@@ -527,6 +527,21 @@ def seed_platform_catalog() -> None:
                     adapter["name"],
                 ),
             )
+    for _rc_name, _rc_desc, _rc_image, _rc_types in [
+        ("shell-readonly",  "Shell runtime for CLI tools (curl, psql, oc, ping...)",   "mcp-runtime-shell:latest",        ["shell"]),
+        ("shell-readwrite", "Shell runtime — write mode allowed",                       "mcp-runtime-shell:latest",        ["shell"]),
+    ]:
+        if not store.one("SELECT name FROM runtime_classes WHERE name = ?", (_rc_name,)):
+            changed = True
+            store.execute(
+                "INSERT INTO runtime_classes(name, description, runtime_image, allowed_execution_types_json, enabled, risk_level, security_profile, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                (_rc_name, _rc_desc, _rc_image, json.dumps(_rc_types), 1, "low", "restricted", now, now),
+            )
+        else:
+            store.execute(
+                "UPDATE runtime_classes SET runtime_image=?, allowed_execution_types_json=?, enabled=1, updated_at=? WHERE name=?",
+                (_rc_image, json.dumps(_rc_types), now, _rc_name),
+            )
     if not store.one("SELECT name FROM runtime_classes WHERE name = ?", ("http-gateway",)):
         changed = True
         store.execute(
@@ -4654,72 +4669,29 @@ def create_page(error: str = "") -> str:
       <button type="button" class="adv-big-btn" onclick="goStep(3)" id="step2-next" style="margin-top:14px">Dalej →</button>
     </div>
 
-    <!-- STEP 3: Narzędzie -->
+    <!-- STEP 3: Narzędzia -->
     <div class="adv-step" id="s3">
       <button type="button" class="adv-back" onclick="goStep(2)">← Wróć</button>
-      <h2>🔧 Zdefiniuj narzędzie</h2>
-      <div class="sub" id="s3-sub">Opisz co serwer będzie robił — AI użyje tej definicji do wywoływania narzędzia.</div>
+      <h2>🔧 Zdefiniuj narzędzia</h2>
+      <div class="sub" id="s3-sub">Dodaj jedno lub więcej narzędzi — AI użyje ich definicji do wywołań.</div>
 
-      <!-- HTTP tool fields -->
-      <div id="s3-http" style="display:none">
-        <div class="adv-field">
-          <label>Adres URL endpointu</label>
-          <input name="first_tool_url" id="s3-url" placeholder="https://api.mojaFirma.pl/v1/search" form="adv-form">
-          <div class="hint">Pełny adres API który AI ma wywoływać</div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-          <div class="adv-field" style="margin:0">
-            <label>Metoda HTTP</label>
-            <select name="first_tool_method" form="adv-form" style="width:100%;padding:10px 12px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:14px">
-              <option value="POST">POST — wysyła zapytanie z parametrem</option>
-              <option value="GET">GET — tylko pobieranie danych</option>
-            </select>
-          </div>
-          <div class="adv-field" style="margin:0">
-            <label>Nazwa narzędzia</label>
-            <input name="first_tool_name" value="call_api" form="adv-form" placeholder="call_api">
-          </div>
-        </div>
-      </div>
+      <!-- Dynamic tool list -->
+      <div id="s3-tools-list" style="display:grid;gap:12px;margin-bottom:12px"></div>
 
-      <!-- Shell tool fields -->
-      <div id="s3-shell" style="display:none">
-        <div class="adv-field">
-          <label>Komenda</label>
-          <input name="shell_cmd_adv" id="s3-cmd" placeholder="psql ${{*args}}" form="adv-form"
-            style="width:100%;box-sizing:border-box;padding:10px 12px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:14px;font-family:monospace">
-          <div class="hint"><code>${{zmienna}}</code> = jeden parametr &nbsp;|&nbsp; <code>${{*args}}</code> = AI podaje wszystkie argumenty naraz (pełny dostęp)</div>
-        </div>
-        <div style="margin-bottom:14px">
-          <div style="font-size:11px;color:#7dd3fc;font-weight:700;margin-bottom:8px">⚡ Gotowe wzorce — kliknij żeby wstawić:</div>
-          <div style="display:flex;flex-wrap:wrap;gap:7px">
-            <button type="button" class="preset-btn" onclick="s3Preset('psql ${{*args}}','Wykonaj dowolne polecenie psql — AI podaje argumenty')">🐘 psql (pełny)</button>
-            <button type="button" class="preset-btn" onclick="s3Preset('psql -h ${{host}} -U ${{user}} -d ${{database}} -c &quot;${{query}}&quot;','Wykonaj zapytanie SQL na bazie PostgreSQL')">🐘 psql query</button>
-            <button type="button" class="preset-btn" onclick="s3Preset('curl ${{*args}}','Wykonaj dowolną komendę curl')">🌐 curl (wszystko)</button>
-            <button type="button" class="preset-btn" onclick="s3Preset('curl -s ${{url}}','Pobierz dane z podanego URL')">🌐 curl GET</button>
-            <button type="button" class="preset-btn" onclick="s3Preset('oc get ${{*args}}','Pobierz zasoby OpenShift — AI podaje zasób i flagi')">🔴 oc get</button>
-            <button type="button" class="preset-btn" onclick="s3Preset('kubectl get ${{*args}}','Pobierz zasoby Kubernetes')">☸️ kubectl get</button>
-            <button type="button" class="preset-btn" onclick="s3Preset('oc ${{*args}}','Pełny dostęp do oc — ustaw denylist w kroku Bezpieczeństwo!')">🔴 oc (pełny)</button>
-          </div>
-        </div>
-        <div class="adv-field">
-          <label>Nazwa narzędzia</label>
-          <input name="shell_tool_name_adv" id="s3-tool-name" value="run_command" form="adv-form" placeholder="run_command / psql_query">
-          <div class="hint">Krótka nazwa — AI będzie jej używać do wywołania</div>
-        </div>
-      </div>
+      <button type="button" onclick="s3AddTool()" style="background:#1a2e1a;border:1px dashed #2a5a2a;color:#5ce89a;padding:10px 18px;border-radius:8px;font-size:13px;cursor:pointer;width:100%;margin-bottom:16px">
+        + Dodaj kolejne narzędzie
+      </button>
 
-      <div class="adv-field">
-        <label>Opis narzędzia (dla AI)</label>
-        <input name="first_tool_desc_adv" id="s3-desc" placeholder="Wykonuje zapytanie SQL / Pobiera dane z API / Listuje zasoby OCP" form="adv-form">
-        <div class="hint">AI będzie wiedziało kiedy i jak użyć tego narzędzia</div>
-      </div>
+      <!-- Hidden fields — first tool (for backend compat) + extra tools JSON -->
+      <input type="hidden" name="shell_cmd_adv"       id="s3-cmd-hidden"  form="adv-form" value="">
+      <input type="hidden" name="shell_tool_name_adv" id="s3-name-hidden" form="adv-form" value="">
+      <input type="hidden" name="first_tool_desc_adv" id="s3-desc-hidden" form="adv-form" value="">
+      <input type="hidden" name="first_tool_url"      id="s3-url-hidden"  form="adv-form" value="">
+      <input type="hidden" name="first_tool_method"   id="s3-method-hidden" form="adv-form" value="POST">
+      <input type="hidden" name="first_tool_name"     id="s3-fname-hidden" form="adv-form" value="">
+      <input type="hidden" name="extra_tools_json"    id="s3-extra-json"  form="adv-form" value="[]">
 
-      <div style="background:#0a1520;border:1px solid #1a3a50;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--muted)">
-        💡 Możesz dodać więcej narzędzi po uruchomieniu serwera — w widoku serwera MCP kliknij "Dodaj nowe narzędzie".
-      </div>
-
-      <button type="button" class="adv-big-btn" onclick="goStep(4)">Dalej → Bezpieczeństwo</button>
+      <button type="button" class="adv-big-btn" onclick="s3Proceed()">Dalej → Bezpieczeństwo</button>
     </div>
 
     <!-- STEP 4: Bezpieczeństwo -->
