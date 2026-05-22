@@ -6114,7 +6114,7 @@ def tool_packages_page(error: str = "") -> str:
             <form method="post" action="/api/tool-packages/{package['id']}/toggle">
               <button class="secondary" style="padding:7px 10px;font-size:12px">{'Wyłącz' if enabled else 'Włącz'}</button>
             </form>
-            {f'<form method="post" action="/api/tool-packages/{package["id"]}/delete" onsubmit="return confirm(\'Usunąć paczkę {escape(package["name"])}?\')"><button class="delete" style="padding:7px 10px;font-size:12px">🗑️ Usuń</button></form>' if _is_admin else ''}
+            {f'<form method="post" action="/api/tool-packages/{package["id"]}/delete" onsubmit="return confirm(\'Usunąć paczkę {escape(package["name"])}?\')"><button class="delete" style="padding:7px 10px;font-size:12px">🗑️ Usuń</button></form>' if is_admin else ''}
           </div>
         </div>"""
     example_package = json.dumps(
@@ -6202,7 +6202,7 @@ def tool_packages_page(error: str = "") -> str:
             f'<div style="color:var(--muted);font-size:12px">{escape((pkg["description"] or "")[:90])}</div>'
             f'<div style="display:flex;gap:6px;flex-wrap:wrap"><span class="badge" style="font-size:11px">{escape(cat)}</span>'
             f'<span class="badge" style="font-size:11px;background:#0d1a2a">🔧 {len(tools_list)} tools</span></div>'
-            (f'<div style="font-size:11px;color:#4ac86a">✅ {escape(deployed_name)}</div>' if deployed_name else "")
+            + (f'<div style="font-size:11px;color:#4ac86a">✅ {escape(deployed_name)}</div>' if deployed_name else "")
             + f'<button onclick="mktDeploy(\'{escape(pkg["id"])}\',\'{escape(pkg["name"])}\')" '
             f'style="margin-top:auto;background:var(--blue);border:none;color:white;padding:8px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">🚀 Wdróż</button>'
             f'</div>'
