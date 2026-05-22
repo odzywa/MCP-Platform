@@ -6602,31 +6602,18 @@ def runtime_images_page() -> str:
     _cu = _current_user.get()
     is_admin = (_cu or {}).get("role") == "admin"
 
-    # Inject builtin base images from Docker
+    # Builtin base images — always shown
     _base_images = [
         ("mcp-runtime-shell:latest", "ubuntu:24.04", "shell-readonly / shell-readwrite"),
         ("mcp-runtime-http-gateway:latest", "python:3.12-slim", "http-gateway"),
         ("mcp-platform-control-plane:latest", "python:3.12-slim", "—"),
         ("mcp-platform-operator:latest", "python:3.12-slim", "—"),
     ]
-    builtin_rows = []
-    for img_name, base, rc in _base_images:
-        try:
-            import subprocess as _sp
-            out = _sp.run(["docker", "inspect", "--format", "{{.Created}}", img_name],
-                          capture_output=True, text=True, timeout=3)
-            if out.returncode == 0 and out.stdout.strip():
-                created = out.stdout.strip()[:16].replace("T", " ")
-                exists = True
-            else:
-                created = "—"
-                exists = False
-        except Exception:
-            created = "—"
-            exists = False
-        if exists:
-            builtin_rows.append({"image": img_name, "base_image": base, "runtime_class": rc,
-                                  "status": "builtin", "error": None, "created_at": created, "id": "builtin"})
+    builtin_rows = [
+        {"image": img, "base_image": base, "runtime_class": rc,
+         "status": "builtin", "error": None, "created_at": "—", "id": "builtin"}
+        for img, base, rc in _base_images
+    ]
 
     def _badge(s: str) -> str:
         color = {"done": "running", "failed": "failed", "pending": "deploying", "builtin": "running"}.get(s, "")
