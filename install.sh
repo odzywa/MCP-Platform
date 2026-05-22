@@ -24,14 +24,25 @@ if ! docker compose version &> /dev/null; then
   exit 1
 fi
 
+# Auto-detect machine IP
+MACHINE_IP=$(ip route get 8.8.8.8 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}' | head -1)
+if [ -z "$MACHINE_IP" ]; then
+  MACHINE_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+fi
+if [ -z "$MACHINE_IP" ]; then
+  MACHINE_IP="localhost"
+fi
+echo -e "${GREEN}✓ Detected IP: ${YELLOW}${MACHINE_IP}${NC}"
+
 # Setup .env
 if [ ! -f .env ]; then
   cp .env.example .env
   INSTALL_DIR=$(pwd)
   sed -i "s|MCP_HOST_DATA_PATH=.*|MCP_HOST_DATA_PATH=${INSTALL_DIR}/data|" .env
-  echo -e "${YELLOW}Created .env with defaults. Edit it if needed.${NC}"
+  sed -i "s|MCP_RUNTIME_PUBLIC_BASE_URL=.*|MCP_RUNTIME_PUBLIC_BASE_URL=http://${MACHINE_IP}|" .env
+  echo -e "${YELLOW}Created .env with IP: ${MACHINE_IP}${NC}"
 else
-  echo ".env already exists, skipping."
+  echo ".env already exists, skipping auto-detect."
 fi
 
 source .env
@@ -71,7 +82,7 @@ echo -e "${GREEN}═════════════════════
 echo -e "${GREEN}  MCP Platform is ready!${NC}"
 echo -e "${GREEN}═══════════════════════════════════════════${NC}"
 echo ""
-echo -e "  UI:       ${YELLOW}http://localhost:${MCP_PLATFORM_PORT:-18100}${NC}"
+echo -e "  UI:       ${YELLOW}http://${MACHINE_IP}:${MCP_PLATFORM_PORT:-18100}${NC}"
 echo -e "  Login:    ${YELLOW}admin / admin${NC}  (change after first login)"
 echo ""
 echo -e "  Docs:     ${YELLOW}docs/jak-stworzyc-mcp-server.md${NC}"
