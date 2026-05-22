@@ -177,6 +177,60 @@ open http://localhost:18100
 
 ---
 
+## Base Runtime Images
+
+Every MCP runtime container must use one of the two platform base images (or a custom image built **on top of them**). These images contain the built-in MCP server (FastAPI + uvicorn) that handles `/mcp`, `/tools/{name}`, `/openwebui` and `/health` endpoints.
+
+### mcp-runtime-shell:latest
+
+Built from `runtime-shell/` during `docker compose build`.
+
+**Base:** `python:3.12-slim` (Debian Bookworm Slim)
+
+**Included tools:**
+
+| Tool | Purpose |
+|------|---------|
+| `curl`, `jq` | HTTP requests and JSON parsing |
+| `oc`, `kubectl` | OpenShift and Kubernetes CLI |
+| `ping` | Network diagnostics |
+| `ssh` | Remote server access |
+| FastAPI + uvicorn | MCP server on port 8080 |
+
+**Use for:** shell tools — curl, oc, kubectl, psql, ping, ssh, any CLI command
+
+### mcp-runtime-http-gateway:latest
+
+Built from `runtime-http-gateway/` during `docker compose build`.
+
+**Base:** `python:3.12-slim` (Debian Bookworm Slim)
+
+**Included:**
+
+| Component | Purpose |
+|-----------|---------|
+| FastAPI + uvicorn | MCP server on port 8080 |
+| httpx | Async HTTP client for calling external REST APIs |
+
+**Use for:** HTTP tools — calling external REST APIs, webhooks, integrations
+
+### Building a custom image
+
+If you need tools not available in the base images (e.g. `psql`, `terraform`, `awscli`), use the **Image Builder** in the UI or write your own Dockerfile:
+
+```dockerfile
+# ALWAYS start from a platform base image — never from a raw OS image
+FROM mcp-runtime-shell:latest
+
+RUN apt-get update && apt-get install -y postgresql-client && rm -rf /var/lib/apt/lists/*
+```
+
+> **⚠️ Raw OS images will NOT work.**  
+> `ubuntu:24.04`, `debian:bookworm-slim`, `alpine` etc. do not contain the MCP server.  
+> The container starts with `bash`, exits immediately, and enters a restart loop.
+
+---
+
 ## Creating your first MCP server
 
 ### Option A — Use an example package
