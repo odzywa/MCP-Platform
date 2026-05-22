@@ -77,6 +77,16 @@ chmod +x install.sh
 
 Open **http://YOUR_SERVER_IP:18100** — login: `admin` / `admin`
 
+### Updating to a newer version
+
+```bash
+git pull
+docker compose up -d --build mcp-platform mcp-platform-operator
+```
+
+> **Note:** `--force-recreate` alone does **not** rebuild images from updated source code.  
+> Always use `--build` after `git pull`.
+
 ---
 
 ## Quick Start
