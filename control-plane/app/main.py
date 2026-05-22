@@ -8855,6 +8855,9 @@ function ntPreset(cmd, desc) {{
       }};
       var savedTab = 'connect';
       try {{ savedTab = localStorage.getItem('rt_tab_' + rid) || 'connect'; }} catch(e) {{}}
+      var _urlParams = new URLSearchParams(window.location.search);
+      if (_urlParams.get('tool_added')) savedTab = 'tools';
+      else if (window.location.hash === '#pane-tools') savedTab = 'tools';
       rtTab(savedTab);
 
       function poll() {{
@@ -9012,7 +9015,7 @@ async def add_tool(runtime_id: str, request: Request):
             _httpx.post(f"{base}/reload", timeout=5)
     except Exception:
         pass
-    return RedirectResponse(f"/runtimes/{runtime_id}?tool_added={execution_type}", status_code=303)
+    return RedirectResponse(f"/runtimes/{runtime_id}?tool_added={execution_type}#pane-tools", status_code=303)
 
 
 @app.post("/api/runtimes/{runtime_id}/adapters")
