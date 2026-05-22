@@ -4405,7 +4405,7 @@ def index() -> str:
     audit = store.rows("SELECT * FROM audit_log ORDER BY id DESC LIMIT 8")
     logs = store.rows("SELECT * FROM runtime_logs ORDER BY id DESC LIMIT 8")
     running = len([r for r in runtimes if r["status"] == "running"])
-    failed = len([r for r in runtimes if r["status"] in {"failed", "unhealthy", "missing"} or (r.get("last_error") and r["status"] not in {"running", "deleted"})])
+    failed = len([r for r in runtimes if r["status"] in {"failed", "unhealthy", "missing", "exited"} or (r.get("last_error") and r["status"] not in {"running", "deleted"})])
     implemented_adapters = len([a for a in adapters if a["implemented"]])
     action_icons_dash = {"deploy_runtime": "🚀", "stop_runtime": "⏹️", "delete_runtime": "🗑️", "reload_runtime": "♻️",
                     "build_runtime_image": "🔨", "action_failed": "❌", "create_runtime": "➕", "health_refresh": "🩺"}
@@ -5158,11 +5158,11 @@ def create_page(error: str = "") -> str:
 def runtimes_page(status: str = "all") -> str:
     all_runtimes = store.rows("SELECT * FROM runtimes WHERE status != 'deleted' ORDER BY created_at DESC")
     running_count = len([r for r in all_runtimes if r["status"] == "running"])
-    problem_count = len([r for r in all_runtimes if r["status"] in {"failed", "unhealthy", "missing"} or (r.get("last_error") and r["status"] not in {"running", "deleted"})])
+    problem_count = len([r for r in all_runtimes if r["status"] in {"failed", "unhealthy", "missing", "exited"} or (r.get("last_error") and r["status"] not in {"running", "deleted"})])
     if status == "running":
         runtimes = [r for r in all_runtimes if r["status"] == "running"]
     elif status == "problem":
-        runtimes = [r for r in all_runtimes if r["status"] in {"failed", "unhealthy", "missing"} or (r.get("last_error") and r["status"] not in {"running", "deleted"})]
+        runtimes = [r for r in all_runtimes if r["status"] in {"failed", "unhealthy", "missing", "exited"} or (r.get("last_error") and r["status"] not in {"running", "deleted"})]
     else:
         runtimes = all_runtimes
 
