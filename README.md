@@ -43,6 +43,27 @@ docker compose version  # Docker Compose version v2.x.x
 
 ---
 
+## Installation
+
+```bash
+# 1. Install Docker (if not already installed)
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+newgrp docker
+
+# 2. Clone the repository
+git clone https://github.com/YOUR_USERNAME/mcp-platform.git
+cd mcp-platform
+
+# 3. Run the installer
+chmod +x install.sh
+./install.sh
+```
+
+Open **http://YOUR_SERVER_IP:18100** — login: `admin` / `admin`
+
+---
+
 ## Quick Start
 
 **Requirements:** Docker 24+, Docker Compose v2, Linux
