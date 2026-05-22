@@ -6111,6 +6111,7 @@ def tool_packages_page(error: str = "") -> str:
             <form method="post" action="/api/tool-packages/{package['id']}/toggle">
               <button class="secondary" style="padding:7px 10px;font-size:12px">{'Wyłącz' if enabled else 'Włącz'}</button>
             </form>
+            {f'<form method="post" action="/api/tool-packages/{package["id"]}/delete" onsubmit="return confirm(\'Usunąć paczkę {escape(package["name"])}?\')"><button class="delete" style="padding:7px 10px;font-size:12px">🗑️ Usuń</button></form>' if _is_admin else ''}
           </div>
         </div>"""
     example_package = json.dumps(
@@ -8049,6 +8050,18 @@ def toggle_tool_package(package_id: str):
         (enabled, store.now_iso(), package_id),
     )
     store.audit("admin", "toggle_tool_package", "tool_package", package_id, {"enabled": bool(enabled)})
+    return RedirectResponse("/tool-packages", status_code=303)
+
+
+@app.post("/api/tool-packages/{package_id}/delete")
+def delete_tool_package(package_id: str):
+    user = _current_user.get()
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can delete packages")
+    if not store.one("SELECT id FROM tool_packages WHERE id = ?", (package_id,)):
+        raise HTTPException(status_code=404, detail="Tool package not found")
+    store.execute("DELETE FROM tool_packages WHERE id = ?", (package_id,))
+    store.audit(user.get("username","admin"), "delete_tool_package", "tool_package", package_id, {})
     return RedirectResponse("/tool-packages", status_code=303)
 
 
