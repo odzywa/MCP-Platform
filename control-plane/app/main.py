@@ -2384,9 +2384,9 @@ def quick_start_page(error: str = "") -> str:
                 <select id="build-base" style="font-size:13px" onchange="updateBaseHint()">
                   {_builtin_options}
                   {f'<optgroup label="── Wcześniej zbudowane ──">{_custom_options}</optgroup>' if _custom_options else ''}
-                  <option value="__custom__">⌨️ Inny — wpisz ręcznie</option>
+                  <option value="__custom__">⌨️ Inny — wpisz ręcznie (zaawansowane)</option>
                 </select>
-                <input id="build-base-custom" placeholder="np. ubuntu:22.04" style="display:none;font-size:13px;margin-top:6px">
+                <input id="build-base-custom" placeholder="musi zawierać serwer MCP (zbudowany na bazie mcp-runtime-shell lub http-gateway)" style="display:none;font-size:13px;margin-top:6px">
                 <div id="base-hint" class="hint" style="margin-top:4px;color:#7dd3fc">
                   ✅ Zawiera: <b>oc, kubectl, curl, jq</b> + Python 3.12 (Debian Slim) — dodasz tylko brakujące narzędzia
                 </div>
@@ -2847,7 +2847,7 @@ window.updateBaseHint = function() {{
     'python:3.12-slim': '⚠️ Czysty Python Debian — brak oc/kubectl/curl. Dodaj <b>curl ca-certificates</b> w APT',
     'python:3.11-slim': '⚠️ Python 3.11 Debian — brak oc/kubectl',
     'debian:bookworm-slim': '⚠️ Czysty Debian — brak wszystkiego, musisz dodać wszystkie potrzebne paczki APT',
-    '__custom__': 'ℹ️ Upewnij się że obraz jest dostępny na tym hoście lub w Docker Hub'
+    '__custom__': '⚠️ <b>UWAGA:</b> Czysty obraz OS (ubuntu, debian, alpine) nie zadziała! Obraz musi być zbudowany na bazie <b>mcp-runtime-shell:latest</b> lub <b>mcp-runtime-http-gateway:latest</b> — tylko te mają wbudowany serwer MCP (uvicorn). Przykład: <code>FROM mcp-runtime-shell:latest</code>'
   }};
   custom.style.display = sel.value === '__custom__' ? 'block' : 'none';
   if (hint) hint.innerHTML = hints[sel.value] || '';
@@ -2885,8 +2885,7 @@ window.startBuild = function() {{
   _buildRcName = rcName;
   var imgTag = 'mcp-runtime-' + rcName + ':latest';
   var selBase = document.getElementById('build-base');
-  var baseImage = selBase && selBase.value !== '__custom__' ? selBase.value
-    : (document.getElementById('build-base-custom').value.trim() || 'mcp-runtime-shell:latest');
+  var baseImage = selBase && selBase.value !== '__custom__' ? selBase.value : (document.getElementById('build-base-custom').value.trim() || 'mcp-runtime-shell:latest');
   document.getElementById('build-btn').disabled = true;
   document.getElementById('build-progress').style.display = 'block';
   document.getElementById('build-status-text').textContent = 'Budowanie obrazu Docker na bazie ' + baseImage + '... (może potrwać 2-5 minut)';
@@ -4502,7 +4501,7 @@ def create_page(error: str = "") -> str:
     ) + ("".join(
         f'<option value="{escape(r["runtime_image"])}">{escape(r["runtime_image"])} — własny zbudowany</option>'
         for r in _adv_custom_images
-    )) + '<option value="__custom__">⌨️ Inny — wpisz ręcznie</option>'
+    )) + '<option value="__custom__">⌨️ Inny — wpisz ręcznie (zaawansowane)</option>'
 
     pkg_cards = "".join(f"""
         <label class="qs-pkg-card" onclick="pkgChosen('{p['id']}', this)">
@@ -5029,10 +5028,10 @@ def create_page(error: str = "") -> str:
       'mcp-runtime-http-gateway:latest': '✅ HTTP gateway, Python 3.12',
       'python:3.12-slim': '⚠️ Czysty Python — dodaj curl w APT jeśli potrzebny',
       'debian:bookworm-slim': '⚠️ Czysty Debian — dodaj wszystkie potrzebne paczki',
-      '__custom__': 'ℹ️ Własny obraz — musi być dostępny lokalnie lub w Docker Hub'
+      '__custom__': '⚠️ UWAGA: Czysty obraz OS (ubuntu, debian, alpine) nie zadziała! Obraz musi być zbudowany na bazie mcp-runtime-shell:latest lub mcp-runtime-http-gateway:latest — tylko te mają wbudowany serwer MCP. Przykład Dockerfile: FROM mcp-runtime-shell:latest'
     }};
     if (custom) custom.style.display = sel.value === '__custom__' ? 'block' : 'none';
-    if (hint) hint.textContent = hints[sel.value] || '';
+    if (hint) hint.innerHTML = hints[sel.value] || '';
   }};
 
   window.advBuildReset = function() {{
@@ -5046,8 +5045,7 @@ def create_page(error: str = "") -> str:
     var pip = (document.getElementById('adv-build-pip').value || '').trim();
     if (!apt && !pip) {{ document.getElementById('adv-build-apt').focus(); return; }}
     var sel = document.getElementById('adv-build-base');
-    var baseImg = sel && sel.value !== '__custom__' ? sel.value
-      : (document.getElementById('adv-build-base-custom').value.trim() || 'mcp-runtime-shell:latest');
+    var baseImg = sel && sel.value !== '__custom__' ? sel.value : (document.getElementById('adv-build-base-custom').value.trim() || 'mcp-runtime-shell:latest');
     var basePart = baseImg.split('/').pop().replace(/[^a-z0-9]/gi,'-').replace(/-+/g,'-').replace(/^-|-$/g,'').toLowerCase().replace(/:[^:]*$/,'');
     var aptPart = apt.split(/\s+/).slice(0,3).map(function(p){{return p.replace(/[^a-z0-9]/g,'').substring(0,12);}}).filter(Boolean).join('-');
     var namePart = (aptPart || pip.split(/\s+/)[0].replace(/[^a-z0-9]/g,'').substring(0,12) || 'env');
@@ -6258,7 +6256,7 @@ def tool_packages_page(error: str = "") -> str:
         <form method="post" action="/api/runtime-images/build">
           <div class="grid3" style="margin-bottom:12px">
             <div><label>Image tag (wynikowy)</label><input name="image" value="mcp-runtime-custom:latest"></div>
-            <div><label>Base image</label><input name="base_image" value="mcp-runtime-shell:latest"></div>
+            <div><label>Base image</label><select name="base_image"><option value="mcp-runtime-shell:latest" selected>mcp-runtime-shell:latest (shell, curl, jq, oc, kubectl)</option><option value="mcp-runtime-http-gateway:latest">mcp-runtime-http-gateway:latest (HTTP REST tools)</option></select><div class="muted" style="font-size:11px;margin-top:3px">Tylko te obrazy mają wbudowany serwer MCP — inne bazy nie będą działać.</div></div>
             <div><label>Nazwa klasy runtime</label><input name="runtime_class" placeholder="openshift-readonly"></div>
             <div><label>Silniki wykonania</label><input name="allowed_execution_types" value="shell" placeholder="http_request shell"></div>
             <div><label>Risk</label><select name="risk_level"><option>low</option><option>medium</option><option>high</option></select></div>
