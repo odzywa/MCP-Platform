@@ -22,6 +22,8 @@ from . import store
 
 app = FastAPI(title="MCP Platform", version="0.1.0", docs_url="/api-swagger", redoc_url=None)
 
+_FAVICON_TAG = '<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 64 64\'%3E%3Crect width=\'64\' height=\'64\' rx=\'12\' fill=\'%230f1722\'/%3E%3Ctext x=\'32\' y=\'36\' font-family=\'Arial Black,Arial,sans-serif\' font-size=\'24\' font-weight=\'900\' fill=\'%231f9bd1\' text-anchor=\'middle\'%3EMCP%3C/text%3E%3Ctext x=\'32\' y=\'52\' font-family=\'Arial,sans-serif\' font-size=\'9\' font-weight=\'600\' fill=\'%234a7a9b\' text-anchor=\'middle\' letter-spacing=\'2\'%3EPLATFORM%3C/text%3E%3C/svg%3E">'
+
 # ── Auth / RBAC ────────────────────────────────────────────────────────────────
 AUTH_COOKIE = "mcp_session"
 SESSION_TTL_H = 24
@@ -1847,9 +1849,7 @@ def page_shell(active: str, body: str) -> str:
 
     return f"""
     <!doctype html>
-    <html lang="pl"><head><title>{page_title} — MCP Platform</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230f1722'/%3E%3Crect width='64' height='64' rx='12' fill='url(%23g)'/%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%231a2a3a'/%3E%3Cstop offset='1' stop-color='%230a1018'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ctext x='32' y='36' font-family='Arial Black,Arial,sans-serif' font-size='24' font-weight='900' fill='%231f9bd1' text-anchor='middle' letter-spacing='-1'%3EMCP%3C/text%3E%3Ctext x='32' y='52' font-family='Arial,sans-serif' font-size='9' font-weight='600' fill='%234a7a9b' text-anchor='middle' letter-spacing='2'%3EPLATFORM%3C/text%3E%3Crect x='8' y='40' width='48' height='1' fill='%231f9bd1' opacity='0.3'/%3E%3C/svg%3E">
-    <style>{base_styles()}
+    <html lang="pl"><head><title>{page_title} — MCP Platform</title>{_FAVICON_TAG}<style>{base_styles()}
 .lang-btn{{display:flex;align-items:center;gap:2px;background:#0d1822;border:1px solid #1a3a50;border-radius:6px;overflow:hidden;flex-shrink:0}}
 .lang-btn button{{border:none;padding:4px 9px;font-size:12px;font-weight:700;cursor:pointer;background:none;color:var(--muted);transition:.15s}}
 .lang-btn button.lang-active{{background:#1a3a5a;color:white}}
@@ -8175,7 +8175,7 @@ def runtime_detail(runtime_id: str, welcome: str = "", tool_added: str = "") -> 
         (runtime_id,),
     )
     runtime_audit = store.rows(
-        "SELECT * FROM audit_log WHERE target_type = 'runtime' AND target_id = ? ORDER BY id DESC LIMIT 30",
+        "SELECT * FROM audit_log WHERE target_type = 'runtime' AND target_id = ? AND action != 'view_runtime' ORDER BY id DESC LIMIT 30",
         (runtime_id,),
     )
     # Load ENV vars from runtime-env.json
@@ -8352,7 +8352,7 @@ def runtime_detail(runtime_id: str, welcome: str = "", tool_added: str = "") -> 
         for item in credentials
     )
     return f"""
-    <!doctype html><html><head><title>{escape(payload['name'])}</title><style>
+    <!doctype html><html><head><title>{escape(payload['name'])} — MCP Platform</title>{_FAVICON_TAG}<style>
     :root {{ --blue:#1f9bd1; --blue-dark:#157aa8; --line:#2b394a; --text:#dce7f3; --muted:#8ea2b8; --bg:#111820; --panel:#182230; --panel-2:#1d2a3a; --field:#101722; --danger:#d0343f; --warn:#b96521; }}
     body {{ font-family: Arial, system-ui, sans-serif; margin:0; background:var(--bg); color:var(--text); font-size:14px; }}
     header {{ background:#0f1722; color:var(--text); padding:18px 28px; border-bottom:1px solid var(--line); }}
