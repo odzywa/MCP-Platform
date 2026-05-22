@@ -5229,6 +5229,8 @@ def runtimes_page(status: str = "all") -> str:
             {'<button onclick="cardAct(\''+rid+'\',\'start\')" style="padding:6px 10px;border:0;border-radius:6px;background:#3d5268;color:white;font-size:12px;font-weight:700;cursor:pointer">▶️ Start</button>' if is_stopped else ''}
             {'<button onclick="cardAct(\''+rid+'\',\'restart\')" style="padding:6px 10px;border:0;border-radius:6px;background:#3d5268;color:white;font-size:12px;font-weight:700;cursor:pointer">🔄 Restart</button>' if is_running else ''}
             {'<button onclick="cardAct(\''+rid+'\',\'health\')" style="padding:6px 10px;border:0;border-radius:6px;background:#263548;color:#c9d7e6;font-size:12px;font-weight:700;cursor:pointer">🩺 Status</button>' if is_running else ''}
+            <a href="/runtimes/{rid}?tab=logs" style="padding:6px 10px;background:#263548;border-radius:6px;font-size:12px;font-weight:700;color:#c9d7e6;text-decoration:none">📋 Logi</a>
+            <a href="/runtimes/{rid}?tab=audit" style="padding:6px 10px;background:#263548;border-radius:6px;font-size:12px;font-weight:700;color:#c9d7e6;text-decoration:none">🤖 Wywołania</a>
             <button onclick="if(confirm('Usunąć?'))cardAct('{rid}','delete')" style="padding:6px 10px;border:0;border-radius:6px;background:#c43b3b;color:white;font-size:12px;font-weight:700;cursor:pointer">🗑️</button>
           </div>
           {audit_strip}
@@ -8857,6 +8859,7 @@ function ntPreset(cmd, desc) {{
       try {{ savedTab = localStorage.getItem('rt_tab_' + rid) || 'connect'; }} catch(e) {{}}
       var _urlParams = new URLSearchParams(window.location.search);
       if (_urlParams.get('tool_added')) savedTab = 'tools';
+      else if (_urlParams.get('tab')) savedTab = _urlParams.get('tab');
       else if (window.location.hash === '#pane-tools') savedTab = 'tools';
       rtTab(savedTab);
 
