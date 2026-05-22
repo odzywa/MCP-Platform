@@ -9640,7 +9640,7 @@ def export_openwebui_tool(runtime_id: str):
 
         method_name = re.sub(r"[^a-z0-9]", "_", t["name"].lower()).strip("_")
 
-        _headers_code = '        _client_ip = ""\n        try:\n            if __request__ and hasattr(__request__, "client") and __request__.client:\n                _client_ip = __request__.client.host or ""\n        except Exception:\n            pass\n        _hdrs = {{"X-Model": __model__, "X-AI-Model": __model__, "X-Real-IP": _client_ip, "X-Forwarded-For": _client_ip}}\n'
+        _headers_code = '        _client_ip = ""\n        try:\n            if __request__ and hasattr(__request__, "client") and __request__.client:\n                _client_ip = __request__.client.host or ""\n        except Exception:\n            pass\n        _hdrs = {"X-Model": __model__, "X-AI-Model": __model__, "X-Real-IP": _client_ip, "X-Forwarded-For": _client_ip}\n'
         if exec_type == "http_request":
             http_method = (cfg.get("method") or "POST").upper()
             if http_method == "GET":
