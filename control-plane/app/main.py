@@ -1847,7 +1847,9 @@ def page_shell(active: str, body: str) -> str:
 
     return f"""
     <!doctype html>
-    <html lang="pl"><head><title>{page_title} — MCP Platform</title><style>{base_styles()}
+    <html lang="pl"><head><title>{page_title} — MCP Platform</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230f1722'/%3E%3Crect width='64' height='64' rx='12' fill='url(%23g)'/%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%231a2a3a'/%3E%3Cstop offset='1' stop-color='%230a1018'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ctext x='32' y='36' font-family='Arial Black,Arial,sans-serif' font-size='24' font-weight='900' fill='%231f9bd1' text-anchor='middle' letter-spacing='-1'%3EMCP%3C/text%3E%3Ctext x='32' y='52' font-family='Arial,sans-serif' font-size='9' font-weight='600' fill='%234a7a9b' text-anchor='middle' letter-spacing='2'%3EPLATFORM%3C/text%3E%3Crect x='8' y='40' width='48' height='1' fill='%231f9bd1' opacity='0.3'/%3E%3C/svg%3E">
+    <style>{base_styles()}
 .lang-btn{{display:flex;align-items:center;gap:2px;background:#0d1822;border:1px solid #1a3a50;border-radius:6px;overflow:hidden;flex-shrink:0}}
 .lang-btn button{{border:none;padding:4px 9px;font-size:12px;font-weight:700;cursor:pointer;background:none;color:var(--muted);transition:.15s}}
 .lang-btn button.lang-active{{background:#1a3a5a;color:white}}
