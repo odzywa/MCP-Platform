@@ -242,6 +242,8 @@ def init_db() -> None:
               result_json TEXT NOT NULL DEFAULT '{}',
               duration_ms INTEGER NOT NULL DEFAULT 0,
               caller TEXT NOT NULL DEFAULT '',
+              caller_ip TEXT NOT NULL DEFAULT '',
+              model TEXT NOT NULL DEFAULT '',
               created_at TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS webhooks (
@@ -264,6 +266,11 @@ def init_db() -> None:
         adapter_columns = {row["name"] for row in conn.execute("PRAGMA table_info(execution_adapters)").fetchall()}
         if "adapter_contract_json" not in adapter_columns:
             conn.execute("ALTER TABLE execution_adapters ADD COLUMN adapter_contract_json TEXT NOT NULL DEFAULT '{}'")
+        tc_columns = {row["name"] for row in conn.execute("PRAGMA table_info(tool_calls)").fetchall()}
+        if "caller_ip" not in tc_columns:
+            conn.execute("ALTER TABLE tool_calls ADD COLUMN caller_ip TEXT NOT NULL DEFAULT ''")
+        if "model" not in tc_columns:
+            conn.execute("ALTER TABLE tool_calls ADD COLUMN model TEXT NOT NULL DEFAULT ''")
 
 
 def rows(query: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
