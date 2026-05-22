@@ -9639,20 +9639,21 @@ def export_openwebui_tool(runtime_id: str):
 
         method_name = re.sub(r"[^a-z0-9]", "_", t["name"].lower()).strip("_")
 
+        _headers_code = '        _hdrs = {"X-Model": __model__, "X-AI-Model": __model__}\n'
         if exec_type == "http_request":
             http_method = (cfg.get("method") or "POST").upper()
             if http_method == "GET":
-                body_code = ""
-                request_code = f'r = requests.get("{tool_url}", timeout=self.valves.timeout)'
+                body_code = _headers_code
+                request_code = f'r = requests.get("{tool_url}", headers=_hdrs, timeout=self.valves.timeout)'
             else:
-                body_code = f"        payload = {payload_str}\n"
-                request_code = f'r = requests.post("{tool_url}", json=payload, timeout=self.valves.timeout)'
+                body_code = _headers_code + f"        payload = {payload_str}\n"
+                request_code = f'r = requests.post("{tool_url}", json=payload, headers=_hdrs, timeout=self.valves.timeout)'
         else:
-            body_code = f"        payload = {payload_str}\n"
-            request_code = f'r = requests.post("{endpoint}/tools/{t["name"]}", json=payload, timeout=self.valves.timeout)'
+            body_code = _headers_code + f"        payload = {payload_str}\n"
+            request_code = f'r = requests.post("{endpoint}/tools/{t["name"]}", json=payload, headers=_hdrs, timeout=self.valves.timeout)'
 
         return f'''
-    def {method_name}(self{param_sig}) -> str:
+    def {method_name}(self{param_sig}, __model__: str = "") -> str:
 {docstring}
 {body_code}        try:
             {request_code}
