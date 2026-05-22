@@ -528,7 +528,7 @@ def mcp_tool_content(result: dict[str, Any]) -> dict[str, Any]:
     return response
 
 
-async def handle_mcp_payload(payload: Any) -> tuple[list[dict[str, Any]], bool]:
+async def handle_mcp_payload(payload: Any, request: Request | None = None) -> tuple[list[dict[str, Any]], bool]:
     messages = payload if isinstance(payload, list) else [payload]
     responses = []
     for message in messages:
@@ -565,7 +565,9 @@ async def handle_mcp_payload(payload: Any) -> tuple[list[dict[str, Any]], bool]:
         elif method == "tools/call":
             name = params.get("name")
             arguments = params.get("arguments") or {}
-            result = await execute_tool(name, arguments, response_profile="mcp")
+            result = await execute_tool(name, arguments, response_profile="mcp",
+                                        caller_ip=_caller_ip(request) if request else "",
+                                        model=_model_from_request(request) if request else "")
             responses.append(jsonrpc_result(message_id, mcp_tool_content(result)))
         elif method == "notifications/initialized":
             continue
@@ -581,7 +583,7 @@ async def mcp(request: Request):
     except Exception:
         return JSONResponse(jsonrpc_error(None, -32700, "Parse error"), status_code=400)
 
-    responses, is_batch = await handle_mcp_payload(payload)
+    responses, is_batch = await handle_mcp_payload(payload, request)
     if not responses:
         return Response(status_code=202)
     return JSONResponse(responses if is_batch else responses[0])
@@ -646,7 +648,7 @@ async def sse_message(session_id: str, request: Request):
         await queue.put(jsonrpc_error(None, -32700, "Parse error"))
         return Response(status_code=202)
 
-    responses, _ = await handle_mcp_payload(payload)
+    responses, _ = await handle_mcp_payload(payload, request)
     for response in responses:
         await queue.put(response)
     return Response(status_code=202)

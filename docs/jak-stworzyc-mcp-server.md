@@ -506,6 +506,30 @@ Logi dostępne w Runtime detail → zakładka **Wywołania** oraz globalnie w `/
 
 ---
 
+### Porównanie metod integracji — IP i model w logach
+
+| Metoda integracji | IP w logach | Model w logach | Uwagi |
+|-------------------|-------------|----------------|-------|
+| **Tool Server** (`/openwebui`) | ❌ brak | ❌ brak | OpenWebUI nie przekazuje tych danych do Tool Server |
+| **Python Tool** (import przez link) | ✅ tak (jeśli nie NAT) | ✅ tak | OpenWebUI wstrzykuje `__model__` i `__request__` do metody |
+
+**Dlaczego Tool Server nie ma IP ani modelu?**
+
+OpenWebUI wysyła wywołania do Tool Servera przez własny backend — nie przekazuje nagłówków `X-Model` ani `X-Real-IP`. Platforma widzi tylko IP backendu OpenWebUI, nie IP użytkownika ani nazwę modelu.
+
+**Dlaczego Python Tool ma model i IP?**
+
+Narzędzie Python (importowane przez link) działa bezpośrednio w procesie OpenWebUI. OpenWebUI automatycznie wstrzykuje do metod specjalne parametry:
+- `__model__` — obiekt lub string z nazwą aktywnego modelu
+- `__user__` — dane zalogowanego użytkownika
+- `__request__` — obiekt HTTP request z IP klienta
+
+Wygenerowany kod wyciąga te dane i wysyła je jako nagłówki `X-Model` i `X-Real-IP` do runtime.
+
+> **Uwaga:** Jeśli OpenWebUI i MCP Platform działają na tym samym hoście lub w tej samej sieci Docker, IP może pokazywać adres wewnętrzny (NAT), a nie rzeczywiste IP użytkownika.
+
+---
+
 ---
 
 ## Gdzie patrzeć gdy coś nie działa

@@ -362,7 +362,9 @@ async def mcp(request: Request):
                 )
             )
         elif method == "tools/call":
-            result = await execute_tool(params.get("name"), params.get("arguments") or {})
+            result = await execute_tool(params.get("name"), params.get("arguments") or {},
+                                        caller_ip=_caller_ip(request),
+                                        model=_model_from_request(request))
             responses.append(jsonrpc_result(message_id, {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False)}]}))
         elif method == "notifications/initialized":
             continue
