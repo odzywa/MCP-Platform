@@ -6602,23 +6602,51 @@ def runtime_images_page() -> str:
     _cu = _current_user.get()
     is_admin = (_cu or {}).get("role") == "admin"
 
-    def _badge(s: str) -> str:
-        color = {"done": "running", "failed": "failed", "pending": "deploying"}.get(s, "")
-        return f'<span class="badge {color}" style="font-size:11px">{escape(s)}</span>'
+    # Inject builtin base images from Docker
+    _base_images = [
+        ("mcp-runtime-shell:latest", "ubuntu:24.04", "shell-readonly / shell-readwrite"),
+        ("mcp-runtime-http-gateway:latest", "python:3.12-slim", "http-gateway"),
+        ("mcp-platform-control-plane:latest", "python:3.12-slim", "—"),
+        ("mcp-platform-operator:latest", "python:3.12-slim", "—"),
+    ]
+    builtin_rows = []
+    for img_name, base, rc in _base_images:
+        try:
+            import subprocess as _sp
+            out = _sp.run(["docker", "inspect", "--format", "{{.Created}}", img_name],
+                          capture_output=True, text=True, timeout=3)
+            if out.returncode == 0 and out.stdout.strip():
+                created = out.stdout.strip()[:16].replace("T", " ")
+                exists = True
+            else:
+                created = "—"
+                exists = False
+        except Exception:
+            created = "—"
+            exists = False
+        if exists:
+            builtin_rows.append({"image": img_name, "base_image": base, "runtime_class": rc,
+                                  "status": "builtin", "error": None, "created_at": created, "id": "builtin"})
 
+    def _badge(s: str) -> str:
+        color = {"done": "running", "failed": "failed", "pending": "deploying", "builtin": "running"}.get(s, "")
+        label = {"builtin": "✅ wbudowany"}.get(s, s)
+        return f'<span class="badge {color}" style="font-size:11px">{escape(label)}</span>'
+
+    all_items = builtin_rows + list(builds)
     rows_html = "".join(f"""
         <tr>
           <td>
             <div style="font-weight:700;font-size:13px">{escape(item['image'])}</div>
-            <div style="font-size:11px;color:var(--muted);margin-top:2px">{escape(item['id'])}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">{'bazowy obraz platformy' if item['id'] == 'builtin' else escape(item['id'])}</div>
           </td>
           <td style="font-size:12px">{escape(item['base_image'])}</td>
           <td style="font-size:12px">{escape(item['runtime_class'] or '—')}</td>
           <td>{_badge(item['status'])}</td>
           <td style="font-size:11px;color:#f47a80;max-width:240px;word-break:break-word">{escape((item['error'] or '')[:150]) or '<span style="color:var(--muted)">—</span>'}</td>
-          <td style="font-size:11px;color:var(--muted);white-space:nowrap">{escape(item['created_at'][:16].replace('T',' '))}</td>
-          <td>{"<button onclick=\"delBuild('" + escape(item['id']) + "','" + escape(item['image']) + "')\" style='background:#3a1010;border:1px solid #6a2020;color:#f47a80;padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer'>🗑️ Usuń</button>" if is_admin else ""}</td>
-        </tr>""" for item in builds)
+          <td style="font-size:11px;color:var(--muted);white-space:nowrap">{escape(str(item['created_at'])[:16].replace('T',' '))}</td>
+          <td>{"<button onclick=\"delBuild('" + escape(item['id']) + "','" + escape(item['image']) + "')\" style='background:#3a1010;border:1px solid #6a2020;color:#f47a80;padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer'>🗑️ Usuń</button>" if is_admin and item['id'] != 'builtin' else ""}</td>
+        </tr>""" for item in all_items)
 
     stats_done = sum(1 for b in builds if b['status'] == 'done')
     stats_failed = sum(1 for b in builds if b['status'] == 'failed')
@@ -6626,11 +6654,11 @@ def runtime_images_page() -> str:
     body = f"""
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px">
       <div class="card" style="text-align:center">
-        <div class="metric">{len(builds)}</div>
-        <div style="font-weight:700;color:white">Wszystkie buildy</div>
+        <div class="metric">{len(all_items)}</div>
+        <div style="font-weight:700;color:white">Wszystkie obrazy</div>
       </div>
       <div class="card" style="text-align:center;border-color:#1a5a38;background:#0e2e1e">
-        <div class="metric" style="color:#5ce89a">{stats_done}</div>
+        <div class="metric" style="color:#5ce89a">{stats_done + len(builtin_rows)}</div>
         <div style="font-weight:700;color:white">✅ Zbudowane</div>
       </div>
       <div class="card" style="text-align:center;border-color:#5a2025;background:#2c0e10">
@@ -6641,10 +6669,10 @@ def runtime_images_page() -> str:
 
     <section>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <h2 style="margin:0">Zbudowane obrazy ({len(builds)})</h2>
+        <h2 style="margin:0">Obrazy Docker ({len(all_items)})</h2>
         {"<div style='font-size:12px;color:var(--muted)'>🔒 Usuwanie dostępne tylko dla admina</div>" if not is_admin else ""}
       </div>
-      {"<table><thead><tr><th>Obraz</th><th>Base</th><th>Klasa runtime</th><th>Status</th><th>Błąd</th><th>Data</th><th></th></tr></thead><tbody>" + rows_html + "</tbody></table>" if builds else '<p class="muted">Brak zbudowanych obrazów.</p>'}
+      <table><thead><tr><th>Obraz</th><th>Base</th><th>Klasa runtime</th><th>Status</th><th>Błąd</th><th>Data buildu</th><th></th></tr></thead><tbody>{rows_html}</tbody></table>
     </section>
 
 <script>
