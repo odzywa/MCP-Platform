@@ -210,13 +210,35 @@ See `docs/jak-stworzyc-mcp-server.md` for full step-by-step guide.
 }
 ```
 
-## Connect to OpenWebUI
+## OpenWebUI Integration
 
-**Tool Server** (multiple tools at once):
-- Admin → Tool Servers → Add → URL: `http://HOST:PORT/openwebui`
+MCP Platform has native integration with [OpenWebUI](https://github.com/open-webui/open-webui).  
+Each deployed MCP server automatically exposes three integration endpoints:
 
-**Python Tool** (import from link):
-- Runtime detail → copy the Python Tool link → OpenWebUI → Tools → Import from URL
+### Option 1 — Tool Server (recommended, multiple tools at once)
+
+Each runtime serves a full OpenAPI spec at `/openwebui/openapi.json`.  
+OpenWebUI discovers all tools automatically.
+
+1. OpenWebUI → **Admin Panel → Tools → Tool Servers → Add**
+2. Enter URL: `http://YOUR_IP:PORT/openwebui`
+3. Save — all tools from the MCP server appear instantly
+
+> OpenWebUI automatically appends `/openapi.json` — enter the base URL only.
+
+### Option 2 — Python Tool (import from link)
+
+Each runtime generates a ready-to-import Python tool file.
+
+1. Open the runtime detail page → **Podłącz** tab → copy the **Python Tool** link
+2. OpenWebUI → **Workspace → Tools → Import from URL** → paste the link
+3. The tool appears in your workspace with full function signatures
+
+### Option 3 — RAGHybrid filter pipeline
+
+If you run RAGHybrid alongside MCP Platform, use the auto-context filter:
+- Automatically injects RAG context into prompts when the tool is active
+- Configurable `top_k`, retrieval mode, and source filtering
 
 ---
 
