@@ -85,7 +85,99 @@ Modele Sentence Transformers: Apache 2.0 (MiniLM, BGE, paraphrase-multilingual).
 
 ---
 
-## Koncepcja platformy w jednym zdaniu
+## Obrazy bazowe platformy
+
+Platforma dostarcza dwa gotowe obrazy Docker które zawierają wbudowany serwer MCP. Każdy runtime container musi być uruchomiony z jednego z tych obrazów (lub z obrazu zbudowanego **na ich bazie**).
+
+---
+
+### mcp-runtime-shell:latest
+
+**Skąd pochodzi:** budowany przez `docker compose --profile build-only build` z katalogu `runtime-shell/`
+
+**Dockerfile:**
+```dockerfile
+FROM python:3.12-slim
+
+RUN apt-get install -y ca-certificates curl gzip iputils-ping jq openssh-client tar \
+    && curl -fsSL https://mirror.openshift.com/.../openshift-client-linux.tar.gz \
+       -o /tmp/oc.tar.gz \
+    && tar -xzf /tmp/oc.tar.gz -C /usr/local/bin oc kubectl \
+    && rm /tmp/oc.tar.gz
+
+RUN useradd -u 1000 -m runtime
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY app ./app
+USER 1000:1000
+EXPOSE 8080
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+```
+
+**Co zawiera:**
+| Komponent | Opis |
+|-----------|------|
+| `python:3.12-slim` | baza (Debian Bookworm Slim) |
+| `curl`, `jq` | HTTP i parsowanie JSON |
+| `oc`, `kubectl` | OpenShift i Kubernetes CLI |
+| `ping` (iputils-ping) | diagnostyka sieci |
+| `ssh` (openssh-client) | połączenia SSH |
+| FastAPI + uvicorn | serwer MCP nasłuchujący na porcie 8080 |
+| `app/main.py` | obsługuje `/mcp`, `/tools/{name}`, `/openwebui`, `/health` |
+
+**Kiedy używać:** narzędzia shell — curl, oc, kubectl, psql, ping, ssh
+
+---
+
+### mcp-runtime-http-gateway:latest
+
+**Skąd pochodzi:** budowany z katalogu `runtime-http-gateway/`
+
+**Dockerfile:**
+```dockerfile
+FROM python:3.12-slim
+
+RUN addgroup --system app && adduser --system --ingroup app app
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY app ./app
+USER app
+EXPOSE 8080
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+```
+
+**Co zawiera:**
+| Komponent | Opis |
+|-----------|------|
+| `python:3.12-slim` | baza (Debian Bookworm Slim) |
+| FastAPI + uvicorn + httpx | serwer MCP + async HTTP client |
+| `app/main.py` | wywołuje zewnętrzne REST API przez httpx, obsługuje `/mcp`, `/tools/{name}` |
+
+**Kiedy używać:** narzędzia HTTP — wywołania REST API, webhooks, integracje z zewnętrznymi serwisami
+
+---
+
+### Jak budować własny obraz na bazie obrazów platformy
+
+Jeśli potrzebujesz narzędzi których nie ma w bazowych obrazach (np. `psql`, `terraform`, `awscli`), użyj **Image Builder** w UI lub napisz własny Dockerfile:
+
+```dockerfile
+# ZAWSZE zaczynaj od obrazu platformy — nigdy od czystego OS
+FROM mcp-runtime-shell:latest
+
+# Dodaj swoje narzędzia
+RUN apt-get update && apt-get install -y postgresql-client && rm -rf /var/lib/apt/lists/*
+```
+
+> **⚠️ Czysty obraz OS nie zadziała.**  
+> `ubuntu:24.04`, `debian:bookworm-slim`, `alpine` itp. nie mają serwera MCP (uvicorn + FastAPI).  
+> Kontener startuje z `bash`, od razu wychodzi i wpada w pętlę restartów.
+
+---
+
+
 
 ```
 Tool Package → MCP Server (definicja) → Deploy → Runtime Container → Endpoint MCP
