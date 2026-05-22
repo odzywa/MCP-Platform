@@ -4817,7 +4817,7 @@ def create_page(error: str = "") -> str:
   var source = null;
 
   // ── multi-tool state for step 3 ──────────────────────────────
-  var _s3Tools = [];   // [{cmd,name,desc,url,method,isShell}]
+  var _s3Tools = [];   // [{{cmd,name,desc,url,method,isShell}}]
   var _s3IsShell = true;
   var _s3IsPkg = false;
 
