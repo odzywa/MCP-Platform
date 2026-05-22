@@ -41,6 +41,21 @@ docker --version        # Docker version 24.x.x
 docker compose version  # Docker Compose version v2.x.x
 ```
 
+> **Important:** Your user must be in the `docker` group, otherwise `install.sh` and all `docker` commands will fail with permission errors.
+>
+> ```bash
+> # Add current user to docker group
+> sudo usermod -aG docker $USER
+>
+> # Apply without logout (current session only)
+> newgrp docker
+>
+> # Verify
+> docker ps   # should work without sudo
+> ```
+>
+> If you log out and back in, group membership is applied automatically.
+
 ---
 
 ## Installation
