@@ -8449,10 +8449,10 @@ def runtime_detail(runtime_id: str, welcome: str = "", tool_added: str = "") -> 
               <img src="https://avatars.githubusercontent.com/u/122285027" style="width:14px;height:14px;border-radius:3px;vertical-align:middle;margin-right:5px" onerror="this.style.display='none'">
               Continue (VS Code / JetBrains)
             </div>
-            <div class="muted" style="font-size:11px;margin-bottom:8px">~/.continue/config.json → <code>mcpServers</code> &nbsp;|&nbsp; transport: <code>sse</code></div>
+            <div class="muted" style="font-size:11px;margin-bottom:8px">~/.continue/config.json → <code>mcpServers</code> &nbsp;|&nbsp; transport: <code>streamable-http</code></div>
             <pre style="font-size:11px;margin:0;cursor:pointer;border-color:#1a3a50" onclick="copySnippet(this)" title="Kliknij żeby skopiować">"mcpServers": {{
   "{escape(payload['name'].lower().replace(' ','-'))}": {{
-    "transport": "sse",
+    "transport": "streamable-http",
     "url": "{escape(payload['endpoint_url'])}"
   }}
 }}</pre>
@@ -8477,7 +8477,7 @@ def runtime_detail(runtime_id: str, welcome: str = "", tool_added: str = "") -> 
   "models": [ ... ],
   "mcpServers": {{
     "{escape(payload['name'].lower().replace(' ','-'))}": {{
-      "transport": "sse",
+      "transport": "streamable-http",
       "url": "{escape(payload['endpoint_url'])}"
     }}
   }}
