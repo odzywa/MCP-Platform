@@ -2125,7 +2125,13 @@ def quick_start_page(error: str = "") -> str:
         ' onclick="chooseType(\'package\')">📦 Wybierz gotowy zestaw</button></div>'
     ) if not _can_shell else ""
     _shell_s0_style = 'style="display:none"' if not _can_shell else ""
-    packages = store.rows("SELECT id, name, description, category, risk_level, package_json FROM tool_packages WHERE enabled=1 AND source NOT IN ('advanced-creator','quick-start') ORDER BY category, name")
+    _all_pkgs = store.rows("SELECT id, name, description, category, risk_level, package_json FROM tool_packages WHERE enabled=1 ORDER BY source='builtin' DESC, created_at ASC")
+    _seen_names: set[str] = set()
+    packages = []
+    for _p in _all_pkgs:
+        if _p["name"] not in _seen_names:
+            _seen_names.add(_p["name"])
+            packages.append(_p)
     # Available base images: built-in + previously built
     _builtin_images = [
         ("mcp-runtime-shell:latest", "mcp-runtime-shell:latest — standardowy (oc, kubectl, curl, jq) [zalecane]"),
