@@ -8158,11 +8158,12 @@ def toggle_adapter(adapter_name: str):
 
 
 @app.get("/runtimes/{runtime_id}", response_class=HTMLResponse)
-def runtime_detail(runtime_id: str, welcome: str = "", tool_added: str = "") -> str:
+def runtime_detail(runtime_id: str, request: Request, welcome: str = "", tool_added: str = "") -> str:
     payload = runtime_payload(runtime_id)
     # Base URL without /mcp suffix — used for /openwebui and other non-MCP paths
     _ep = (payload.get("endpoint_url") or "").rstrip("/")
     _base_url = _ep[:-4] if _ep.endswith("/mcp") else _ep
+    _platform_base = f"{request.url.scheme}://{request.url.netloc}"
     adapter_select = adapter_options("http_request")
     runtime_adapters = store.rows("SELECT * FROM runtime_adapters WHERE runtime_id = ? ORDER BY adapter_name", (runtime_id,))
     targets = store.rows("SELECT * FROM targets WHERE runtime_id = ? ORDER BY adapter_name, name", (runtime_id,))
@@ -8457,7 +8458,7 @@ def runtime_detail(runtime_id: str, welcome: str = "", tool_added: str = "") -> 
               <div style="display:flex;align-items:center;gap:8px">
                 <code style="font-size:11px;background:#060e06;border:1px solid #2a5a3a;border-radius:5px;padding:4px 8px;color:#5ce89a;flex:1;word-break:break-all;cursor:pointer"
                       onclick="navigator.clipboard.writeText(this.textContent).then(()=>{{this.style.background='#0d2a1a';setTimeout(()=>this.style.background='',1500)}})"
-                      title="Kliknij żeby skopiować">http://mcp.dom:18100/api/runtimes/{escape(payload['id'])}/openwebui-tool.py</code>
+                      title="Kliknij żeby skopiować">{escape(_platform_base)}/api/runtimes/{escape(payload['id'])}/openwebui-tool.py</code>
                 <a href="/api/runtimes/{escape(payload['id'])}/openwebui-tool.py" download
                    style="background:#1a5a2a;color:#5ce89a;border:1px solid #2a7a3a;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;text-decoration:none;flex-shrink:0;white-space:nowrap">
                   ⬇ Pobierz .py
