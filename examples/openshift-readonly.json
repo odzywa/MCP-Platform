@@ -1,0 +1,82 @@
+{
+  "name": "OpenShift Read-Only",
+  "description": "Query OpenShift/Kubernetes cluster — oc get, describe, logs",
+  "category": "devops",
+  "risk_level": "medium",
+  "runtime_class": {
+    "name": "shell-oc",
+    "runtime_image": "mcp-runtime-shell:latest",
+    "execution_types": ["shell"],
+    "security_profile": "restricted"
+  },
+  "policy": {
+    "require_read_only": true,
+    "block_write_tools": true,
+    "block_destructive_tools": true,
+    "allowed_binaries": ["oc"],
+    "allowed_command_prefixes": ["oc get", "oc describe", "oc logs", "oc status", "oc version"],
+    "timeout_seconds": 30,
+    "max_payload_bytes": 262144,
+    "max_response_bytes": 10485760
+  },
+  "tools": [
+    {
+      "name": "oc_get",
+      "description": "Run 'oc get' to list OpenShift/Kubernetes resources. E.g. pods, services, deployments.",
+      "execution_type": "shell",
+      "mode": "read-only",
+      "risk_level": "medium",
+      "enabled": true,
+      "execution": {
+        "command": ["oc", "get", "${*args}"],
+        "timeout_seconds": 20
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "args": {"type": "string", "description": "Resource type and flags, e.g. 'pods -n production -o wide'"}
+        },
+        "required": ["args"]
+      }
+    },
+    {
+      "name": "oc_describe",
+      "description": "Run 'oc describe' on an OpenShift resource to get details.",
+      "execution_type": "shell",
+      "mode": "read-only",
+      "risk_level": "medium",
+      "enabled": true,
+      "execution": {
+        "command": ["oc", "describe", "${*args}"],
+        "timeout_seconds": 20
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "args": {"type": "string", "description": "Resource type and name, e.g. 'pod my-pod-abc -n production'"}
+        },
+        "required": ["args"]
+      }
+    },
+    {
+      "name": "oc_logs",
+      "description": "Get logs from an OpenShift pod.",
+      "execution_type": "shell",
+      "mode": "read-only",
+      "risk_level": "medium",
+      "enabled": true,
+      "execution": {
+        "command": ["oc", "logs", "${*args}"],
+        "timeout_seconds": 25
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "args": {"type": "string", "description": "Pod name and flags, e.g. 'my-pod -n production --tail=50'"}
+        },
+        "required": ["args"]
+      }
+    }
+  ],
+  "_setup_note": "Add KUBECONFIG as a file credential mounted at /config/secrets/kubeconfig and set env KUBECONFIG=/config/secrets/kubeconfig"
+}

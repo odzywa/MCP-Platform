@@ -1,0 +1,24 @@
+# Environment
+.env
+
+# Runtime data (database, configs, secrets)
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/configs/
+!data/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Docker
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,82 @@
+{
+  "name": "Curl HTTP Toolkit",
+  "description": "HTTP tools using curl — GET, POST, check status",
+  "category": "http",
+  "risk_level": "low",
+  "runtime_class": {
+    "name": "shell-readonly",
+    "runtime_image": "mcp-runtime-shell:latest",
+    "execution_types": ["shell"],
+    "security_profile": "restricted"
+  },
+  "policy": {
+    "require_read_only": true,
+    "block_write_tools": true,
+    "block_destructive_tools": true,
+    "allowed_binaries": ["curl", "jq"],
+    "allowed_command_prefixes": ["curl", "jq"],
+    "timeout_seconds": 30,
+    "max_payload_bytes": 262144,
+    "max_response_bytes": 5242880
+  },
+  "tools": [
+    {
+      "name": "http_get",
+      "description": "HTTP GET request. Returns response body as text or JSON.",
+      "execution_type": "shell",
+      "mode": "read-only",
+      "risk_level": "low",
+      "enabled": true,
+      "execution": {
+        "command": ["curl", "-s", "-L", "--max-time", "20", "${*url}"],
+        "timeout_seconds": 25
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "url": {"type": "string", "description": "URL to fetch (include https://)"}
+        },
+        "required": ["url"]
+      }
+    },
+    {
+      "name": "http_post",
+      "description": "HTTP POST request with JSON body.",
+      "execution_type": "shell",
+      "mode": "read-only",
+      "risk_level": "low",
+      "enabled": true,
+      "execution": {
+        "command": ["curl", "-s", "-L", "-X", "POST", "-H", "Content-Type: application/json", "-d", "${body}", "${*url}"],
+        "timeout_seconds": 25
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "url":  {"type": "string", "description": "Target URL"},
+          "body": {"type": "string", "description": "JSON body string"}
+        },
+        "required": ["url", "body"]
+      }
+    },
+    {
+      "name": "http_status",
+      "description": "Check HTTP status code of a URL.",
+      "execution_type": "shell",
+      "mode": "read-only",
+      "risk_level": "low",
+      "enabled": true,
+      "execution": {
+        "command": ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code} %{url_effective} time=%{time_total}s", "--max-time", "15", "${*url}"],
+        "timeout_seconds": 20
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "url": {"type": "string", "description": "URL to check"}
+        },
+        "required": ["url"]
+      }
+    }
+  ]
+}

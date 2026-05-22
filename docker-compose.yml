@@ -1,0 +1,62 @@
+services:
+  mcp-platform:
+    build:
+      context: ./control-plane
+    image: mcp-platform-control-plane:latest
+    container_name: mcp-platform
+    restart: unless-stopped
+    ports:
+      - "${MCP_PLATFORM_PORT:-18100}:8080"
+    environment:
+      MCP_PLATFORM_DB: /data/mcp_platform.db
+      MCP_PLATFORM_CONFIG_ROOT: /data/configs
+    volumes:
+      - ./data:/data
+    networks:
+      - mcp-net
+
+  mcp-platform-operator:
+    build:
+      context: ./operator
+    image: mcp-platform-operator:latest
+    container_name: mcp-platform-operator
+    restart: unless-stopped
+    environment:
+      MCP_PLATFORM_DB: /data/mcp_platform.db
+      MCP_PLATFORM_CONFIG_ROOT: /data/configs
+      MCP_PLATFORM_CONFIG_HOST_ROOT: ${MCP_HOST_DATA_PATH}/configs
+      MCP_RUNTIME_NETWORK: mcp-net
+      MCP_RUNTIME_PUBLIC_BASE_URL: ${MCP_RUNTIME_PUBLIC_BASE_URL:-http://localhost}
+      MCP_RUNTIME_PUBLIC_PORT_BASE: "${MCP_RUNTIME_PUBLIC_PORT_BASE:-19000}"
+      MCP_RUNTIME_BUILD_CONTEXT_ROOT: /workspace
+      MCP_PLATFORM_CALLBACK_URL: http://mcp-platform:8080
+    volumes:
+      - ./data:/data
+      - ./runtime-http-gateway:/workspace/runtime-http-gateway:ro
+      - ./runtime-shell:/workspace/runtime-shell:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - mcp-net
+    depends_on:
+      - mcp-platform
+
+  mcp-runtime-shell-image:
+    build:
+      context: ./runtime-shell
+    image: mcp-runtime-shell:latest
+    command: ["python", "-c", "print('mcp-runtime-shell image built')"]
+    profiles:
+      - build-only
+
+  mcp-runtime-http-gateway-image:
+    build:
+      context: ./runtime-http-gateway
+    image: mcp-runtime-http-gateway:latest
+    command: ["python", "-c", "print('mcp-runtime-http-gateway image built')"]
+    profiles:
+      - build-only
+
+networks:
+  mcp-net:
+    name: mcp-net
+    driver: bridge

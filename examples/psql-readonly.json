@@ -1,0 +1,76 @@
+{
+  "name": "PostgreSQL Read-Only",
+  "description": "Query PostgreSQL databases — SELECT only, no writes",
+  "category": "database",
+  "risk_level": "medium",
+  "runtime_class": {
+    "name": "shell-psql",
+    "runtime_image": "mcp-runtime-shell:latest",
+    "execution_types": ["shell"],
+    "security_profile": "restricted"
+  },
+  "policy": {
+    "require_read_only": true,
+    "block_write_tools": true,
+    "block_destructive_tools": true,
+    "allowed_binaries": ["psql"],
+    "allowed_command_prefixes": ["psql"],
+    "timeout_seconds": 30,
+    "max_payload_bytes": 262144,
+    "max_response_bytes": 5242880
+  },
+  "tools": [
+    {
+      "name": "sql_query",
+      "description": "Execute a SELECT query on PostgreSQL. Returns results as text table.",
+      "execution_type": "shell",
+      "mode": "read-only",
+      "risk_level": "medium",
+      "enabled": true,
+      "execution": {
+        "command": ["psql", "-h", "${PGHOST}", "-U", "${PGUSER}", "-d", "${PGDATABASE}", "-c", "${query}"],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {"type": "string", "description": "SQL SELECT query to execute"}
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "list_tables",
+      "description": "List all tables in the connected PostgreSQL database.",
+      "execution_type": "shell",
+      "mode": "read-only",
+      "risk_level": "low",
+      "enabled": true,
+      "execution": {
+        "command": ["psql", "-h", "${PGHOST}", "-U", "${PGUSER}", "-d", "${PGDATABASE}", "-c", "\\dt"],
+        "timeout_seconds": 10
+      },
+      "input_schema": {"type": "object", "properties": {}}
+    },
+    {
+      "name": "describe_table",
+      "description": "Show column structure of a PostgreSQL table.",
+      "execution_type": "shell",
+      "mode": "read-only",
+      "risk_level": "low",
+      "enabled": true,
+      "execution": {
+        "command": ["psql", "-h", "${PGHOST}", "-U", "${PGUSER}", "-d", "${PGDATABASE}", "-c", "\\d ${table_name}"],
+        "timeout_seconds": 10
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "table_name": {"type": "string", "description": "Table name to describe"}
+        },
+        "required": ["table_name"]
+      }
+    }
+  ],
+  "_setup_note": "Add credentials via Runtime → Secrets: PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE"
+}
