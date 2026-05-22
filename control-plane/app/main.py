@@ -3,6 +3,7 @@ import ipaddress
 import json
 import re
 import secrets as _secrets_mod
+import shlex
 import uuid
 from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
@@ -5221,7 +5222,7 @@ def runtimes_page(status: str = "all") -> str:
         else:
             audit_strip = '<div style="border-top:1px solid var(--line);margin-top:8px;padding-top:7px;font-size:11px;color:var(--muted)">Brak historii operacji</div>'
         cards_html += f"""
-        <div class="srv-card" id="card-{rid}">
+        <div class="srv-card" id="card-{rid}" onclick="if(!event.target.closest('button,a,form'))location.href='/runtimes/{rid}'" style="cursor:pointer">
           <div class="srv-card-top">
             <div>
               <a href="/runtimes/{rid}" class="srv-card-name">{escape(r['name'])}</a>
