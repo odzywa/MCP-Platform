@@ -87,6 +87,23 @@ docker compose up -d --build mcp-platform mcp-platform-operator
 > **Note:** `--force-recreate` alone does **not** rebuild images from updated source code.  
 > Always use `--build` after `git pull`.
 
+### Rebuilding images manually (after local code changes)
+
+```bash
+# Rebuild control plane only
+docker compose up -d --build mcp-platform
+
+# Rebuild operator only
+docker compose up -d --build mcp-platform-operator
+
+# Rebuild runtime images (shell / http-gateway)
+docker compose --profile build-only build
+# Then redeploy running runtimes via the UI: Runtime → Deploy
+
+# Rebuild everything at once
+docker compose build && docker compose up -d
+```
+
 ---
 
 ## Quick Start

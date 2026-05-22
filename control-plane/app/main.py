@@ -4816,23 +4816,132 @@ def create_page(error: str = "") -> str:
 (function() {{
   var source = null;
 
+  // ── multi-tool state for step 3 ──────────────────────────────
+  var _s3Tools = [];   // [{cmd,name,desc,url,method,isShell}]
+  var _s3IsShell = true;
+  var _s3IsPkg = false;
+
+  var _s3ShellPresets = [
+    ['psql ${{*args}}','🐘 psql'],
+    ['curl ${{*args}}','🌐 curl'],
+    ['curl -s ${{url}}','🌐 curl GET'],
+    ['oc get ${{*args}}','🔴 oc get'],
+    ['kubectl get ${{*args}}','☸️ kubectl']
+  ];
+
+  function s3ToolHtml(idx, isShell) {{
+    var presets = '';
+    if (isShell) {{
+      presets = '<div style="font-size:11px;color:#7dd3fc;font-weight:700;margin-bottom:6px">⚡ Wzorce:</div><div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">';
+      for (var pi=0; pi<_s3ShellPresets.length; pi++) {{
+        var pcmd = _s3ShellPresets[pi][0], plbl = _s3ShellPresets[pi][1];
+        presets += '<button type="button" onclick="s3ToolPreset('+idx+',this.dataset.cmd)" data-cmd="'+pcmd+'" style="background:#1a2a3a;border:1px solid #2a4a6a;color:#7dd3fc;padding:3px 9px;border-radius:5px;font-size:11px;cursor:pointer">'+plbl+'</button>';
+      }}
+      presets += '</div>';
+    }}
+    var inputStyle = 'width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:13px';
+    var cmdField = isShell
+      ? '<label style="font-size:12px;color:var(--muted)">Komenda</label>' + presets +
+        '<input id="s3t-cmd-'+idx+'" placeholder="curl -s ${{url}}" style="'+inputStyle+';font-family:monospace;margin-bottom:8px">'
+      : '<div style="display:grid;grid-template-columns:80px 1fr;gap:8px;margin-bottom:8px">' +
+        '<div><label style="font-size:12px;color:var(--muted)">Metoda</label>' +
+        '<select id="s3t-method-'+idx+'" style="'+inputStyle+'"><option>POST</option><option>GET</option></select></div>' +
+        '<div><label style="font-size:12px;color:var(--muted)">URL</label>' +
+        '<input id="s3t-url-'+idx+'" placeholder="https://api.example.com/v1/search" style="'+inputStyle+'"></div></div>';
+    var delBtn = idx > 0
+      ? '<button type="button" onclick="s3RemoveTool('+idx+')" style="background:none;border:none;color:#f47a80;font-size:20px;cursor:pointer;padding:0;line-height:1">×</button>'
+      : '';
+    return '<div id="s3-card-'+idx+'" style="background:#0d1822;border:1px solid #2a3a4a;border-radius:10px;padding:14px 16px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
+      '<span style="font-weight:700;font-size:13px;color:#7dd3fc">Narzędzie '+(idx+1)+'</span>'+delBtn+'</div>' +
+      cmdField +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+      '<div><label style="font-size:12px;color:var(--muted)">Nazwa</label>' +
+      '<input id="s3t-name-'+idx+'" placeholder="run_command" value="'+(idx===0?'run_command':'')+'" style="'+inputStyle+'"></div>' +
+      '<div><label style="font-size:12px;color:var(--muted)">Opis (dla AI)</label>' +
+      '<input id="s3t-desc-'+idx+'" placeholder="Pobiera dane / wykonuje komendę" style="'+inputStyle+'"></div>' +
+      '</div></div>';
+  }}
+
+  function s3Render() {{
+    var list = document.getElementById('s3-tools-list');
+    if (!list) return;
+    list.innerHTML = _s3Tools.map(function(_,i){{ return s3ToolHtml(i, _s3IsShell); }}).join('');
+  }}
+
+  window.s3AddTool = function() {{
+    _s3Tools.push({{}});
+    s3Render();
+  }};
+
+  window.s3RemoveTool = function(idx) {{
+    if (_s3Tools.length <= 1) return;
+    _s3Tools.splice(idx, 1);
+    s3Render();
+  }};
+
+  window.s3ToolPreset = function(idx, cmd) {{
+    var c = document.getElementById('s3t-cmd-'+idx);
+    if (c) c.value = cmd;
+    var n = document.getElementById('s3t-name-'+idx);
+    if (n && (!n.value || n.value === 'run_command')) {{
+      n.value = cmd.split(' ')[0].replace(/[^a-z0-9]/gi,'') + '_command';
+    }}
+  }};
+
+  window.s3Proceed = function() {{
+    var tools = [];
+    for (var i=0; i<_s3Tools.length; i++) {{
+      var name = (document.getElementById('s3t-name-'+i)||{{}}).value || ('tool_'+i);
+      var desc = (document.getElementById('s3t-desc-'+i)||{{}}).value || '';
+      if (_s3IsShell) {{
+        var cmd = (document.getElementById('s3t-cmd-'+i)||{{}}).value || '';
+        tools.push({{cmd:cmd, name:name, desc:desc, isShell:true}});
+      }} else {{
+        var url = (document.getElementById('s3t-url-'+i)||{{}}).value || '';
+        var method = (document.getElementById('s3t-method-'+i)||{{}}).value || 'POST';
+        tools.push({{url:url, method:method, name:name, desc:desc, isShell:false}});
+      }}
+    }}
+    if (tools.length === 0 && !_s3IsPkg) {{ alert('Dodaj co najmniej jedno narzędzie.'); return; }}
+    // Write first tool to legacy hidden fields
+    if (tools.length > 0) {{
+      var t0 = tools[0];
+      if (t0.isShell) {{
+        document.getElementById('s3-cmd-hidden').value  = t0.cmd;
+        document.getElementById('s3-name-hidden').value = t0.name;
+        document.getElementById('s3-desc-hidden').value = t0.desc;
+      }} else {{
+        document.getElementById('s3-url-hidden').value    = t0.url;
+        document.getElementById('s3-method-hidden').value = t0.method;
+        document.getElementById('s3-fname-hidden').value  = t0.name;
+        document.getElementById('s3-desc-hidden').value   = t0.desc;
+      }}
+    }}
+    // Extra tools (idx 1+)
+    document.getElementById('s3-extra-json').value = JSON.stringify(tools.slice(1));
+    goStep(4);
+  }};
+
   window.goStep = function(n) {{
     if (n === 3) {{
       var name = document.getElementById('adv-name').value.trim();
       if (!name) {{ document.getElementById('adv-name').focus(); return; }}
-      // Show correct s3 fields based on source/engine
       var adapter = document.getElementById('adapter-hidden').value;
-      var isShell = adapter === 'shell';
-      var isPkg = source === 'package';
-      document.getElementById('s3-http').style.display = (!isPkg && !isShell) ? 'block' : 'none';
-      document.getElementById('s3-shell').style.display = (!isPkg && isShell) ? 'block' : 'none';
-      if (isPkg) {{
-        document.getElementById('s3-sub').textContent = 'Narzędzia są już zdefiniowane w wybranej paczce — przejdź dalej.';
-      }} else if (isShell) {{
-        document.getElementById('s3-sub').textContent = 'Wpisz komendę którą AI będzie wykonywać w kontenerze.';
-      }} else {{
-        document.getElementById('s3-sub').textContent = 'Podaj adres API który AI ma wywoływać.';
+      _s3IsShell = adapter === 'shell';
+      _s3IsPkg   = source === 'package';
+      if (_s3Tools.length === 0) _s3Tools.push({{}});
+      s3Render();
+      var sub = document.getElementById('s3-sub');
+      if (sub) {{
+        if (_s3IsPkg)       sub.textContent = 'Narzędzia są już zdefiniowane w wybranej paczce — przejdź dalej.';
+        else if (_s3IsShell) sub.textContent = 'Zdefiniuj komendy które AI będzie wykonywać w kontenerze.';
+        else                 sub.textContent = 'Podaj adresy API które AI ma wywoływać.';
       }}
+      var addBtn = document.querySelector('#s3 button[onclick="s3AddTool()"]');
+      if (addBtn) addBtn.style.display = _s3IsPkg ? 'none' : '';
+      var toolList = document.getElementById('s3-tools-list');
+      if (toolList) toolList.style.display = _s3IsPkg ? 'none' : '';
     }}
     [1,2,3,4,5].forEach(function(i) {{
       var s = document.getElementById('s'+i);
@@ -4845,16 +4954,9 @@ def create_page(error: str = "") -> str:
   }};
 
   window.s3Preset = function(cmd, desc) {{
-    var c = document.getElementById('s3-cmd');
-    if (c) c.value = cmd;
-    var d = document.getElementById('s3-desc');
+    s3ToolPreset(0, cmd);
+    var d = document.getElementById('s3t-desc-0');
     if (d && !d.value) d.value = desc;
-    // auto tool name from first word
-    var tn = document.getElementById('s3-tool-name');
-    if (tn && tn.value === 'run_command') {{
-      var first = cmd.split(' ')[0].replace(/[^a-z0-9]/gi,'');
-      tn.value = first + '_command';
-    }}
   }};
 
   window.chooseSource = function(src) {{
@@ -7581,6 +7683,48 @@ async def create_runtime(request: Request):
              json.dumps(shell_schema), "{}", 1, data.risk_level, "read-only", "other", now, now),
         )
         store.audit("admin", "add_initial_tool", "runtime", runtime_id, {"tool": shell_tool_name})
+
+    # Extra tools from multi-tool step 3
+    try:
+        extra_tools = json.loads(str(form.get("extra_tools_json") or "[]"))
+    except Exception:
+        extra_tools = []
+    for et in extra_tools:
+        if not isinstance(et, dict):
+            continue
+        et_name = re.sub(r"[^a-z0-9_]", "_", str(et.get("name") or "tool").strip().lower()) or "tool"
+        et_desc = str(et.get("desc") or et_name)
+        if et.get("isShell") or et.get("cmd"):
+            et_cmd_raw = str(et.get("cmd") or "").strip()
+            if not et_cmd_raw:
+                continue
+            et_parts = et_cmd_raw.split()
+            et_splat = re.findall(r"\$\{\*(\w+)\}", et_cmd_raw)
+            et_regular = [v for v in re.findall(r"\$\{(\w+)\}", et_cmd_raw) if v not in et_splat]
+            et_props: dict[str, Any] = {}
+            for v in et_splat:
+                et_props[v] = {"type": "string", "description": f"Argumenty dla {et_parts[0] if et_parts else 'komendy'}"}
+            for v in et_regular:
+                et_props[v] = {"type": "string", "description": f"Wartość parametru {v}"}
+            et_schema = {"type": "object", "properties": et_props, "required": list(et_props.keys())} if et_props else {"type": "object"}
+            store.execute(
+                "INSERT INTO tools(runtime_id, name, description, execution_type, config_json, input_schema_json, output_schema_json, enabled, risk_level, mode, category, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (runtime_id, et_name, et_desc, "shell",
+                 json.dumps({"command": et_parts, "timeout_seconds": adv_policy.get("timeout_seconds", 30)}),
+                 json.dumps(et_schema), "{}", 1, data.risk_level, "read-only", "other", now, now),
+            )
+        else:
+            et_url = str(et.get("url") or "")
+            et_method = str(et.get("method") or "POST").upper()
+            if not et_url:
+                continue
+            store.execute(
+                "INSERT INTO tools(runtime_id, name, description, execution_type, config_json, input_schema_json, output_schema_json, enabled, risk_level, mode, category, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (runtime_id, et_name, et_desc, "http_request",
+                 json.dumps({"method": et_method, "url": et_url, "body": {}, "timeout_seconds": 30}),
+                 json.dumps({"type": "object"}), "{}", 1, data.risk_level, "read-only", "other", now, now),
+            )
+        store.audit("admin", "add_initial_tool", "runtime", runtime_id, {"tool": et_name})
 
     # Auto-create tool package in catalog so it's reusable
     _tools_in_db = store.rows("SELECT * FROM tools WHERE runtime_id = ?", (runtime_id,))
