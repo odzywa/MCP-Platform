@@ -8794,7 +8794,7 @@ function ntPreset(cmd, desc) {{
     </main>
     <script>
     (function() {{
-      const TRANSITIONAL = new Set(['deploying','building','starting','stopping','restarting','deleting','checking','syncing_logs']);
+      const TRANSITIONAL = new Set(['deploying','building','starting','stopping','restarting','deleting','checking','syncing_logs','draft']);
       const rid = '{escape(runtime_id)}';
       let currentStatus = '{escape(payload["status"])}';
 
