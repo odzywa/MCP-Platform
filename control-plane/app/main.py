@@ -9639,7 +9639,7 @@ def export_openwebui_tool(runtime_id: str):
 
         method_name = re.sub(r"[^a-z0-9]", "_", t["name"].lower()).strip("_")
 
-        _headers_code = '        _hdrs = {"X-Model": __model__, "X-AI-Model": __model__, "X-Forwarded-For": (__user__ or {{}}).get("valves", {{}}).get("client_ip", "") or (__user__ or {{}}).get("id", "")}\n'
+        _headers_code = '        _client_ip = ""\n        try:\n            if __request__ and hasattr(__request__, "client") and __request__.client:\n                _client_ip = __request__.client.host or ""\n        except Exception:\n            pass\n        _hdrs = {{"X-Model": __model__, "X-AI-Model": __model__, "X-Real-IP": _client_ip, "X-Forwarded-For": _client_ip}}\n'
         if exec_type == "http_request":
             http_method = (cfg.get("method") or "POST").upper()
             if http_method == "GET":
@@ -9653,7 +9653,7 @@ def export_openwebui_tool(runtime_id: str):
             request_code = f'r = requests.post("{endpoint}/tools/{t["name"]}", json=payload, headers=_hdrs, timeout=self.valves.timeout)'
 
         return f'''
-    def {method_name}(self{param_sig}, __model__: str = "", __user__: dict = {{}}) -> str:
+    def {method_name}(self{param_sig}, __model__: str = "", __user__: dict = {{}}, __request__: object = None) -> str:
 {docstring}
 {body_code}        try:
             {request_code}
