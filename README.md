@@ -18,6 +18,31 @@ Connect AI assistants (Continue, OpenWebUI, Claude Desktop) to your infrastructu
 
 ---
 
+## Prerequisites
+
+| Requirement | Version | Install |
+|-------------|---------|---------|
+| **Docker Engine** | 24.0+ | [docs.docker.com/engine/install](https://docs.docker.com/engine/install/) |
+| **Docker Compose** | v2.20+ (plugin) | included with Docker Desktop / `apt install docker-compose-plugin` |
+| **OS** | Linux (Ubuntu 22.04+ recommended) | — |
+| **RAM** | 2 GB minimum, 4 GB recommended | — |
+| **Disk** | 4 GB free (images + data) | — |
+| **Ports** | 18100 + range 19000–19999 open | firewall / UFW |
+
+> **Note:** Docker Desktop on macOS/Windows works for development but runtime containers may not be reachable by AI clients outside the VM. Linux is recommended for production.
+
+### Install Docker (Ubuntu)
+
+```bash
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+newgrp docker
+docker --version        # Docker version 24.x.x
+docker compose version  # Docker Compose version v2.x.x
+```
+
+---
+
 ## Quick Start
 
 **Requirements:** Docker 24+, Docker Compose v2, Linux
