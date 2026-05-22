@@ -4842,7 +4842,8 @@ def create_page(error: str = "") -> str:
     var inputStyle = 'width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:13px';
     var cmdField = isShell
       ? '<label style="font-size:12px;color:var(--muted)">Komenda</label>' + presets +
-        '<input id="s3t-cmd-'+idx+'" placeholder="curl -s ${{url}}" style="'+inputStyle+';font-family:monospace;margin-bottom:8px">'
+        '<input id="s3t-cmd-'+idx+'" placeholder="curl -s ${{url}}" style="'+inputStyle+';font-family:monospace;margin-bottom:4px">' +
+        '<div style="font-size:11px;color:var(--muted);margin-bottom:8px"><code style="background:#0d1420;padding:1px 5px;border-radius:3px">${{zmienna}}</code> = jeden parametr &nbsp;|&nbsp; <code style="background:#0d1420;padding:1px 5px;border-radius:3px">${{*args}}</code> = AI podaje wszystkie argumenty naraz</div>'
       : '<div style="display:grid;grid-template-columns:80px 1fr;gap:8px;margin-bottom:8px">' +
         '<div><label style="font-size:12px;color:var(--muted)">Metoda</label>' +
         '<select id="s3t-method-'+idx+'" style="'+inputStyle+'"><option>POST</option><option>GET</option></select></div>' +
