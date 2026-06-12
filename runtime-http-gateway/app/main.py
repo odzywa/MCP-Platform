@@ -444,6 +444,7 @@ async def execute_tool(tool_name: str, arguments: dict[str, Any], response_profi
     execution = tool.get("execution") or {}
     method = str(execution.get("method", "POST")).upper()
     template_values = {**runtime_config, **arguments}
+    header_values = {**os.environ, **template_values}
     url = Template(str(execution["url"])).safe_substitute(template_values)
     body_template = execution.get("body", arguments)
     if isinstance(body_template, dict):
@@ -452,10 +453,13 @@ async def execute_tool(tool_name: str, arguments: dict[str, Any], response_profi
         body = json.loads(Template(body_template).safe_substitute(template_values))
     else:
         body = arguments
+    headers_template = execution.get("headers") or {}
+    headers = {str(k): str(v) for k, v in substitute_template(headers_template, header_values).items()}
     timeout = int(execution.get("timeout_seconds") or policy.get("timeout_seconds") or 30)
     max_response_bytes = int(execution.get("max_response_bytes") or policy.get("max_response_bytes") or 5_242_880)
     async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.request(method, url, json=body if method in {"POST", "PUT", "PATCH"} else None)
+        response = await client.request(method, url, json=body if method in {"POST", "PUT", "PATCH"} else None,
+                                         headers=headers or None)
         content = response.content[:max_response_bytes]
         try:
             output = json.loads(content.decode("utf-8")) if content else {}

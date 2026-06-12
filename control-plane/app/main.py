@@ -15,33 +15,30 @@ from urllib.parse import quote, urlparse
 import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from . import queries as sql
 from . import store
+from .adapters_config import adapter_contracts
+from .config import (
+    _ADMIN_ONLY,
+    _FAVICON_TAG,
+    _PUBLIC,
+    _READONLY_GET,
+    AUTH_COOKIE,
+    CUSTOM_TEMPLATES_FILE,
+    SESSION_TTL_H,
+)
+from .models import AdapterCreate, RuntimeCreate, ToolCreate
+from .templates import render_template
+from .tools.docker import build_runtime_dockerfile
+from .tools.strings import clean_words, slug, validate_image_ref
 
 
 app = FastAPI(title="MCP Platform", version="0.1.0", docs_url="/api-swagger", redoc_url=None)
 
-_FAVICON_TAG = '<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 64 64\'%3E%3Crect width=\'64\' height=\'64\' rx=\'12\' fill=\'%230f1722\'/%3E%3Ctext x=\'32\' y=\'36\' font-family=\'Arial Black,Arial,sans-serif\' font-size=\'24\' font-weight=\'900\' fill=\'%231f9bd1\' text-anchor=\'middle\'%3EMCP%3C/text%3E%3Ctext x=\'32\' y=\'52\' font-family=\'Arial,sans-serif\' font-size=\'9\' font-weight=\'600\' fill=\'%234a7a9b\' text-anchor=\'middle\' letter-spacing=\'2\'%3EPLATFORM%3C/text%3E%3C/svg%3E">'
-
 # ── Auth / RBAC ────────────────────────────────────────────────────────────────
-AUTH_COOKIE = "mcp_session"
-SESSION_TTL_H = 24
 _current_user: ContextVar[dict | None] = ContextVar("current_user", default=None)
-
-# Public paths that never require login
-_PUBLIC = re.compile(r"^/(login|register)(/?|\?.*)$|^/api/runtimes/[^/]+/openwebui-tool\.py$|^/api/tool-call$|^/api/runtime-callback")
-# Paths that are read-only (any logged-in user can GET them)
-_READONLY_GET = re.compile(
-    r"^/(|runtimes.*|audit.*|logs.*|security.*|docs.*|external-mcp.*"
-    r"|api/runtimes/[^/]+/status|api/user/.*)$"
-)
-# Paths blocked for read_write (admin only)
-_ADMIN_ONLY = re.compile(
-    r"^/(tool-packages/generate|runtime-classes.*|tool-types.*|adapters.*|admin.*"
-    r"|api/(tool-packages.*|runtime-images.*|runtime-classes.*|adapters.*))"
-)
 
 
 def _hash_pw(pw: str) -> str:
@@ -94,16 +91,12 @@ def _ensure_admin() -> None:
 
 
 def _access_denied_html(user: dict, msg: str) -> str:
-    return f"""<!doctype html><html><head><title>Brak dostępu</title>
-    <style>body{{font-family:Arial;background:#111820;color:#dce7f3;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}}
-    .box{{background:#182230;border:1px solid #2b394a;border-radius:12px;padding:40px;text-align:center;max-width:420px}}</style></head>
-    <body><div class="box">
-      <div style="font-size:48px;margin-bottom:16px">🔒</div>
-      <h2 style="margin:0 0 10px">Brak dostępu</h2>
-      <p style="color:#8ea2b8;margin-bottom:20px">{escape(msg)}</p>
-      <p style="color:#607083;font-size:13px">Zalogowany jako: <b>{escape(user.get("username","?"))}</b> (rola: {escape(user.get("role","?"))})</p>
-      <a href="/" style="background:#1f9bd1;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:700">← Powrót</a>
-    </div></body></html>"""
+    return render_template(
+        "access_denied",
+        msg=escape(msg),
+        username=escape(user.get("username", "?")),
+        role=escape(user.get("role", "?")),
+    )
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -147,230 +140,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
 app.add_middleware(AuthMiddleware)
 
 
-class RuntimeCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=80)
-    description: str = ""
-    package_id: str = ""
-    runtime_class: str = "http-gateway"
-    template: str = "blank"
-    risk_level: str = "low"
-    first_tool_name: str = ""
-    first_tool_url: str = ""
-    first_tool_method: str = "POST"
-    first_tool_body_json: dict[str, Any] = Field(default_factory=dict)
-    first_tool_enabled: bool = True
-
-
-class ToolCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=80)
-    description: str = ""
-    execution_type: str = "http_request"
-    url: str
-    method: str = "POST"
-    body_json: dict[str, Any] = Field(default_factory=dict)
-    enabled: bool = False
-    risk_level: str = "low"
-    mode: str = "read-only"
-    category: str = "other"
-
-
-class AdapterCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=80)
-    description: str = ""
-    adapter_type: str = "http"
-    risk_level: str = "low"
-    mode: str = "read-only"
-    implemented: bool = False
-    enabled: bool = False
-
-
-def adapter_contracts() -> dict[str, dict[str, Any]]:
-    return {
-        "http_request": {
-            "name": "http_request",
-            "display_name": "HTTP Adapter",
-            "category": "api",
-            "config_schema": {
-                "type": "object",
-                "properties": {
-                    "base_url": {"type": "string", "title": "Base URL"},
-                    "auth_type": {"type": "string", "title": "Auth type", "enum": ["none", "bearer", "basic", "api_key"], "default": "none"},
-                    "timeout_seconds": {"type": "integer", "title": "Timeout seconds", "default": 30, "minimum": 1, "maximum": 300},
-                    "retry_count": {"type": "integer", "title": "Retries", "default": 1, "minimum": 0, "maximum": 10},
-                },
-            },
-            "secret_schema": {
-                "type": "object",
-                "properties": {
-                    "bearer_token": {"type": "string", "title": "Bearer token secret ref"},
-                    "basic_password": {"type": "string", "title": "Basic password secret ref"},
-                    "api_key": {"type": "string", "title": "API key secret ref"},
-                },
-            },
-            "target_schema": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string", "title": "Target name"},
-                    "base_url": {"type": "string", "title": "Base URL"},
-                    "environment": {"type": "string", "title": "Environment"},
-                },
-                "required": ["name", "base_url"],
-            },
-            "tool_schema": {
-                "type": "object",
-                "properties": {
-                    "method": {"type": "string", "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"], "default": "GET"},
-                    "path": {"type": "string", "title": "Path"},
-                    "body_template": {"type": "string", "title": "Body template"},
-                },
-                "required": ["method", "path"],
-            },
-            "policy_schema": {
-                "type": "object",
-                "properties": {
-                    "allowed_methods": {"type": "array", "items": {"type": "string"}, "default": ["GET", "POST"]},
-                    "allowed_hosts": {"type": "array", "items": {"type": "string"}},
-                    "max_response_bytes": {"type": "integer", "default": 5242880},
-                },
-            },
-            "capabilities": ["http.request", "http.read", "http.write"],
-        },
-        "shell": {
-            "name": "shell",
-            "display_name": "Process/Shell Adapter",
-            "category": "system",
-            "config_schema": {
-                "type": "object",
-                "properties": {
-                    "working_dir": {"type": "string", "title": "Working directory", "default": "/tmp"},
-                    "timeout_seconds": {"type": "integer", "title": "Timeout seconds", "default": 20, "minimum": 1, "maximum": 300},
-                },
-            },
-            "secret_schema": {"type": "object", "properties": {}},
-            "target_schema": {"type": "object", "properties": {"name": {"type": "string", "title": "Target name"}}},
-            "tool_schema": {
-                "type": "object",
-                "properties": {
-                    "command": {"type": "array", "title": "Command argv", "items": {"type": "string"}},
-                },
-                "required": ["command"],
-            },
-            "policy_schema": {
-                "type": "object",
-                "properties": {
-                    "allowed_binaries": {"type": "array", "items": {"type": "string"}},
-                    "blocked_commands": {"type": "array", "items": {"type": "string"}},
-                    "max_response_bytes": {"type": "integer", "default": 1048576},
-                },
-            },
-            "capabilities": ["process.execute", "process.readonly"],
-        },
-        "ssh": {
-            "name": "ssh",
-            "display_name": "SSH Adapter",
-            "category": "infrastructure",
-            "config_schema": {
-                "type": "object",
-                "properties": {
-                    "default_port": {"type": "integer", "title": "Default SSH port", "default": 22, "minimum": 1, "maximum": 65535},
-                    "connect_timeout_seconds": {"type": "integer", "title": "Connect timeout", "default": 10, "minimum": 1, "maximum": 120},
-                    "command_timeout_seconds": {"type": "integer", "title": "Command timeout", "default": 20, "minimum": 1, "maximum": 300},
-                    "strict_host_key_checking": {"type": "boolean", "title": "Strict host key checking", "default": True},
-                },
-            },
-            "secret_schema": {
-                "type": "object",
-                "properties": {
-                    "password": {"type": "string", "title": "Password secret ref"},
-                    "private_key": {"type": "string", "title": "Private key secret ref"},
-                    "passphrase": {"type": "string", "title": "Key passphrase secret ref"},
-                },
-            },
-            "target_schema": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string", "title": "Target name"},
-                    "host": {"type": "string", "title": "Host/IP"},
-                    "port": {"type": "integer", "title": "SSH port", "default": 22, "minimum": 1, "maximum": 65535},
-                    "username": {"type": "string", "title": "Username"},
-                    "auth_method": {"type": "string", "title": "Auth method", "enum": ["password", "private_key"], "default": "private_key"},
-                    "environment": {"type": "string", "title": "Environment"},
-                },
-                "required": ["name", "host", "username"],
-            },
-            "tool_schema": {
-                "type": "object",
-                "properties": {
-                    "target_selector": {"type": "string", "title": "Target selector"},
-                    "command_template": {"type": "string", "title": "Command template"},
-                    "output_parser": {"type": "string", "title": "Output parser", "enum": ["text", "json", "lines"], "default": "text"},
-                },
-                "required": ["command_template"],
-            },
-            "policy_schema": {
-                "type": "object",
-                "properties": {
-                    "allowed_command_prefixes": {"type": "array", "items": {"type": "string"}},
-                    "blocked_command_patterns": {"type": "array", "items": {"type": "string"}},
-                    "allow_targets_from_inventory_only": {"type": "boolean", "default": True},
-                    "max_output_bytes": {"type": "integer", "default": 1048576},
-                    "concurrent_sessions": {"type": "integer", "default": 2, "minimum": 1, "maximum": 50},
-                },
-            },
-            "capabilities": ["ssh.command.execute", "ssh.command.readonly", "ssh.command.privileged"],
-        },
-    }
-
-
 @app.on_event("startup")
 def startup() -> None:
     store.init_db()
     _ensure_admin()
     seed_platform_catalog()
     seed_raghybrid_template()
-
-
-def slug(value: str) -> str:
-    clean = re.sub(r"[^a-zA-Z0-9-]+", "-", value.strip().lower()).strip("-")
-    return clean or "runtime"
-
-
-def clean_words(value: str, pattern: str, field: str) -> list[str]:
-    words = [item.strip() for item in re.split(r"[\s,]+", value or "") if item.strip()]
-    invalid = [item for item in words if not re.fullmatch(pattern, item)]
-    if invalid:
-        raise HTTPException(status_code=400, detail=f"Invalid {field}: {', '.join(invalid[:5])}")
-    return words
-
-
-def validate_image_ref(value: str, field: str = "image") -> str:
-    image = value.strip()
-    if not image or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,180}", image):
-        raise HTTPException(status_code=400, detail=f"Invalid {field}")
-    return image
-
-
-def build_runtime_dockerfile(base_image: str, apt_packages: list[str], pip_packages: list[str], extra_dockerfile: str) -> str:
-    lines = [
-        f"FROM {base_image}",
-        "USER root",
-        "ENV PYTHONDONTWRITEBYTECODE=1",
-    ]
-    if apt_packages:
-        packages = " ".join(apt_packages)
-        lines.append(
-            "RUN apt-get update "
-            f"&& apt-get install -y --no-install-recommends {packages} "
-            "&& rm -rf /var/lib/apt/lists/*"
-        )
-    if pip_packages:
-        lines.append(f"RUN pip install --no-cache-dir {' '.join(pip_packages)}")
-    extra = extra_dockerfile.strip()
-    if extra:
-        lines.append("")
-        lines.append("# Admin-provided Dockerfile fragment")
-        lines.extend(extra.splitlines())
-    return "\n".join(lines).rstrip() + "\n"
 
 
 def enqueue_runtime_image_build(
@@ -485,14 +260,10 @@ def seed_platform_catalog() -> None:
     ]
     for adapter in adapters:
         contract_json = json.dumps(adapter_contracts().get(adapter["name"], {"name": adapter["name"], "config_schema": adapter["schema"]}))
-        if not store.one("SELECT name FROM execution_adapters WHERE name = ?", (adapter["name"],)):
+        if not store.one(sql.SELECT_ADAPTER_NAME_BY_NAME, (adapter["name"],)):
             changed = True
             store.execute(
-                """
-                INSERT INTO execution_adapters(name, description, adapter_type, runtime_image, config_schema_json,
-                                               adapter_contract_json, enabled, implemented, risk_level, mode, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
+                sql.INSERT_EXECUTION_ADAPTER,
                 (
                     adapter["name"],
                     adapter["description"],
@@ -534,7 +305,7 @@ def seed_platform_catalog() -> None:
         ("shell-readonly",  "Shell runtime for CLI tools (curl, psql, oc, ping...)",   "mcp-runtime-shell:latest",        ["shell"]),
         ("shell-readwrite", "Shell runtime — write mode allowed",                       "mcp-runtime-shell:latest",        ["shell"]),
     ]:
-        if not store.one("SELECT name FROM runtime_classes WHERE name = ?", (_rc_name,)):
+        if not store.one(sql.SELECT_RUNTIME_CLASS_NAME_BY_NAME, (_rc_name,)):
             changed = True
             store.execute(
                 "INSERT INTO runtime_classes(name, description, runtime_image, allowed_execution_types_json, enabled, risk_level, security_profile, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
@@ -545,14 +316,10 @@ def seed_platform_catalog() -> None:
                 "UPDATE runtime_classes SET runtime_image=?, allowed_execution_types_json=?, enabled=1, updated_at=? WHERE name=?",
                 (_rc_image, json.dumps(_rc_types), now, _rc_name),
             )
-    if not store.one("SELECT name FROM runtime_classes WHERE name = ?", ("http-gateway",)):
+    if not store.one(sql.SELECT_RUNTIME_CLASS_NAME_BY_NAME, ("http-gateway",)):
         changed = True
         store.execute(
-            """
-            INSERT INTO runtime_classes(name, description, runtime_image, allowed_execution_types_json,
-                                        enabled, risk_level, security_profile, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
+            sql.INSERT_RUNTIME_CLASS,
             (
                 "http-gateway",
                 "Generic HTTP MCP runtime. Supports config-driven HTTP tools.",
@@ -565,14 +332,10 @@ def seed_platform_catalog() -> None:
                 now,
             ),
         )
-    if not store.one("SELECT name FROM runtime_classes WHERE name = ?", ("generic-runtime",)):
+    if not store.one(sql.SELECT_RUNTIME_CLASS_NAME_BY_NAME, ("generic-runtime",)):
         changed = True
         store.execute(
-            """
-            INSERT INTO runtime_classes(name, description, runtime_image, allowed_execution_types_json,
-                                        enabled, risk_level, security_profile, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
+            sql.INSERT_RUNTIME_CLASS,
             (
                 "generic-runtime",
                 "Generic adapter-driven MCP runtime. Loads adapter-config, targets, tools and policy.",
@@ -892,14 +655,11 @@ def seed_builtin_tool_packages() -> None:
 
 
 def seed_raghybrid_template() -> None:
-    if store.one("SELECT id FROM runtimes WHERE id = ?", ("raghybrid-assistant",)):
+    if store.one(sql.SELECT_RUNTIME_ID_EXISTS, ("raghybrid-assistant",)):
         return
     now = store.now_iso()
     store.execute(
-        """
-        INSERT INTO runtimes(id, name, description, runtime_class, template, status, risk_level, image, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
+        sql.INSERT_RUNTIME,
         (
             "raghybrid-assistant",
             "RAGHybrid Assistant",
@@ -941,11 +701,7 @@ def seed_raghybrid_template() -> None:
         "required": ["query"],
     }
     store.execute(
-        """
-        INSERT INTO tools(runtime_id, name, description, execution_type, config_json, input_schema_json, output_schema_json,
-                          enabled, risk_level, mode, category, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
+        sql.INSERT_TOOL,
         (
             "raghybrid-assistant",
             "hybridrag_search",
@@ -963,7 +719,7 @@ def seed_raghybrid_template() -> None:
         ),
     )
     store.execute(
-        "INSERT INTO policies(runtime_id, policy_json, updated_at) VALUES (?, ?, ?)",
+        sql.INSERT_POLICY,
         (
             "raghybrid-assistant",
             json.dumps(
@@ -984,11 +740,11 @@ def seed_raghybrid_template() -> None:
 
 
 def runtime_payload(runtime_id: str) -> dict[str, Any]:
-    runtime = store.one("SELECT * FROM runtimes WHERE id = ?", (runtime_id,))
+    runtime = store.one(sql.SELECT_RUNTIME_BY_ID, (runtime_id,))
     if not runtime:
         raise HTTPException(status_code=404, detail="Runtime not found")
     tools = store.rows("SELECT * FROM tools WHERE runtime_id = ? ORDER BY name", (runtime_id,))
-    policy = store.one("SELECT policy_json FROM policies WHERE runtime_id = ?", (runtime_id,))
+    policy = store.one(sql.SELECT_POLICY_JSON_BY_RUNTIME, (runtime_id,))
     return {
         **runtime,
         "tools": tools,
@@ -1102,7 +858,7 @@ def extract_schema_values(form: Any, prefix: str, schema: dict[str, Any]) -> dic
 
 
 def validate_runtime_class_adapter(runtime_class: str, execution_type: str) -> None:
-    runtime = store.one("SELECT * FROM runtime_classes WHERE name = ? AND enabled = 1", (runtime_class,))
+    runtime = store.one(sql.SELECT_RUNTIME_CLASS_ENABLED_BY_NAME, (runtime_class,))
     if not runtime:
         raise HTTPException(status_code=400, detail=f"Runtime class is not enabled: {runtime_class}")
     allowed = json.loads(runtime["allowed_execution_types_json"] or "[]")
@@ -1119,7 +875,7 @@ def validate_runtime_class_adapter(runtime_class: str, execution_type: str) -> N
 
 
 def package_spec(package_id: str) -> dict[str, Any]:
-    row = store.one("SELECT * FROM tool_packages WHERE id = ?", (package_id,))
+    row = store.one(sql.SELECT_TOOL_PACKAGE_BY_ID, (package_id,))
     if not row:
         raise HTTPException(status_code=404, detail="Tool package not found")
     if not row.get("enabled", 1):
@@ -1128,7 +884,7 @@ def package_spec(package_id: str) -> dict[str, Any]:
 
 
 def adapter_contract(adapter_name: str) -> dict[str, Any]:
-    adapter = store.one("SELECT * FROM execution_adapters WHERE name = ?", (adapter_name,))
+    adapter = store.one(sql.SELECT_ADAPTER_BY_NAME, (adapter_name,))
     if not adapter:
         return {}
     try:
@@ -1158,19 +914,7 @@ def upsert_package_dependencies(package: dict[str, Any]) -> None:
     runtime_class = package.get("runtime_class") or {}
     if runtime_class.get("name"):
         store.execute(
-            """
-            INSERT INTO runtime_classes(name, description, runtime_image, allowed_execution_types_json,
-                                        enabled, risk_level, security_profile, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(name) DO UPDATE SET
-              description = excluded.description,
-              runtime_image = excluded.runtime_image,
-              allowed_execution_types_json = excluded.allowed_execution_types_json,
-              enabled = excluded.enabled,
-              risk_level = excluded.risk_level,
-              security_profile = excluded.security_profile,
-              updated_at = excluded.updated_at
-            """,
+            sql.UPSERT_RUNTIME_CLASS,
             (
                 runtime_class["name"],
                 runtime_class.get("description") or package.get("description", ""),
@@ -1265,16 +1009,13 @@ def create_runtime_from_package(package_id: str, name: str, deploy: bool) -> str
     upsert_package_dependencies(package)
     runtime_class = package["runtime_class"]
     runtime_class_name = runtime_class["name"]
-    class_row = store.one("SELECT * FROM runtime_classes WHERE name = ? AND enabled = 1", (runtime_class_name,))
+    class_row = store.one(sql.SELECT_RUNTIME_CLASS_ENABLED_BY_NAME, (runtime_class_name,))
     if not class_row:
         raise HTTPException(status_code=400, detail=f"Runtime class is not enabled: {runtime_class_name}")
     runtime_id = slug(name or package["name"]) + "-" + uuid.uuid4().hex[:6]
     now = store.now_iso()
     store.execute(
-        """
-        INSERT INTO runtimes(id, name, description, runtime_class, template, status, risk_level, image, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
+        sql.INSERT_RUNTIME,
         (
             runtime_id,
             name or package["name"],
@@ -1289,7 +1030,7 @@ def create_runtime_from_package(package_id: str, name: str, deploy: bool) -> str
         ),
     )
     store.execute(
-        "INSERT INTO policies(runtime_id, policy_json, updated_at) VALUES (?, ?, ?)",
+        sql.INSERT_POLICY,
         (runtime_id, json.dumps(package.get("policy") or {}), now),
     )
     for adapter in package.get("adapters") or []:
@@ -1301,11 +1042,7 @@ def create_runtime_from_package(package_id: str, name: str, deploy: bool) -> str
         )
     for tool in package.get("tools") or []:
         store.execute(
-            """
-            INSERT INTO tools(runtime_id, name, description, execution_type, config_json, input_schema_json, output_schema_json,
-                              enabled, risk_level, mode, category, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
+            sql.INSERT_TOOL,
             (
                 runtime_id,
                 tool["name"],
@@ -1413,7 +1150,7 @@ def write_runtime_config(runtime_id: str) -> str:
 
 
 def enqueue_runtime_action(runtime_id: str, action: str) -> None:
-    if not store.one("SELECT id FROM runtimes WHERE id = ?", (runtime_id,)):
+    if not store.one(sql.SELECT_RUNTIME_ID_EXISTS, (runtime_id,)):
         raise HTTPException(status_code=404, detail="Runtime not found")
     now = store.now_iso()
     status = {
@@ -1629,10 +1366,13 @@ def tool_edit_form(runtime_id: str, tool: dict[str, Any]) -> str:
         <label>Timeout (s)<input name="timeout_seconds" type="number" value="{timeout_val}" min="1" max="300" style="width:120px"></label>"""
     else:
         body_json = json.dumps(config.get("body", {}), indent=2, ensure_ascii=False)
+        headers_json = json.dumps(config.get("headers", {}), indent=2, ensure_ascii=False)
         exec_fields = f"""
         <label>Method<select name="method">{select_options(["GET", "POST", "PUT", "PATCH", "DELETE"], str(config.get("method", "POST")).upper())}</select></label>
         <label>URL<input name="url" value="{escape(str(config.get("url", "")))}"></label>
-        <label>Body JSON<textarea name="body_json">{escape(body_json)}</textarea></label>"""
+        <label>Body JSON<textarea name="body_json">{escape(body_json)}</textarea></label>
+        <label>Headers JSON<textarea name="headers_json" placeholder='{{"Authorization": "Bearer ${{API_TOKEN}}"}}'>{escape(headers_json)}</textarea></label>
+        <div class="muted" style="font-size:11px;margin-top:-4px">Wartości <code>${{ZMIENNA}}</code> są podstawiane z ENV kontenera (zakładka 🔑 Sekrety) — np. tokeny API, klucze.</div>"""
     return f"""
     <details id="tool-{tool['id']}">
       <summary>{escape(tool['name'])} <span class="muted">{escape(tool['execution_type'])} / {'enabled' if tool['enabled'] else 'disabled'}</span></summary>
@@ -4380,7 +4120,7 @@ async def change_user_role(user_id: int, request: Request) -> Any:
     u = store.one("SELECT username FROM users WHERE id=?", (user_id,))
     store.execute("UPDATE users SET role=?,updated_at=? WHERE id=?", (role, store.now_iso(), user_id))
     # Invalidate existing sessions for this user
-    store.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
+    store.execute(sql.DELETE_SESSIONS_BY_USER, (user_id,))
     store.audit("admin", "change_role", "user", (u or {}).get("username", "?"), {"role": role})
     return RedirectResponse(f"/admin/users?ok={quote('Rola zmieniona.')}", status_code=303)
 
@@ -4393,15 +4133,15 @@ async def toggle_user(user_id: int) -> Any:
     new_active = 0 if u["active"] else 1
     store.execute("UPDATE users SET active=?,updated_at=? WHERE id=?", (new_active, store.now_iso(), user_id))
     if not new_active:
-        store.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
+        store.execute(sql.DELETE_SESSIONS_BY_USER, (user_id,))
     store.audit("admin", "toggle_user", "user", u["username"], {"active": new_active})
     return RedirectResponse(f"/admin/users?ok={quote('Status użytkownika zmieniony.')}", status_code=303)
 
 
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
-    runtimes = store.rows("SELECT * FROM runtimes WHERE status != 'deleted' ORDER BY created_at DESC")
-    adapters = store.rows("SELECT * FROM execution_adapters ORDER BY name")
+    runtimes = store.rows(sql.SELECT_RUNTIMES_ACTIVE)
+    adapters = store.rows(sql.SELECT_ADAPTERS_ALL)
     audit = store.rows("SELECT * FROM audit_log ORDER BY id DESC LIMIT 8")
     logs = store.rows("SELECT * FROM runtime_logs ORDER BY id DESC LIMIT 8")
     running = len([r for r in runtimes if r["status"] == "running"])
@@ -5156,7 +4896,7 @@ def create_page(error: str = "") -> str:
 
 @app.get("/runtimes", response_class=HTMLResponse)
 def runtimes_page(status: str = "all") -> str:
-    all_runtimes = store.rows("SELECT * FROM runtimes WHERE status != 'deleted' ORDER BY created_at DESC")
+    all_runtimes = store.rows(sql.SELECT_RUNTIMES_ACTIVE)
     running_count = len([r for r in all_runtimes if r["status"] == "running"])
     problem_count = len([r for r in all_runtimes if r["status"] in {"failed", "unhealthy", "missing", "exited"} or (r.get("last_error") and r["status"] not in {"running", "deleted"})])
     if status == "running":
@@ -5340,7 +5080,7 @@ def adapter_toggle_html(adapter: dict[str, Any]) -> str:
 @app.get("/tool-types", response_class=HTMLResponse)
 @app.get("/adapters", response_class=HTMLResponse)
 def adapters_page(implemented: int | None = None, error: str = "") -> str:
-    all_adapters = store.rows("SELECT * FROM execution_adapters ORDER BY name")
+    all_adapters = store.rows(sql.SELECT_ADAPTERS_ALL)
     adapters = [adapter for adapter in all_adapters if adapter["implemented"]] if implemented == 1 else all_adapters
     title = "Działające silniki wykonania" if implemented == 1 else "Silniki wykonania"
     alert = f'<div class="alert">{escape(error)}</div>' if error else ""
@@ -6355,7 +6095,7 @@ function delBuild(id, img) {{
 
 @app.get("/runtime-classes", response_class=HTMLResponse)
 def runtime_classes_page(error: str = "", ok: str = "") -> str:
-    runtime_classes = store.rows("SELECT * FROM runtime_classes ORDER BY name")
+    runtime_classes = store.rows(sql.SELECT_RUNTIME_CLASSES_ALL)
     all_images = list({r["runtime_image"] for r in runtime_classes if r["runtime_image"]})
     implemented_adapters = store.rows("SELECT name FROM execution_adapters WHERE implemented=1 AND enabled=1 ORDER BY name")
     alert = f'<div class="alert">{escape(error)}</div>' if error else ""
@@ -6503,7 +6243,7 @@ async def update_runtime_class(class_name: str, request: Request):
     user = _get_session(request)
     if not user or user["role"] != "admin":
         raise HTTPException(status_code=403)
-    rc = store.one("SELECT * FROM runtime_classes WHERE name = ?", (class_name,))
+    rc = store.one(sql.SELECT_RUNTIME_CLASS_BY_NAME, (class_name,))
     if not rc:
         raise HTTPException(status_code=404)
     form = await request.form()
@@ -6567,7 +6307,7 @@ async def create_runtime_class(request: Request):
 
 @app.post("/api/runtime-classes/{class_name}/toggle")
 def toggle_runtime_class(class_name: str):
-    rc = store.one("SELECT * FROM runtime_classes WHERE name = ?", (class_name,))
+    rc = store.one(sql.SELECT_RUNTIME_CLASS_BY_NAME, (class_name,))
     if not rc:
         raise HTTPException(status_code=404, detail="Runtime class not found")
     enabled = 0 if rc["enabled"] else 1
@@ -6577,9 +6317,6 @@ def toggle_runtime_class(class_name: str):
     )
     store.audit("admin", "toggle_runtime_class", "runtime_class", class_name, {"enabled": bool(enabled)})
     return RedirectResponse("/runtime-classes", status_code=303)
-
-
-CUSTOM_TEMPLATES_FILE = store.CONFIG_ROOT / "custom_policy_templates.json"
 
 
 def _load_custom_templates() -> list[dict]:
@@ -6703,10 +6440,10 @@ def _dispatch_webhooks(event: str, runtime_id: str, details: dict[str, Any]) -> 
             try:
                 req = _ur.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
                 resp = _ur.urlopen(req, timeout=5)
-                store.execute("UPDATE webhooks SET last_fired_at=?,last_status=?,updated_at=? WHERE id=?",
+                store.execute(sql.UPDATE_WEBHOOK_FIRED,
                               (store.now_iso(), resp.status, store.now_iso(), wh_id))
             except Exception:
-                store.execute("UPDATE webhooks SET last_fired_at=?,last_status=?,updated_at=? WHERE id=?",
+                store.execute(sql.UPDATE_WEBHOOK_FIRED,
                               (store.now_iso(), 0, store.now_iso(), wh_id))
         import threading as _th
         _th.Thread(target=_fire, args=(wh["url"], payload, wh["id"]), daemon=True).start()
@@ -7431,8 +7168,8 @@ def logs_page() -> str:
 @app.get("/legacy-all", response_class=HTMLResponse)
 def legacy_all() -> str:
     runtimes = store.rows("SELECT * FROM runtimes ORDER BY created_at DESC")
-    runtime_classes = store.rows("SELECT * FROM runtime_classes ORDER BY name")
-    adapters = store.rows("SELECT * FROM execution_adapters ORDER BY name")
+    runtime_classes = store.rows(sql.SELECT_RUNTIME_CLASSES_ALL)
+    adapters = store.rows(sql.SELECT_ADAPTERS_ALL)
     audit = store.rows("SELECT * FROM audit_log ORDER BY id DESC LIMIT 20")
     logs = store.rows("SELECT * FROM runtime_logs ORDER BY id DESC LIMIT 30")
     rows_html = "".join(
@@ -7599,24 +7336,21 @@ async def create_runtime(request: Request):
             return RedirectResponse(f"/create?error={quote(str(exc.detail))}", status_code=303)
         # Override policy with advanced form values
         store.execute(
-            "INSERT INTO policies(runtime_id, policy_json, updated_at) VALUES(?,?,?) ON CONFLICT(runtime_id) DO UPDATE SET policy_json=excluded.policy_json, updated_at=excluded.updated_at",
+            sql.UPSERT_POLICY_COMPACT,
             (runtime_id, json.dumps(adv_policy), store.now_iso()),
         )
         return RedirectResponse(f"/runtimes/{runtime_id}?welcome=1", status_code=303)
-    runtime_class = store.one("SELECT * FROM runtime_classes WHERE name = ? AND enabled = 1", (data.runtime_class,))
+    runtime_class = store.one(sql.SELECT_RUNTIME_CLASS_ENABLED_BY_NAME, (data.runtime_class,))
     if not runtime_class:
         raise HTTPException(status_code=400, detail=f"Runtime class is not enabled: {data.runtime_class}")
     runtime_id = slug(data.name) + "-" + uuid.uuid4().hex[:6]
     now = store.now_iso()
     store.execute(
-        """
-        INSERT INTO runtimes(id, name, description, runtime_class, template, status, risk_level, image, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
+        sql.INSERT_RUNTIME,
         (runtime_id, data.name, data.description, data.runtime_class, data.template, "draft", data.risk_level, runtime_class["runtime_image"], now, now),
     )
     store.execute(
-        "INSERT INTO policies(runtime_id, policy_json, updated_at) VALUES (?, ?, ?)",
+        sql.INSERT_POLICY,
         (runtime_id, json.dumps(adv_policy), now),
     )
     # Read ENV vars from dynamic form fields env_key_N / env_val_N
@@ -7645,7 +7379,7 @@ async def create_runtime(request: Request):
         (str(config_dir), runtime_id),
     )
     for adapter_name in selected_adapters:
-        adapter = store.one("SELECT * FROM execution_adapters WHERE name = ? AND enabled = 1 AND implemented = 1", (adapter_name,))
+        adapter = store.one(sql.SELECT_ADAPTER_ENABLED_IMPLEMENTED, (adapter_name,))
         if not adapter:
             continue
         contract = adapter_contract(adapter_name)
@@ -7666,11 +7400,7 @@ async def create_runtime(request: Request):
             "max_response_bytes": 5242880,
         }
         store.execute(
-            """
-            INSERT INTO tools(runtime_id, name, description, execution_type, config_json, input_schema_json, output_schema_json,
-                              enabled, risk_level, mode, category, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
+            sql.INSERT_TOOL,
             (
                 runtime_id,
                 data.first_tool_name,
@@ -7703,7 +7433,7 @@ async def create_runtime(request: Request):
             schema_props[v] = {"type": "string", "description": f"Wartość parametru {v}"}
         shell_schema = {"type": "object", "properties": schema_props, "required": list(schema_props.keys())} if schema_props else {"type": "object"}
         store.execute(
-            "INSERT INTO tools(runtime_id, name, description, execution_type, config_json, input_schema_json, output_schema_json, enabled, risk_level, mode, category, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            sql.INSERT_TOOL,
             (runtime_id, shell_tool_name, shell_desc, "shell",
              json.dumps({"command": cmd_parts, "timeout_seconds": adv_policy.get("timeout_seconds", 30)}),
              json.dumps(shell_schema), "{}", 1, data.risk_level, "read-only", "other", now, now),
@@ -7734,7 +7464,7 @@ async def create_runtime(request: Request):
                 et_props[v] = {"type": "string", "description": f"Wartość parametru {v}"}
             et_schema = {"type": "object", "properties": et_props, "required": list(et_props.keys())} if et_props else {"type": "object"}
             store.execute(
-                "INSERT INTO tools(runtime_id, name, description, execution_type, config_json, input_schema_json, output_schema_json, enabled, risk_level, mode, category, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                sql.INSERT_TOOL,
                 (runtime_id, et_name, et_desc, "shell",
                  json.dumps({"command": et_parts, "timeout_seconds": adv_policy.get("timeout_seconds", 30)}),
                  json.dumps(et_schema), "{}", 1, data.risk_level, "read-only", "other", now, now),
@@ -7745,7 +7475,7 @@ async def create_runtime(request: Request):
             if not et_url:
                 continue
             store.execute(
-                "INSERT INTO tools(runtime_id, name, description, execution_type, config_json, input_schema_json, output_schema_json, enabled, risk_level, mode, category, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                sql.INSERT_TOOL,
                 (runtime_id, et_name, et_desc, "http_request",
                  json.dumps({"method": et_method, "url": et_url, "body": {}, "timeout_seconds": 30}),
                  json.dumps({"type": "object"}), "{}", 1, data.risk_level, "read-only", "other", now, now),
@@ -7769,7 +7499,7 @@ async def create_runtime(request: Request):
                 "config": _tc,
                 "input_schema": json.loads(_t["input_schema_json"] or "{}"),
             })
-        _rc = store.one("SELECT * FROM runtime_classes WHERE name = ?", (data.runtime_class,))
+        _rc = store.one(sql.SELECT_RUNTIME_CLASS_BY_NAME, (data.runtime_class,))
         _pkg: dict[str, Any] = {
             "id": runtime_id,
             "name": data.name,
@@ -7790,7 +7520,7 @@ async def create_runtime(request: Request):
             "policy": adv_policy,
             "tools": _pkg_tools,
         }
-        if not store.one("SELECT id FROM tool_packages WHERE id = ?", (runtime_id,)):
+        if not store.one(sql.SELECT_TOOL_PACKAGE_ID_BY_ID, (runtime_id,)):
             store.execute(
                 "INSERT INTO tool_packages(id, name, description, category, risk_level, source, enabled, package_json, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
                 (runtime_id, data.name, _pkg["description"], "other", data.risk_level, "advanced-creator", 1,
@@ -7900,19 +7630,7 @@ async def build_runtime_image(request: Request):
         build_id = enqueue_runtime_image_build(image, base_image, apt_packages, pip_packages, extra_dockerfile, runtime_class)
         now = store.now_iso()
         store.execute(
-            """
-            INSERT INTO runtime_classes(name, description, runtime_image, allowed_execution_types_json,
-                                        enabled, risk_level, security_profile, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(name) DO UPDATE SET
-              description = excluded.description,
-              runtime_image = excluded.runtime_image,
-              allowed_execution_types_json = excluded.allowed_execution_types_json,
-              enabled = excluded.enabled,
-              risk_level = excluded.risk_level,
-              security_profile = excluded.security_profile,
-              updated_at = excluded.updated_at
-            """,
+            sql.UPSERT_RUNTIME_CLASS,
             (
                 runtime_class,
                 f"Custom runtime image built by MCP Platform: {image}",
@@ -7977,7 +7695,7 @@ async def create_runtime_from_tool_package(package_id: str, request: Request):
 
 @app.get("/tool-packages/{package_id}/edit", response_class=HTMLResponse)
 def edit_package_page(package_id: str, error: str = "") -> str:
-    package = store.one("SELECT * FROM tool_packages WHERE id = ?", (package_id,))
+    package = store.one(sql.SELECT_TOOL_PACKAGE_BY_ID, (package_id,))
     if not package:
         raise HTTPException(status_code=404, detail="Nie znaleziono paczki")
     pkg_json = json.dumps(json.loads(package["package_json"]), indent=2, ensure_ascii=False)
@@ -8030,7 +7748,7 @@ async def update_tool_package(package_id: str, request: Request):
     user = _get_session(request)
     if not user or user["role"] not in ("admin", "read_write"):
         raise HTTPException(status_code=403)
-    package = store.one("SELECT * FROM tool_packages WHERE id = ?", (package_id,))
+    package = store.one(sql.SELECT_TOOL_PACKAGE_BY_ID, (package_id,))
     if not package:
         raise HTTPException(status_code=404)
     form = await request.form()
@@ -8057,7 +7775,7 @@ async def update_tool_package(package_id: str, request: Request):
 
 @app.post("/api/tool-packages/{package_id}/toggle")
 def toggle_tool_package(package_id: str):
-    package = store.one("SELECT * FROM tool_packages WHERE id = ?", (package_id,))
+    package = store.one(sql.SELECT_TOOL_PACKAGE_BY_ID, (package_id,))
     if not package:
         raise HTTPException(status_code=404, detail="Tool package not found")
     enabled = 0 if package.get("enabled", 1) else 1
@@ -8074,7 +7792,7 @@ def delete_tool_package(package_id: str):
     user = _current_user.get()
     if not user or user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Only admins can delete packages")
-    if not store.one("SELECT id FROM tool_packages WHERE id = ?", (package_id,)):
+    if not store.one(sql.SELECT_TOOL_PACKAGE_ID_BY_ID, (package_id,)):
         raise HTTPException(status_code=404, detail="Tool package not found")
     store.execute("DELETE FROM tool_packages WHERE id = ?", (package_id,))
     store.audit(user.get("username","admin"), "delete_tool_package", "tool_package", package_id, {})
@@ -8094,15 +7812,11 @@ async def create_adapter(request: Request):
     enabled = implemented  # auto-enable if implemented
     if not name:
         return RedirectResponse("/tool-types?error=Nazwa+jest+wymagana", status_code=303)
-    if store.one("SELECT name FROM execution_adapters WHERE name = ?", (name,)):
+    if store.one(sql.SELECT_ADAPTER_NAME_BY_NAME, (name,)):
         return RedirectResponse(f"/tool-types?error=Adapter+{name}+już+istnieje", status_code=303)
     now = store.now_iso()
     store.execute(
-        """
-        INSERT INTO execution_adapters(name, description, adapter_type, runtime_image, config_schema_json,
-                                       adapter_contract_json, enabled, implemented, risk_level, mode, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
+        sql.INSERT_EXECUTION_ADAPTER,
         (
             name,
             description or f"Adapter {adapter_type}.",
@@ -8127,7 +7841,7 @@ async def update_adapter(adapter_name: str, request: Request):
     user = _get_session(request)
     if not user or user["role"] != "admin":
         raise HTTPException(status_code=403)
-    adapter = store.one("SELECT * FROM execution_adapters WHERE name = ?", (adapter_name,))
+    adapter = store.one(sql.SELECT_ADAPTER_BY_NAME, (adapter_name,))
     if not adapter:
         raise HTTPException(status_code=404)
     form = await request.form()
@@ -8155,7 +7869,7 @@ async def delete_adapter(adapter_name: str, request: Request):
 
 @app.post("/api/adapters/{adapter_name}/toggle")
 def toggle_adapter(adapter_name: str):
-    adapter = store.one("SELECT * FROM execution_adapters WHERE name = ?", (adapter_name,))
+    adapter = store.one(sql.SELECT_ADAPTER_BY_NAME, (adapter_name,))
     if not adapter:
         raise HTTPException(status_code=404, detail="Adapter not found")
     enabled = 0 if adapter["enabled"] else 1
@@ -8601,6 +8315,11 @@ def runtime_detail(runtime_id: str, request: Request, welcome: str = "", tool_ad
                     <textarea name="body_json" rows="3" style="width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:12px;font-family:monospace;resize:vertical">{{"query":"${{query}}"}}</textarea>
                     <div style="font-size:11px;color:var(--muted);margin-top:4px">Użyj <code>${{zmienna}}</code> dla parametrów które AI będzie podawać</div>
                   </div>
+                  <div style="margin-top:10px">
+                    <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Headers JSON (opcjonalnie)</label>
+                    <textarea name="headers_json" rows="2" style="width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:12px;font-family:monospace;resize:vertical" placeholder='{{"Authorization": "Bearer ${{API_TOKEN}}"}}'></textarea>
+                    <div style="font-size:11px;color:var(--muted);margin-top:4px">Wartości <code>${{ZMIENNA}}</code> podstawiane z ENV kontenera (zakładka 🔑 Sekrety) — np. tokeny API</div>
+                  </div>
                 </div>
 
                 <!-- Shell fields -->
@@ -8978,7 +8697,7 @@ function ntPreset(cmd, desc) {{
 
 @app.post("/api/runtimes/{runtime_id}/tools")
 async def add_tool(runtime_id: str, request: Request):
-    runtime = store.one("SELECT * FROM runtimes WHERE id = ?", (runtime_id,))
+    runtime = store.one(sql.SELECT_RUNTIME_BY_ID, (runtime_id,))
     if not runtime:
         raise HTTPException(status_code=404, detail="Runtime not found")
     form = await request.form()
@@ -9007,8 +8726,9 @@ async def add_tool(runtime_id: str, request: Request):
     else:
         try:
             body = json.loads(str(form.get("body_json") or "{}"))
+            headers = json.loads(str(form.get("headers_json") or "{}"))
         except json.JSONDecodeError as exc:
-            raise HTTPException(status_code=400, detail=f"Invalid body JSON: {exc}") from exc
+            raise HTTPException(status_code=400, detail=f"Invalid body/headers JSON: {exc}") from exc
         url = str(form.get("url") or "")
         # Build input schema from ${var} in body values
         all_vars = re.findall(r"\$\{(\w+)\}", json.dumps(body))
@@ -9021,13 +8741,11 @@ async def add_tool(runtime_id: str, request: Request):
             "timeout_seconds": 30,
             "max_response_bytes": 5242880,
         }
+        if headers:
+            config["headers"] = headers
     now = store.now_iso()
     store.execute(
-        """
-        INSERT INTO tools(runtime_id, name, description, execution_type, config_json, input_schema_json, output_schema_json,
-                          enabled, risk_level, mode, category, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
+        sql.INSERT_TOOL,
         (
             runtime_id,
             str(form.get("name") or ""),
@@ -9059,13 +8777,13 @@ async def add_tool(runtime_id: str, request: Request):
 
 @app.post("/api/runtimes/{runtime_id}/adapters")
 async def add_runtime_adapter(runtime_id: str, request: Request):
-    if not store.one("SELECT id FROM runtimes WHERE id = ?", (runtime_id,)):
+    if not store.one(sql.SELECT_RUNTIME_ID_EXISTS, (runtime_id,)):
         raise HTTPException(status_code=404, detail="Runtime not found")
     form = await request.form()
     adapter_name = str(form.get("adapter_name") or "").strip()
     if not adapter_name:
         raise HTTPException(status_code=400, detail="Adapter name required")
-    adapter = store.one("SELECT * FROM execution_adapters WHERE name = ? AND enabled = 1 AND implemented = 1", (adapter_name,))
+    adapter = store.one(sql.SELECT_ADAPTER_ENABLED_IMPLEMENTED, (adapter_name,))
     if not adapter:
         raise HTTPException(status_code=400, detail=f"Adapter not available: {adapter_name}")
     contract = adapter_contract(adapter_name)
@@ -9079,7 +8797,7 @@ async def add_runtime_adapter(runtime_id: str, request: Request):
 
 @app.post("/api/runtimes/{runtime_id}/adapters/{adapter_name}/unbind")
 def unbind_runtime_adapter(runtime_id: str, adapter_name: str):
-    if not store.one("SELECT id FROM runtimes WHERE id = ?", (runtime_id,)):
+    if not store.one(sql.SELECT_RUNTIME_ID_EXISTS, (runtime_id,)):
         raise HTTPException(status_code=404, detail="Runtime not found")
     store.execute(
         "DELETE FROM runtime_adapters WHERE runtime_id = ? AND adapter_name = ?",
@@ -9092,7 +8810,7 @@ def unbind_runtime_adapter(runtime_id: str, adapter_name: str):
 
 @app.post("/api/runtimes/{runtime_id}/targets")
 async def add_target(runtime_id: str, request: Request):
-    if not store.one("SELECT id FROM runtimes WHERE id = ?", (runtime_id,)):
+    if not store.one(sql.SELECT_RUNTIME_ID_EXISTS, (runtime_id,)):
         raise HTTPException(status_code=404, detail="Runtime not found")
     form = await request.form()
     adapter_name = str(form.get("adapter_name") or "")
@@ -9109,10 +8827,7 @@ async def add_target(runtime_id: str, request: Request):
     now = store.now_iso()
     name = str(target.get("name") or f"{adapter_name}-target")
     store.execute(
-        """
-        INSERT INTO targets(runtime_id, adapter_name, name, target_json, secret_refs_json, tags_json, enabled, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
+        sql.INSERT_TARGET,
         (runtime_id, adapter_name, name, json.dumps(target), json.dumps(secret_refs), json.dumps(tags), 1, now, now),
     )
     store.audit("admin", "add_target", "runtime", runtime_id, {"adapter": adapter_name, "target": name})
@@ -9122,7 +8837,7 @@ async def add_target(runtime_id: str, request: Request):
 
 @app.post("/api/runtimes/{runtime_id}/env")
 async def add_env_var(runtime_id: str, request: Request):
-    runtime = store.one("SELECT * FROM runtimes WHERE id = ?", (runtime_id,))
+    runtime = store.one(sql.SELECT_RUNTIME_BY_ID, (runtime_id,))
     if not runtime:
         raise HTTPException(status_code=404)
     data = await request.json()
@@ -9146,7 +8861,7 @@ async def add_env_var(runtime_id: str, request: Request):
 
 @app.delete("/api/runtimes/{runtime_id}/env/{key}")
 async def delete_env_var(runtime_id: str, key: str):
-    runtime = store.one("SELECT * FROM runtimes WHERE id = ?", (runtime_id,))
+    runtime = store.one(sql.SELECT_RUNTIME_BY_ID, (runtime_id,))
     if not runtime:
         raise HTTPException(status_code=404)
     env_path = store.CONFIG_ROOT / runtime_id / "runtime-env.json"
@@ -9163,7 +8878,7 @@ async def delete_env_var(runtime_id: str, key: str):
 
 @app.post("/api/runtimes/{runtime_id}/credentials")
 async def add_credential(runtime_id: str, request: Request):
-    if not store.one("SELECT id FROM runtimes WHERE id = ?", (runtime_id,)):
+    if not store.one(sql.SELECT_RUNTIME_ID_EXISTS, (runtime_id,)):
         raise HTTPException(status_code=404, detail="Runtime not found")
     form = await request.form()
     kind = str(form.get("kind") or "env")
@@ -9204,10 +8919,10 @@ def delete_credential(runtime_id: str, credential_id: int):
 
 @app.post("/api/runtimes/{runtime_id}/tools/{tool_id}/update")
 async def update_tool(runtime_id: str, tool_id: int, request: Request):
-    runtime = store.one("SELECT * FROM runtimes WHERE id = ?", (runtime_id,))
+    runtime = store.one(sql.SELECT_RUNTIME_BY_ID, (runtime_id,))
     if not runtime:
         raise HTTPException(status_code=404, detail="Runtime not found")
-    tool = store.one("SELECT * FROM tools WHERE id = ? AND runtime_id = ?", (tool_id, runtime_id))
+    tool = store.one(sql.SELECT_TOOL_BY_ID_AND_RUNTIME, (tool_id, runtime_id))
     if not tool:
         raise HTTPException(status_code=404, detail="Tool not found")
     form = await request.form()
@@ -9215,6 +8930,7 @@ async def update_tool(runtime_id: str, tool_id: int, request: Request):
     validate_runtime_class_adapter(runtime["runtime_class"], execution_type)
     try:
         body = json.loads(str(form.get("body_json") or "{}"))
+        headers = json.loads(str(form.get("headers_json") or "{}"))
         input_schema = json.loads(str(form.get("input_schema_json") or "{}"))
         output_schema = json.loads(str(form.get("output_schema_json") or "{}"))
     except json.JSONDecodeError as exc:
@@ -9239,6 +8955,8 @@ async def update_tool(runtime_id: str, tool_id: int, request: Request):
             "timeout_seconds": 30,
             "max_response_bytes": 5242880,
         }
+        if headers:
+            config["headers"] = headers
     store.execute(
         """
         UPDATE tools
@@ -9269,7 +8987,7 @@ async def update_tool(runtime_id: str, tool_id: int, request: Request):
 
 @app.post("/api/runtimes/{runtime_id}/tools/{tool_id}/delete")
 def delete_tool(runtime_id: str, tool_id: int):
-    tool = store.one("SELECT * FROM tools WHERE id = ? AND runtime_id = ?", (tool_id, runtime_id))
+    tool = store.one(sql.SELECT_TOOL_BY_ID_AND_RUNTIME, (tool_id, runtime_id))
     if not tool:
         raise HTTPException(status_code=404, detail="Tool not found")
     store.execute("DELETE FROM tools WHERE id = ? AND runtime_id = ?", (tool_id, runtime_id))
@@ -9281,10 +8999,10 @@ def delete_tool(runtime_id: str, tool_id: int):
 @app.post("/api/security/policy/{runtime_id}")
 async def security_update_policy(runtime_id: str, request: Request):
     """Update policy from the Security page — form fields instead of raw JSON."""
-    if not store.one("SELECT id FROM runtimes WHERE id = ?", (runtime_id,)):
+    if not store.one(sql.SELECT_RUNTIME_ID_EXISTS, (runtime_id,)):
         raise HTTPException(status_code=404, detail="Runtime not found")
     form = await request.form()
-    current = store.one("SELECT policy_json FROM policies WHERE runtime_id = ?", (runtime_id,))
+    current = store.one(sql.SELECT_POLICY_JSON_BY_RUNTIME, (runtime_id,))
     try:
         policy: dict[str, Any] = json.loads(current["policy_json"] if current else "{}")
     except Exception:
@@ -9304,7 +9022,7 @@ async def security_update_policy(runtime_id: str, request: Request):
     bins_raw = str(form.get("allowed_binaries") or "").strip()
     policy["allowed_binaries"] = [b.strip() for b in re.split(r"[\s,]+", bins_raw) if b.strip()] if bins_raw else []
     store.execute(
-        "INSERT INTO policies(runtime_id, policy_json, updated_at) VALUES(?,?,?) ON CONFLICT(runtime_id) DO UPDATE SET policy_json=excluded.policy_json, updated_at=excluded.updated_at",
+        sql.UPSERT_POLICY_COMPACT,
         (runtime_id, json.dumps(policy), store.now_iso()),
     )
     store.audit("admin", "update_policy", "runtime", runtime_id, {"source": "security_page"})
@@ -9315,7 +9033,7 @@ async def security_update_policy(runtime_id: str, request: Request):
 @app.post("/api/security/policy/{runtime_id}/apply-template")
 async def security_apply_template(runtime_id: str, request: Request):
     """Apply a named policy template to a runtime."""
-    if not store.one("SELECT id FROM runtimes WHERE id = ?", (runtime_id,)):
+    if not store.one(sql.SELECT_RUNTIME_ID_EXISTS, (runtime_id,)):
         raise HTTPException(status_code=404, detail="Runtime not found")
     form = await request.form()
     tpl = str(form.get("template") or "strict")
@@ -9326,7 +9044,7 @@ async def security_apply_template(runtime_id: str, request: Request):
     }
     policy = templates.get(tpl, templates["strict"])
     # Preserve allowed_binaries from current policy
-    current = store.one("SELECT policy_json FROM policies WHERE runtime_id = ?", (runtime_id,))
+    current = store.one(sql.SELECT_POLICY_JSON_BY_RUNTIME, (runtime_id,))
     if current:
         try:
             existing = json.loads(current["policy_json"])
@@ -9335,7 +9053,7 @@ async def security_apply_template(runtime_id: str, request: Request):
         except Exception:
             pass
     store.execute(
-        "INSERT INTO policies(runtime_id, policy_json, updated_at) VALUES(?,?,?) ON CONFLICT(runtime_id) DO UPDATE SET policy_json=excluded.policy_json, updated_at=excluded.updated_at",
+        sql.UPSERT_POLICY_COMPACT,
         (runtime_id, json.dumps(policy), store.now_iso()),
     )
     store.audit("admin", "apply_policy_template", "runtime", runtime_id, {"template": tpl})
@@ -9345,7 +9063,7 @@ async def security_apply_template(runtime_id: str, request: Request):
 
 @app.post("/api/runtimes/{runtime_id}/policy/update")
 async def update_policy(runtime_id: str, request: Request):
-    if not store.one("SELECT id FROM runtimes WHERE id = ?", (runtime_id,)):
+    if not store.one(sql.SELECT_RUNTIME_ID_EXISTS, (runtime_id,)):
         raise HTTPException(status_code=404, detail="Runtime not found")
     form = await request.form()
     try:
@@ -9355,11 +9073,7 @@ async def update_policy(runtime_id: str, request: Request):
     if not isinstance(policy, dict):
         raise HTTPException(status_code=400, detail="Policy JSON must be an object")
     store.execute(
-        """
-        INSERT INTO policies(runtime_id, policy_json, updated_at)
-        VALUES (?, ?, ?)
-        ON CONFLICT(runtime_id) DO UPDATE SET policy_json = excluded.policy_json, updated_at = excluded.updated_at
-        """,
+        sql.UPSERT_POLICY,
         (runtime_id, json.dumps(policy), store.now_iso()),
     )
     store.audit("admin", "update_policy", "runtime", runtime_id, {"keys": sorted(policy.keys())})
@@ -9369,10 +9083,10 @@ async def update_policy(runtime_id: str, request: Request):
 
 @app.post("/api/runtimes/{runtime_id}/policy/shell-preset")
 async def update_shell_policy(runtime_id: str, request: Request):
-    if not store.one("SELECT id FROM runtimes WHERE id = ?", (runtime_id,)):
+    if not store.one(sql.SELECT_RUNTIME_ID_EXISTS, (runtime_id,)):
         raise HTTPException(status_code=404, detail="Runtime not found")
     form = await request.form()
-    current = store.one("SELECT policy_json FROM policies WHERE runtime_id = ?", (runtime_id,))
+    current = store.one(sql.SELECT_POLICY_JSON_BY_RUNTIME, (runtime_id,))
     try:
         policy = json.loads(current["policy_json"] if current else "{}")
     except json.JSONDecodeError:
@@ -9382,11 +9096,7 @@ async def update_shell_policy(runtime_id: str, request: Request):
     policy["allowed_command_prefixes"] = [line.strip() for line in str(form.get("allowed_command_prefixes") or "").splitlines() if line.strip()]
     policy["blocked_command_prefixes"] = [line.strip() for line in str(form.get("blocked_command_prefixes") or "").splitlines() if line.strip()]
     store.execute(
-        """
-        INSERT INTO policies(runtime_id, policy_json, updated_at)
-        VALUES (?, ?, ?)
-        ON CONFLICT(runtime_id) DO UPDATE SET policy_json = excluded.policy_json, updated_at = excluded.updated_at
-        """,
+        sql.UPSERT_POLICY,
         (runtime_id, json.dumps(policy), store.now_iso()),
     )
     store.audit("admin", "update_shell_policy", "runtime", runtime_id, {"allowed": policy["allowed_command_prefixes"], "blocked": policy["blocked_command_prefixes"]})
@@ -9475,14 +9185,12 @@ async def clone_runtime(runtime_id: str, request: Request):
          payload["template"], payload["risk_level"], payload["image"], now, now),
     )
     store.execute(
-        "INSERT INTO policies(runtime_id, policy_json, updated_at) VALUES (?, ?, ?)",
+        sql.INSERT_POLICY,
         (new_id, json.dumps(payload["policy"]), now),
     )
     for tool in payload["tools"]:
         store.execute(
-            """INSERT INTO tools(runtime_id, name, description, execution_type, config_json,
-               input_schema_json, output_schema_json, enabled, risk_level, mode, category, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            sql.INSERT_TOOL,
             (new_id, tool["name"], tool["description"], tool["execution_type"],
              tool["config_json"], tool["input_schema_json"], tool["output_schema_json"],
              tool["enabled"], tool["risk_level"], tool["mode"], tool["category"], now, now),
@@ -9495,8 +9203,7 @@ async def clone_runtime(runtime_id: str, request: Request):
         )
     for tgt in targets:
         store.execute(
-            """INSERT INTO targets(runtime_id, adapter_name, name, target_json, secret_refs_json, tags_json, enabled, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            sql.INSERT_TARGET,
             (new_id, tgt["adapter_name"], tgt["name"], tgt["target_json"],
              tgt["secret_refs_json"], tgt["tags_json"], tgt["enabled"], now, now),
         )
@@ -9508,7 +9215,7 @@ async def clone_runtime(runtime_id: str, request: Request):
 def export_runtime_as_package(runtime_id: str):
     from fastapi.responses import JSONResponse as _JSONResponse
     payload = runtime_payload(runtime_id)
-    rc_row = store.one("SELECT * FROM runtime_classes WHERE name = ?", (payload["runtime_class"],))
+    rc_row = store.one(sql.SELECT_RUNTIME_CLASS_BY_NAME, (payload["runtime_class"],))
     runtime_adapters = store.rows(
         "SELECT * FROM runtime_adapters WHERE runtime_id = ? AND enabled = 1", (runtime_id,)
     )
@@ -9601,7 +9308,7 @@ async def test_tool(runtime_id: str, request: Request):
 def export_openwebui_tool(runtime_id: str):
     """Generate a ready-to-import OpenWebUI Python tool file for this runtime."""
     from fastapi.responses import PlainTextResponse
-    runtime = store.one("SELECT * FROM runtimes WHERE id = ?", (runtime_id,))
+    runtime = store.one(sql.SELECT_RUNTIME_BY_ID, (runtime_id,))
     if not runtime:
         raise HTTPException(status_code=404, detail="Runtime not found")
     tools = store.rows(
@@ -9717,7 +9424,7 @@ class Tools:
 
 @app.get("/api/runtimes")
 def list_runtimes():
-    return store.rows("SELECT * FROM runtimes WHERE status != 'deleted' ORDER BY created_at DESC")
+    return store.rows(sql.SELECT_RUNTIMES_ACTIVE)
 
 
 @app.get("/api/runtimes/{runtime_id}")
@@ -9727,12 +9434,12 @@ def get_runtime(runtime_id: str):
 
 @app.get("/api/adapters")
 def list_adapters():
-    return store.rows("SELECT * FROM execution_adapters ORDER BY name")
+    return store.rows(sql.SELECT_ADAPTERS_ALL)
 
 
 @app.get("/api/runtime-classes")
 def list_runtime_classes():
-    return store.rows("SELECT * FROM runtime_classes ORDER BY name")
+    return store.rows(sql.SELECT_RUNTIME_CLASSES_ALL)
 
 
 @app.get("/api/tool-packages")
