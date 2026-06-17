@@ -8204,49 +8204,48 @@ def runtime_detail(runtime_id: str, request: Request, welcome: str = "", tool_ad
         </summary>
         <div style="margin-top:16px">
         {f"""
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
-          <!-- OpenWebUI -->
-          <div style="background:#0b1e10;border:2px solid #1a5a2a;border-radius:10px;padding:14px">
-            <div style="font-weight:800;color:white;margin-bottom:3px;font-size:13px">🌐 OpenWebUI <span style="color:#4ac86a;font-size:11px;font-weight:400">— Tool Server URL</span></div>
-            <div class="muted" style="font-size:11px;margin-bottom:8px">Admin Panel → Settings → Tools → wklej poniższy URL</div>
-            <pre style="font-size:12px;margin:0 0 6px;cursor:pointer;border-color:#1a5a2a;background:#060e06" onclick="copySnippet(this)" title="Kliknij żeby skopiować">{escape(_base_url)}/openwebui</pre>
-            <div style="font-size:11px;color:#4ac86a;margin-bottom:10px">✅ OpenWebUI automatycznie doda <code>/openapi.json</code></div>
-            <div style="border-top:1px solid #1a5a2a;padding-top:10px">
-              <div style="font-weight:700;color:#a0d8b0;font-size:11px;margin-bottom:6px">📥 Albo importuj jako Python tool (Workspace → Narzędzia → Importuj z linku):</div>
-              <div style="display:flex;align-items:center;gap:8px">
-                <code style="font-size:11px;background:#060e06;border:1px solid #2a5a3a;border-radius:5px;padding:4px 8px;color:#5ce89a;flex:1;word-break:break-all;cursor:pointer"
-                      onclick="navigator.clipboard.writeText(this.textContent).then(()=>{{this.style.background='#0d2a1a';setTimeout(()=>this.style.background='',1500)}})"
-                      title="Kliknij żeby skopiować">{escape(_platform_base)}/api/runtimes/{escape(payload['id'])}/openwebui-tool.py</code>
-                <a href="/api/runtimes/{escape(payload['id'])}/openwebui-tool.py" download
-                   style="background:#1a5a2a;color:#5ce89a;border:1px solid #2a7a3a;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;text-decoration:none;flex-shrink:0;white-space:nowrap">
-                  ⬇ Pobierz .py
-                </a>
-              </div>
+        <!-- OpenWebUI Tool Server -->
+        <div style="background:#0b1e10;border:2px solid #1a5a2a;border-radius:10px;padding:14px;margin-bottom:12px">
+          <div style="font-weight:800;color:white;margin-bottom:3px;font-size:13px">🌐 OpenWebUI <span style="color:#4ac86a;font-size:11px;font-weight:400">— Tool Server URL</span></div>
+          <div class="muted" style="font-size:11px;margin-bottom:8px">Admin Panel → Settings → Tools → wklej poniższy URL</div>
+          <pre style="font-size:12px;margin:0 0 6px;cursor:pointer;border-color:#1a5a2a;background:#060e06" onclick="copySnippet(this)" title="Kliknij żeby skopiować">{escape(_base_url)}/openwebui</pre>
+          <div style="font-size:11px;color:#4ac86a;margin-bottom:10px">✅ OpenWebUI automatycznie doda <code>/openapi.json</code></div>
+          <div style="border-top:1px solid #1a5a2a;padding-top:10px">
+            <div style="font-weight:700;color:#a0d8b0;font-size:11px;margin-bottom:6px">📥 Albo importuj jako Python tool (Workspace → Narzędzia → Importuj z linku):</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <code style="font-size:11px;background:#060e06;border:1px solid #2a5a3a;border-radius:5px;padding:4px 8px;color:#5ce89a;flex:1;word-break:break-all;cursor:pointer"
+                    onclick="navigator.clipboard.writeText(this.textContent).then(()=>{{this.style.background='#0d2a1a';setTimeout(()=>this.style.background='',1500)}})"
+                    title="Kliknij żeby skopiować">{escape(_platform_base)}/api/runtimes/{escape(payload['id'])}/openwebui-tool.py</code>
+              <a href="/api/runtimes/{escape(payload['id'])}/openwebui-tool.py" download
+                 style="background:#1a5a2a;color:#5ce89a;border:1px solid #2a7a3a;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;text-decoration:none;flex-shrink:0;white-space:nowrap">
+                ⬇ Pobierz .py
+              </a>
             </div>
           </div>
-          <!-- Continue -->
-          <div style="background:#0b1520;border:1px solid #1a3a50;border-radius:10px;padding:14px">
-            <div style="font-weight:800;color:white;margin-bottom:3px;font-size:13px">
-              <img src="https://avatars.githubusercontent.com/u/122285027" style="width:14px;height:14px;border-radius:3px;vertical-align:middle;margin-right:5px" onerror="this.style.display='none'">
-              Continue (VS Code / JetBrains)
-            </div>
-            <div class="muted" style="font-size:11px;margin-bottom:8px">~/.continue/config.json → <code>mcpServers</code> &nbsp;|&nbsp; transport: <code>streamable-http</code></div>
-            <pre style="font-size:11px;margin:0;cursor:pointer;border-color:#1a3a50" onclick="copySnippet(this)" title="Kliknij żeby skopiować">"mcpServers": {{
-  "{escape(payload['name'].lower().replace(' ','-'))}": {{
-    "transport": "streamable-http",
-    "url": "{escape(payload['endpoint_url'])}"
-  }}
-}}</pre>
-          </div>
-          <!-- Inne -->
-          <div style="background:#0b1520;border:1px solid #1a3a50;border-radius:10px;padding:14px">
-            <div style="font-weight:800;color:white;margin-bottom:3px;font-size:13px">📋 Inne klienty MCP</div>
-            <div class="muted" style="font-size:11px;margin-bottom:8px">Streamable-HTTP lub SSE — oba działają</div>
-            <pre style="font-size:11px;margin:0;cursor:pointer;border-color:#1a3a50" onclick="copySnippet(this)" title="Kliknij żeby skopiować">{{
+        </div>
+
+        <!-- MCP JSON snippets: Streamable-HTTP + SSE -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div style="background:#0b1520;border:2px solid #1a5a6a;border-radius:10px;padding:14px">
+            <div style="font-weight:800;color:#3ab8f5;margin-bottom:3px;font-size:14px">⚡ Streamable-HTTP <span style="font-size:11px;font-weight:400;color:#4ac86a">(zalecane)</span></div>
+            <div class="muted" style="font-size:11px;margin-bottom:8px">Continue, Cline, Claude Code, Claude Desktop, OpenChamber i inne klienty MCP</div>
+            <pre style="font-size:12px;margin:0;cursor:pointer;border-color:#1a5a6a" onclick="copySnippet(this)" title="Kliknij żeby skopiować">{{
   "mcpServers": {{
     "{escape(payload['name'].lower().replace(' ','-'))}": {{
       "url": "{escape(payload['endpoint_url'])}",
       "transport": "streamable-http"
+    }}
+  }}
+}}</pre>
+          </div>
+          <div style="background:#0b1520;border:1px solid #3a3a50;border-radius:10px;padding:14px">
+            <div style="font-weight:800;color:#b0a0d0;margin-bottom:3px;font-size:14px">📡 SSE</div>
+            <div class="muted" style="font-size:11px;margin-bottom:8px">Starsze klienty lub gdy streamable-http nie działa</div>
+            <pre style="font-size:12px;margin:0;cursor:pointer;border-color:#3a3a50" onclick="copySnippet(this)" title="Kliknij żeby skopiować">{{
+  "mcpServers": {{
+    "{escape(payload['name'].lower().replace(' ','-'))}": {{
+      "url": "{escape(payload['endpoint_url'])}",
+      "transport": "sse"
     }}
   }}
 }}</pre>
