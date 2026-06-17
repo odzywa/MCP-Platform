@@ -4612,10 +4612,41 @@ def create_page(error: str = "") -> str:
       '</div></div>';
   }}
 
+  function s3SaveValues() {{
+    for (var i = 0; i < _s3Tools.length; i++) {{
+      var cmd = document.getElementById('s3t-cmd-'+i);
+      var name = document.getElementById('s3t-name-'+i);
+      var desc = document.getElementById('s3t-desc-'+i);
+      var url = document.getElementById('s3t-url-'+i);
+      var method = document.getElementById('s3t-method-'+i);
+      if (cmd) _s3Tools[i].cmd = cmd.value;
+      if (name) _s3Tools[i].name = name.value;
+      if (desc) _s3Tools[i].desc = desc.value;
+      if (url) _s3Tools[i].url = url.value;
+      if (method) _s3Tools[i].method = method.value;
+    }}
+  }}
+  function s3RestoreValues() {{
+    for (var i = 0; i < _s3Tools.length; i++) {{
+      var t = _s3Tools[i];
+      var cmd = document.getElementById('s3t-cmd-'+i);
+      var name = document.getElementById('s3t-name-'+i);
+      var desc = document.getElementById('s3t-desc-'+i);
+      var url = document.getElementById('s3t-url-'+i);
+      var method = document.getElementById('s3t-method-'+i);
+      if (cmd && t.cmd) cmd.value = t.cmd;
+      if (name && t.name) name.value = t.name;
+      if (desc && t.desc) desc.value = t.desc;
+      if (url && t.url) url.value = t.url;
+      if (method && t.method) method.value = t.method;
+    }}
+  }}
   function s3Render() {{
+    s3SaveValues();
     var list = document.getElementById('s3-tools-list');
     if (!list) return;
     list.innerHTML = _s3Tools.map(function(_,i){{ return s3ToolHtml(i, _s3IsShell); }}).join('');
+    s3RestoreValues();
   }}
 
   window.s3AddTool = function() {{
