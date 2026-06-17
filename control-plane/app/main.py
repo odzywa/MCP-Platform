@@ -7457,6 +7457,9 @@ async def create_runtime(request: Request):
         cmd_parts = shell_cmd_raw.split()
         splat_vars = re.findall(r"\$\{\*(\w+)\}", shell_cmd_raw)
         regular_vars = [v for v in re.findall(r"\$\{(\w+)\}", shell_cmd_raw) if v not in splat_vars]
+        _env_names = {c["name"] for c in store.rows("SELECT name FROM runtime_credentials WHERE runtime_id = ?", (runtime_id,))}
+        _env_like = {v for v in regular_vars if v.isupper() and (v in _env_names or any(v.startswith(p) for p in ("AWX_", "API_", "DB_", "PG", "MIKROTIK_", "TOKEN", "SECRET", "PASS", "AUTH")))}
+        regular_vars = [v for v in regular_vars if v not in _env_like]
         schema_props: dict[str, Any] = {}
         for v in splat_vars:
             schema_props[v] = {"type": "string", "description": f"Argumenty dla {cmd_parts[0] if cmd_parts else 'komendy'}"}
@@ -7488,6 +7491,9 @@ async def create_runtime(request: Request):
             et_parts = et_cmd_raw.split()
             et_splat = re.findall(r"\$\{\*(\w+)\}", et_cmd_raw)
             et_regular = [v for v in re.findall(r"\$\{(\w+)\}", et_cmd_raw) if v not in et_splat]
+            _env_names = {c["name"] for c in store.rows("SELECT name FROM runtime_credentials WHERE runtime_id = ?", (runtime_id,))}
+            _env_like = {v for v in et_regular if v.isupper() and (v in _env_names or any(v.startswith(p) for p in ("AWX_", "API_", "DB_", "PG", "MIKROTIK_", "TOKEN", "SECRET", "PASS", "AUTH")))}
+            et_regular = [v for v in et_regular if v not in _env_like]
             et_props: dict[str, Any] = {}
             for v in et_splat:
                 et_props[v] = {"type": "string", "description": f"Argumenty dla {et_parts[0] if et_parts else 'komendy'}"}
@@ -7938,14 +7944,8 @@ def runtime_detail(runtime_id: str, request: Request, welcome: str = "", tool_ad
         "SELECT * FROM audit_log WHERE target_type = 'runtime' AND target_id = ? AND action != 'view_runtime' ORDER BY id DESC LIMIT 30",
         (runtime_id,),
     )
-    # Load ENV vars from runtime-env.json
-    _env_vars: dict[str, str] = {}
-    _env_path = store.CONFIG_ROOT / runtime_id / "runtime-env.json"
-    if _env_path.exists():
-        try:
-            _env_vars = json.loads(_env_path.read_text(encoding="utf-8")).get("env") or {}
-        except Exception:
-            pass
+    # Load ENV vars from DB credentials
+    _env_vars: dict[str, str] = {c["name"]: c["value"] for c in credentials if c["kind"] == "env"}
     # Tool config preview for dry-run mode
     _tool_config_preview = "".join(
         f'<div style="margin-bottom:12px;padding:10px;background:#060e18;border-radius:6px">'
@@ -8434,15 +8434,17 @@ function ntPreset(cmd, desc) {{
         <p class="muted">Zmienne są wstrzykiwane do kontenera przy następnym deploy. Po zmianie kliknij <b>Redeploy</b>.</p>
         <div style="background:#1a1200;border:1px solid #3a2800;border-radius:8px;padding:14px;margin-bottom:16px">
           <div id="env-rows" style="display:grid;gap:6px;margin-bottom:10px">
-            {"".join(f'''<div style="display:grid;grid-template-columns:160px 1fr auto;gap:8px;align-items:center">
+            {"".join(f'''<div style="display:grid;grid-template-columns:160px 1fr auto auto;gap:8px;align-items:center">
               <code style="padding:6px 10px;background:#0d1000;border:1px solid #3a2800;border-radius:6px;font-size:12px;color:#d4a820">{escape(k)}</code>
-              <span style="padding:6px 10px;background:#0d1000;border:1px solid #3a2800;border-radius:6px;font-size:12px;color:var(--muted)">{'*' * min(len(v),8) if v else '(puste)'}</span>
+              <span data-secret="{escape(v)}" style="padding:6px 10px;background:#0d1000;border:1px solid #3a2800;border-radius:6px;font-size:12px;color:var(--muted)">{'*' * min(len(v),8) if v else '(puste)'}</span>
+              <button onclick="toggleSecret(this)" title="Pokaż/ukryj" style="background:none;border:1px solid #3a2800;color:var(--muted);padding:4px 8px;border-radius:6px;font-size:13px;cursor:pointer">👁</button>
               <button onclick="delEnvVar('{escape(runtime_id)}','{escape(k)}')" style="background:#3a1010;border:1px solid #6a2020;color:#f47a80;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">✕</button>
             </div>''' for k,v in _env_vars.items()) or '<p class="muted" style="margin:0">Brak zmiennych ENV — dodaj poniżej.</p>'}
           </div>
-          <div style="display:grid;grid-template-columns:160px 1fr auto;gap:8px;align-items:center">
+          <div style="display:grid;grid-template-columns:160px 1fr auto auto;gap:8px;align-items:center">
             <input id="new-env-key" placeholder="NAZWA_ZMIENNEJ" style="padding:7px 10px;border:1px solid #3a2800;border-radius:6px;background:#0d1000;color:var(--text);font-size:12px;font-family:monospace">
             <input id="new-env-val" type="password" placeholder="wartość / token" style="padding:7px 10px;border:1px solid #3a2800;border-radius:6px;background:#0d1000;color:var(--text);font-size:12px">
+            <button onclick="var i=document.getElementById('new-env-val');i.type=i.type==='password'?'text':'password'" title="Pokaż/ukryj" style="background:none;border:1px solid #3a2800;color:var(--muted);padding:7px 8px;border-radius:6px;font-size:13px;cursor:pointer">👁</button>
             <button onclick="addEnvVar('{escape(runtime_id)}')" style="background:#1a2800;border:1px solid #3a5000;color:#8ac840;padding:7px 12px;border-radius:6px;font-size:12px;cursor:pointer">+ Dodaj</button>
           </div>
         </div>
@@ -8695,6 +8697,17 @@ function ntPreset(cmd, desc) {{
         }})
         .catch(function(e) {{ result.textContent = String(e); status.textContent = ''; }});
       }};
+      window.toggleSecret = function(btn) {{
+        var span = btn.parentElement.querySelector('[data-secret]');
+        if (!span) return;
+        if (span.dataset.revealed === '1') {{
+          span.textContent = '*'.repeat(Math.min(span.dataset.secret.length, 8)) || '(puste)';
+          span.dataset.revealed = '0';
+        }} else {{
+          span.textContent = span.dataset.secret;
+          span.dataset.revealed = '1';
+        }}
+      }};
       window.addEnvVar = function(rid) {{
         var k = document.getElementById('new-env-key').value.trim();
         var v = document.getElementById('new-env-val').value;
@@ -8876,16 +8889,16 @@ async def add_env_var(runtime_id: str, request: Request):
     value = str(data.get("value") or "")
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,100}", key):
         raise HTTPException(status_code=400, detail="Nieprawidłowa nazwa zmiennej")
-    env_path = store.CONFIG_ROOT / runtime_id / "runtime-env.json"
-    env_path.parent.mkdir(parents=True, exist_ok=True)
-    env: dict[str, str] = {}
-    if env_path.exists():
-        try:
-            env = json.loads(env_path.read_text(encoding="utf-8")).get("env") or {}
-        except Exception:
-            pass
-    env[key] = value
-    env_path.write_text(json.dumps({"env": env}, indent=2), encoding="utf-8")
+    now = store.now_iso()
+    existing = store.one("SELECT id FROM runtime_credentials WHERE runtime_id = ? AND name = ? AND kind = 'env'", (runtime_id, key))
+    if existing:
+        store.execute("UPDATE runtime_credentials SET value = ?, updated_at = ? WHERE id = ?", (value, now, existing["id"]))
+    else:
+        store.execute(
+            "INSERT INTO runtime_credentials(runtime_id, kind, name, value, env_name, mount_path, enabled, created_at, updated_at) VALUES (?, 'env', ?, ?, '', '', 1, ?, ?)",
+            (runtime_id, key, value, now, now),
+        )
+    write_runtime_config(runtime_id)
     store.audit("admin", "set_env_var", "runtime", runtime_id, {"key": key})
     return {"ok": True}
 
@@ -8895,14 +8908,8 @@ async def delete_env_var(runtime_id: str, key: str):
     runtime = store.one(sql.SELECT_RUNTIME_BY_ID, (runtime_id,))
     if not runtime:
         raise HTTPException(status_code=404)
-    env_path = store.CONFIG_ROOT / runtime_id / "runtime-env.json"
-    if env_path.exists():
-        try:
-            env = json.loads(env_path.read_text(encoding="utf-8")).get("env") or {}
-            env.pop(key, None)
-            env_path.write_text(json.dumps({"env": env}, indent=2), encoding="utf-8")
-        except Exception:
-            pass
+    store.execute("DELETE FROM runtime_credentials WHERE runtime_id = ? AND name = ? AND kind = 'env'", (runtime_id, key))
+    write_runtime_config(runtime_id)
     store.audit("admin", "delete_env_var", "runtime", runtime_id, {"key": key})
     return {"ok": True}
 

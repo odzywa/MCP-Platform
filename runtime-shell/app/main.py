@@ -152,7 +152,9 @@ async def rest_tool_openwebui(tool_name: str, request: Request) -> JSONResponse:
 
 
 def render_arg(value: Any, arguments: dict[str, Any]) -> str:
-    return Template(str(value)).safe_substitute({key: str(val) for key, val in arguments.items()})
+    merged = {k: v for k, v in os.environ.items()}
+    merged.update({key: str(val) for key, val in arguments.items()})
+    return Template(str(value)).safe_substitute(merged)
 
 
 def policy_check(command: list[str]) -> None:
@@ -225,9 +227,15 @@ async def execute_tool(tool_name: str, arguments: dict[str, Any],
         return {"ok": False, "tool": tool_name, "error": str(exc)}
     timeout = int(execution.get("timeout_seconds") or policy.get("timeout_seconds") or 20)
     max_response_bytes = int(execution.get("max_response_bytes") or policy.get("max_response_bytes") or 1_048_576)
+    use_shell = "|" in command or ">" in command or "&&" in command
+    if use_shell:
+        shell_cmd = shlex.join(command)
+        run_args: dict[str, Any] = {"args": shell_cmd, "shell": True}
+    else:
+        run_args = {"args": command, "shell": False}
     try:
         completed = subprocess.run(
-            command,
+            **run_args,
             check=False,
             capture_output=True,
             text=True,
