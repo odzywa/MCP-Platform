@@ -1352,6 +1352,42 @@ def action_forms(runtime_id: str, compact: bool = False, return_to: str | None =
 </script>"""
 
 
+def _validation_ui(tool: dict[str, Any]) -> str:
+    schema = json.loads(tool["input_schema_json"] or "{}")
+    props = schema.get("properties") or {}
+    if not props:
+        return '<p class="muted" style="font-size:11px">Brak parametrów — dodaj w Input Schema JSON wyżej.</p>'
+    rows = []
+    for pname, pdef in props.items():
+        val = pdef.get("validation") or {}
+        allowed = ", ".join(val.get("allowed_values") or [])
+        blocked = ", ".join(val.get("blocked_words") or [])
+        pattern = val.get("pattern") or ""
+        max_len = val.get("max_length") or ""
+        rows.append(f"""<tr>
+          <td style="font-weight:700;color:#7dd3fc;font-size:12px">{escape(pname)}</td>
+          <td><input name="val_allowed_{escape(pname)}" value="{escape(allowed)}" placeholder="wartość1, wartość2" style="font-size:11px;padding:4px 8px;width:100%;box-sizing:border-box"></td>
+          <td><input name="val_blocked_{escape(pname)}" value="{escape(blocked)}" placeholder="DROP, DELETE, rm" style="font-size:11px;padding:4px 8px;width:100%;box-sizing:border-box"></td>
+          <td><input name="val_pattern_{escape(pname)}" value="{escape(pattern)}" placeholder="^[0-9]+$" style="font-size:11px;padding:4px 8px;width:100%;box-sizing:border-box;font-family:monospace"></td>
+          <td><input name="val_maxlen_{escape(pname)}" value="{escape(str(max_len))}" type="number" min="0" placeholder="0" style="font-size:11px;padding:4px 8px;width:80px"></td>
+        </tr>""")
+    return f"""
+    <div style="background:#0d1822;border:1px solid #1a3a50;border-radius:8px;padding:10px 12px">
+      <div style="font-weight:700;font-size:12px;color:#7dd3fc;margin-bottom:6px">🛡️ Walidacja wartości parametrów (Pydantic)</div>
+      <div class="muted" style="font-size:11px;margin-bottom:8px">Allow list = tylko te wartości przejdą | Block list = zabronione słowa | Pattern = regex | + blocked_commands z polityki</div>
+      <table style="width:100%;font-size:12px">
+        <thead><tr>
+          <th style="text-align:left;padding:4px;width:120px">Parametr</th>
+          <th style="text-align:left;padding:4px">Allow list</th>
+          <th style="text-align:left;padding:4px">Block list</th>
+          <th style="text-align:left;padding:4px;width:140px">Pattern (regex)</th>
+          <th style="text-align:left;padding:4px;width:90px">Max length</th>
+        </tr></thead>
+        <tbody>{"".join(rows)}</tbody>
+      </table>
+    </div>"""
+
+
 def tool_edit_form(runtime_id: str, tool: dict[str, Any]) -> str:
     config = json.loads(tool["config_json"] or "{}")
     is_shell = tool["execution_type"] in ("shell", "ssh")
@@ -1387,7 +1423,8 @@ def tool_edit_form(runtime_id: str, tool: dict[str, Any]) -> str:
         </div>
         <label>Description<textarea name="description" style="min-height:52px">{escape(tool['description'])}</textarea></label>
         {exec_fields}
-        <label style="margin-top:8px">Input Schema JSON<textarea name="input_schema_json">{escape(input_schema_json)}</textarea></label>
+        <label style="margin-top:8px">Input Schema JSON<textarea name="input_schema_json" id="sch-{tool['id']}" oninput="renderValidationUI('{tool['id']}')">{escape(input_schema_json)}</textarea></label>
+        <div id="val-ui-{tool['id']}" style="margin-top:8px">{_validation_ui(tool)}</div>
         <label>Output Schema JSON<textarea name="output_schema_json">{escape(output_schema_json)}</textarea></label>
         <div class="actions" style="margin-top:10px">
           <button>💾 Zapisz tool</button>
@@ -8994,6 +9031,27 @@ async def update_tool(runtime_id: str, tool_id: int, request: Request):
         }
         if headers:
             config["headers"] = headers
+    for pname in list((input_schema.get("properties") or {}).keys()):
+        val_rules: dict[str, Any] = {}
+        allowed_raw = str(form.get(f"val_allowed_{pname}") or "").strip()
+        blocked_raw = str(form.get(f"val_blocked_{pname}") or "").strip()
+        pattern_raw = str(form.get(f"val_pattern_{pname}") or "").strip()
+        maxlen_raw = str(form.get(f"val_maxlen_{pname}") or "").strip()
+        if allowed_raw:
+            val_rules["allowed_values"] = [v.strip() for v in allowed_raw.split(",") if v.strip()]
+        if blocked_raw:
+            val_rules["blocked_words"] = [v.strip() for v in blocked_raw.split(",") if v.strip()]
+        if pattern_raw:
+            val_rules["pattern"] = pattern_raw
+        if maxlen_raw and maxlen_raw != "0":
+            try:
+                val_rules["max_length"] = int(maxlen_raw)
+            except ValueError:
+                pass
+        if val_rules:
+            input_schema["properties"][pname]["validation"] = val_rules
+        else:
+            input_schema["properties"][pname].pop("validation", None)
     store.execute(
         """
         UPDATE tools

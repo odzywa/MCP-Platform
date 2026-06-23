@@ -1,5 +1,6 @@
 import json
 import os
+import re as _re
 import shlex
 import subprocess
 import time
@@ -12,6 +13,7 @@ from typing import Any
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from jsonschema import validate
+from pydantic import BaseModel, create_model, field_validator
 
 
 CONFIG_DIR = Path(os.getenv("RUNTIME_CONFIG_DIR", "/config"))
@@ -157,6 +159,71 @@ def render_arg(value: Any, arguments: dict[str, Any]) -> str:
     return Template(str(value)).safe_substitute(merged)
 
 
+_pydantic_cache: dict[str, type[BaseModel]] = {}
+
+def _build_pydantic_model(tool_name: str, schema: dict, policy_blocked: list[str]) -> type[BaseModel] | None:
+    props = schema.get("properties") or {}
+    if not props:
+        return None
+    cache_key = json.dumps({"t": tool_name, "s": schema, "b": policy_blocked}, sort_keys=True)
+    if cache_key in _pydantic_cache:
+        return _pydantic_cache[cache_key]
+
+    fields: dict[str, Any] = {}
+    validators: dict[str, Any] = {}
+    required = set(schema.get("required") or [])
+
+    for pname, pdef in props.items():
+        py_type = {"integer": int, "number": float, "boolean": bool}.get(pdef.get("type", "string"), str)
+        if pname in required:
+            fields[pname] = (py_type, ...)
+        else:
+            default = "" if py_type is str else (0 if py_type in (int, float) else False)
+            fields[pname] = (py_type, default)
+
+        rules = pdef.get("validation") or {}
+        allowed = rules.get("allowed_values") or []
+        blocked = list(rules.get("blocked_words") or []) + policy_blocked
+        pattern = rules.get("pattern") or ""
+        max_len = rules.get("max_length") or 0
+
+        if allowed or blocked or pattern or max_len:
+            _a, _b, _p, _m, _fn = allowed, blocked, pattern, max_len, pname
+            def _make_check(a=_a, b=_b, p=_p, m=_m, fn=_fn):
+                def _check(cls, v):
+                    s = str(v)
+                    if a and s not in a:
+                        raise ValueError(f"{fn}: '{s}' niedozwolone. Dozwolone: {a}")
+                    if b:
+                        upper = s.upper()
+                        for word in b:
+                            if word.upper() in upper:
+                                raise ValueError(f"{fn}: zabronione słowo '{word}'")
+                    if p and not _re.match(p, s):
+                        raise ValueError(f"{fn}: nie pasuje do wzorca '{p}'")
+                    if m and len(s) > m:
+                        raise ValueError(f"{fn}: max {m} znaków, podano {len(s)}")
+                    return v
+                return _check
+            validators[f"check_{pname}"] = field_validator(pname, mode="before")(_make_check())
+
+    model = create_model(f"Tool_{tool_name}", **fields, __validators__=validators)
+    _pydantic_cache[cache_key] = model
+    return model
+
+
+def validate_with_pydantic(tool_name: str, arguments: dict, schema: dict, tool_policy: dict) -> str | None:
+    policy_blocked = [str(w) for w in (tool_policy.get("blocked_commands") or [])]
+    model = _build_pydantic_model(tool_name, schema, policy_blocked)
+    if not model:
+        return None
+    try:
+        model(**arguments)
+        return None
+    except Exception as exc:
+        return str(exc)
+
+
 def policy_check(command: list[str]) -> None:
     if not command:
         raise ValueError("empty command")
@@ -206,6 +273,9 @@ async def execute_tool(tool_name: str, arguments: dict[str, Any],
     if tool.get("execution_type") != "shell":
         return {"ok": False, "error": f"unsupported execution type: {tool.get('execution_type')}"}
     validate(arguments, tool.get("input_schema") or {})
+    pydantic_error = validate_with_pydantic(tool_name, arguments, tool.get("input_schema") or {}, policy)
+    if pydantic_error:
+        return {"ok": False, "error": pydantic_error, "validation_blocked": True}
     execution = tool.get("execution") or {}
     command_template = execution.get("command") or []
     # Build command — ${*varname} expands value with shlex.split (multi-arg passthrough)
