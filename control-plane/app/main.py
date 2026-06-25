@@ -620,7 +620,55 @@ def builtin_tool_packages() -> list[dict[str, Any]]:
             },
         ],
     }
-    return [raghybrid_package, openshift_package]
+    platform_manager_package = {
+        "id": "platform-manager",
+        "name": "MCP Platform Manager",
+        "description": "Meta-MCP: AI tworzy i zarządza serwerami MCP na platformie. Czyta instrukcje, generuje paczki, deployuje — wszystko automatycznie.",
+        "category": "other",
+        "risk_level": "high",
+        "runtime_class": {
+            "name": "shell-readwrite",
+            "runtime_image": "mcp-runtime-shell:latest",
+            "allowed_execution_types": ["shell"],
+            "security_profile": "restricted",
+        },
+        "policy": {"allowed_binaries": ["curl", "jq"], "require_read_only": False, "timeout_seconds": 30},
+        "tools": [
+            {"name": "get_instructions", "description": "Pobiera instrukcję jak tworzyć serwery MCP. ZAWSZE wywołaj PRZED tworzeniem serwera.", "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "other",
+             "config": {"command": ["curl", "-s", "${PLATFORM_URL}/api/platform-docs"], "timeout_seconds": 10},
+             "input_schema": {"type": "object", "properties": {}}},
+            {"name": "create_mcp_server", "description": "Tworzy nowy serwer MCP. Przyjmuje JSON z package, name, credentials. NAJPIERW wywołaj get_instructions.", "execution_type": "shell", "enabled": True, "risk_level": "high", "mode": "write", "category": "other",
+             "config": {"command": ["curl", "-s", "-X", "POST", "-H", "Content-Type: application/json", "${PLATFORM_URL}/api/auto-create", "-d", "${payload}"], "timeout_seconds": 30},
+             "input_schema": {"type": "object", "properties": {"payload": {"type": "string", "description": "JSON: {package: {...}, name: '...', credentials: {KEY: 'val'}, deploy: true}"}}, "required": ["payload"]}},
+            {"name": "list_servers", "description": "Lista serwerów MCP — nazwy, statusy, endpointy.", "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "other",
+             "config": {"command": ["curl", "-s", "${PLATFORM_URL}/api/runtimes"], "timeout_seconds": 10},
+             "input_schema": {"type": "object", "properties": {}}},
+            {"name": "list_packages", "description": "Lista gotowych paczek narzędzi.", "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "other",
+             "config": {"command": ["curl", "-s", "${PLATFORM_URL}/api/tool-packages"], "timeout_seconds": 10},
+             "input_schema": {"type": "object", "properties": {}}},
+            {"name": "server_details", "description": "Szczegóły serwera MCP.", "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "other",
+             "config": {"command": ["curl", "-s", "${PLATFORM_URL}/api/runtimes/${runtime_id}"], "timeout_seconds": 10},
+             "input_schema": {"type": "object", "properties": {"runtime_id": {"type": "string", "description": "ID serwera"}}, "required": ["runtime_id"]}},
+            {"name": "deploy_server", "description": "Deployuje serwer MCP.", "execution_type": "shell", "enabled": True, "risk_level": "medium", "mode": "write", "category": "other",
+             "config": {"command": ["curl", "-s", "-X", "POST", "${PLATFORM_URL}/api/runtimes/${runtime_id}/deploy"], "timeout_seconds": 15},
+             "input_schema": {"type": "object", "properties": {"runtime_id": {"type": "string", "description": "ID serwera"}}, "required": ["runtime_id"]}},
+            {"name": "stop_server", "description": "Zatrzymuje serwer MCP.", "execution_type": "shell", "enabled": True, "risk_level": "medium", "mode": "write", "category": "other",
+             "config": {"command": ["curl", "-s", "-X", "POST", "${PLATFORM_URL}/api/runtimes/${runtime_id}/stop"], "timeout_seconds": 15},
+             "input_schema": {"type": "object", "properties": {"runtime_id": {"type": "string", "description": "ID serwera"}}, "required": ["runtime_id"]}},
+        ],
+    }
+    # Load extra templates from templates/ directory
+    _extra_packages = []
+    _templates_dir = Path(__file__).resolve().parent.parent.parent / "templates"
+    if _templates_dir.exists():
+        for _tf in _templates_dir.rglob("*.json"):
+            try:
+                _tp = json.loads(_tf.read_text(encoding="utf-8"))
+                if _tp.get("id") and _tp.get("tools") and _tp["id"] not in {"raghybrid-assistant", "openshift-readonly", "platform-manager"}:
+                    _extra_packages.append(_tp)
+            except Exception:
+                pass
+    return [raghybrid_package, openshift_package, platform_manager_package] + _extra_packages
 
 
 def seed_builtin_tool_packages() -> None:
@@ -7609,6 +7657,115 @@ async def create_runtime(request: Request):
             (runtime_id, "deploy", "pending", store.now_iso(), store.now_iso()),
         )
     return RedirectResponse(f"/runtimes/{runtime_id}?welcome=1", status_code=303)
+
+
+@app.post("/api/auto-create")
+async def auto_create_mcp(request: Request):
+    """One-shot: accepts package JSON + optional credentials, creates runtime, deploys."""
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    package = data.get("package")
+    if not package or not isinstance(package, dict):
+        raise HTTPException(status_code=400, detail="Missing 'package' object")
+    server_name = str(data.get("name") or package.get("name") or "mcp-server")
+    credentials = data.get("credentials") or {}
+    auto_deploy = data.get("deploy", True)
+    try:
+        package_id = install_tool_package(package, source="auto-api")
+        runtime_id = create_runtime_from_package(package_id, server_name, deploy=False)
+    except HTTPException as exc:
+        return JSONResponse({"ok": False, "error": str(exc.detail)}, status_code=exc.status_code)
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+    now = store.now_iso()
+    for key, value in credentials.items():
+        existing = store.one("SELECT id FROM runtime_credentials WHERE runtime_id = ? AND name = ? AND kind = 'env'", (runtime_id, key))
+        if existing:
+            store.execute("UPDATE runtime_credentials SET value = ?, updated_at = ? WHERE id = ?", (str(value), now, existing["id"]))
+        else:
+            store.execute(
+                "INSERT INTO runtime_credentials(runtime_id, kind, name, value, env_name, mount_path, enabled, created_at, updated_at) VALUES (?, 'env', ?, ?, '', '', 1, ?, ?)",
+                (runtime_id, str(key), str(value), now, now),
+            )
+    write_runtime_config(runtime_id)
+    if auto_deploy:
+        enqueue_runtime_action(runtime_id, "deploy")
+    store.audit("admin", "auto_create", "runtime", runtime_id, {"package_id": package.get("id", ""), "tools": len(package.get("tools", []))})
+    runtime = store.one(sql.SELECT_RUNTIME_BY_ID, (runtime_id,))
+    return JSONResponse({
+        "ok": True,
+        "runtime_id": runtime_id,
+        "name": server_name,
+        "tools": len(package.get("tools", [])),
+        "credentials": len(credentials),
+        "deploy": auto_deploy,
+        "message": f"MCP server '{server_name}' created with {len(package.get('tools', []))} tools. {'Deployment started.' if auto_deploy else 'Not deployed yet — call deploy manually.'}",
+    })
+
+
+@app.get("/api/platform-docs")
+def platform_docs():
+    """Returns instructions for AI models on how to create MCP servers."""
+    return {
+        "instruction": "You are creating MCP servers on MCP Platform. To create a server, call the create_mcp_server tool with a package JSON. Follow this structure exactly.",
+        "package_structure": {
+            "id": "unique-kebab-case-id",
+            "name": "Human Readable Name",
+            "description": "What this server does",
+            "category": "one of: http, shell, openshift, database, other",
+            "risk_level": "low | medium | high",
+            "source": "auto-api",
+            "runtime_class": {
+                "name": "shell-readonly (for CLI tools) or http-gateway (for REST APIs)",
+                "runtime_image": "mcp-runtime-shell:latest (for shell) or mcp-runtime-http-gateway:latest (for http)",
+                "allowed_execution_types": ["shell"],
+                "security_profile": "restricted"
+            },
+            "policy": {
+                "allowed_binaries": ["list of allowed commands, e.g. curl, jq, oc, psql"],
+                "blocked_commands": ["list of blocked words in commands"],
+                "require_read_only": True,
+                "timeout_seconds": 30
+            },
+            "tools": [
+                {
+                    "name": "tool_name_snake_case",
+                    "description": "Clear description for AI - what this tool does and what parameters mean",
+                    "execution_type": "shell",
+                    "enabled": True,
+                    "risk_level": "low",
+                    "mode": "read-only",
+                    "category": "same as package category",
+                    "config": {
+                        "command": ["binary", "arg1", "${variable}", "${*free_args}"],
+                        "timeout_seconds": 30
+                    },
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "variable": {"type": "string", "description": "What this parameter is for"},
+                        },
+                        "required": ["variable"]
+                    }
+                }
+            ]
+        },
+        "variable_syntax": {
+            "${variable}": "Single parameter — replaced with one value from AI arguments",
+            "${*args}": "Splat parameter — AI provides full string, split by shlex into multiple arguments",
+            "${ENV_VAR}": "UPPERCASE variables are resolved from container environment (credentials), NOT from AI arguments"
+        },
+        "credentials_note": "Pass credentials as UPPERCASE env vars (e.g. AWX_URL, API_TOKEN, DB_PASS). These are injected into the container environment and resolved in commands automatically. Do NOT add them to input_schema.",
+        "examples": {
+            "curl_with_auth": "curl -s -u ${API_USER}:${API_PASS} ${API_URL}/endpoint",
+            "oc_get": "oc get ${*args}",
+            "psql_query": "psql -h ${PGHOST} -U ${PGUSER} -d ${PGDATABASE} -c ${query}",
+            "simple_curl": "curl -s ${url}"
+        },
+        "api_endpoint": "POST /api/auto-create with JSON body: {\"package\": {...}, \"name\": \"server-name\", \"credentials\": {\"KEY\": \"value\"}, \"deploy\": true}"
+    }
 
 
 @app.post("/api/tool-packages/import")

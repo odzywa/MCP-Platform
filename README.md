@@ -249,6 +249,49 @@ RUN apt-get update && apt-get install -y postgresql-client && rm -rf /var/lib/ap
 
 See `docs/jak-stworzyc-mcp-server.md` for full step-by-step guide.
 
+### Option C — Let AI create it for you (Platform Manager)
+
+MCP Platform includes a built-in **Platform Manager** MCP server — a meta-MCP that lets AI models create other MCP servers automatically.
+
+1. Go to **Quick Start** → deploy **MCP Platform Manager**
+2. Add credential: `PLATFORM_URL` = `http://mcp-platform:8080`
+3. Deploy → connect to your AI client
+4. Tell the AI what you need:
+
+```
+"Create an MCP server for monitoring MikroTik router at 192.168.88.1 with login admin and password test123"
+```
+
+The AI will:
+- Read platform instructions (`get_instructions`)
+- Generate the package JSON with tools, policy, and credentials
+- Call `create_mcp_server` to deploy it automatically
+
+**Available tools in Platform Manager:**
+
+| Tool | Description |
+|------|-------------|
+| `get_instructions` | Returns full documentation on how to create MCP servers |
+| `create_mcp_server` | Creates + deploys a server from package JSON in one call |
+| `list_servers` | Lists all running MCP servers |
+| `list_packages` | Lists available template packages |
+| `server_details` | Shows details of a specific server |
+| `deploy_server` | Starts a stopped server |
+| `stop_server` | Stops a running server |
+
+### Built-in template packages
+
+| Package | Tools | Description |
+|---------|-------|-------------|
+| `curl-http-toolkit` | 3 | HTTP GET, POST, status check via curl |
+| `openshift-readonly` | 7 | oc get, describe, logs, events, status, top |
+| `mikrotik-readonly` | 7 | MikroTik REST API — interfaces, DHCP, routes, firewall, logs |
+| `minio-readonly` | 5 | MinIO S3 — list buckets, objects, download files |
+| `mssql-readonly` | 4 | MSSQL SELECT queries, list tables/databases |
+| `trino-readonly` | 5 | Trino SQL — catalogs, schemas, tables, queries |
+| `git-readonly` | 6 | Git log, diff, show, status, branches, blame |
+| `platform-manager` | 7 | Meta-MCP — AI creates and manages other MCP servers |
+
 ---
 
 ## Connect to Continue
