@@ -1,0 +1,156 @@
+{
+  "id": "platform-manager",
+  "name": "MCP Platform Manager",
+  "description": "Meta-MCP: AI tworzy i zarządza serwerami MCP na platformie. Czyta instrukcje, generuje paczki, deployuje — wszystko automatycznie.",
+  "category": "other",
+  "risk_level": "high",
+  "source": "builtin",
+  "runtime_class": {
+    "name": "shell-readwrite",
+    "runtime_image": "mcp-runtime-shell:latest",
+    "allowed_execution_types": ["shell"],
+    "security_profile": "restricted"
+  },
+  "policy": {
+    "allowed_binaries": ["curl", "jq"],
+    "blocked_commands": [],
+    "require_read_only": false,
+    "timeout_seconds": 30
+  },
+  "tools": [
+    {
+      "name": "get_instructions",
+      "description": "Pobiera pełną instrukcję jak tworzyć serwery MCP na platformie. ZAWSZE wywołaj to narzędzie PRZED tworzeniem serwera — zawiera strukturę paczki JSON, składnię zmiennych, przykłady komend. Bez tych instrukcji nie twórz serwera.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": ["curl", "-s", "${PLATFORM_URL}/api/platform-docs"],
+        "timeout_seconds": 10
+      },
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "create_mcp_server",
+      "description": "Tworzy nowy serwer MCP na platformie. Przyjmuje kompletną paczkę JSON z narzędziami, polityką i credentials. Serwer jest automatycznie deployowany. NAJPIERW wywołaj get_instructions żeby poznać wymaganą strukturę JSON.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "high",
+      "mode": "write",
+      "category": "other",
+      "config": {
+        "command": ["curl", "-s", "-X", "POST", "-H", "Content-Type: application/json", "${PLATFORM_URL}/api/auto-create", "-d", "${payload}"],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "payload": {
+            "type": "string",
+            "description": "Pełny JSON z polami: package (obiekt paczki z tools, policy, runtime_class), name (nazwa serwera), credentials (obiekt ENV: klucz=wartość), deploy (true/false). Patrz get_instructions po szczegóły."
+          }
+        },
+        "required": ["payload"]
+      }
+    },
+    {
+      "name": "list_servers",
+      "description": "Lista wszystkich serwerów MCP na platformie — nazwy, statusy, endpointy.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": ["curl", "-s", "${PLATFORM_URL}/api/runtimes"],
+        "timeout_seconds": 10
+      },
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "list_packages",
+      "description": "Lista dostępnych gotowych paczek narzędzi — szablony do szybkiego tworzenia serwerów.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": ["curl", "-s", "${PLATFORM_URL}/api/tool-packages"],
+        "timeout_seconds": 10
+      },
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "server_details",
+      "description": "Szczegóły konkretnego serwera MCP — narzędzia, polityka, status, endpoint.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": ["curl", "-s", "${PLATFORM_URL}/api/runtimes/${runtime_id}"],
+        "timeout_seconds": 10
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "runtime_id": {
+            "type": "string",
+            "description": "ID serwera MCP"
+          }
+        },
+        "required": ["runtime_id"]
+      }
+    },
+    {
+      "name": "deploy_server",
+      "description": "Deployuje (uruchamia) serwer MCP. Użyj po create lub gdy serwer jest zatrzymany.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "medium",
+      "mode": "write",
+      "category": "other",
+      "config": {
+        "command": ["curl", "-s", "-X", "POST", "${PLATFORM_URL}/api/runtimes/${runtime_id}/deploy"],
+        "timeout_seconds": 15
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "runtime_id": {
+            "type": "string",
+            "description": "ID serwera do deploymentu"
+          }
+        },
+        "required": ["runtime_id"]
+      }
+    },
+    {
+      "name": "stop_server",
+      "description": "Zatrzymuje serwer MCP.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "medium",
+      "mode": "write",
+      "category": "other",
+      "config": {
+        "command": ["curl", "-s", "-X", "POST", "${PLATFORM_URL}/api/runtimes/${runtime_id}/stop"],
+        "timeout_seconds": 15
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "runtime_id": {
+            "type": "string",
+            "description": "ID serwera do zatrzymania"
+          }
+        },
+        "required": ["runtime_id"]
+      }
+    }
+  ]
+}

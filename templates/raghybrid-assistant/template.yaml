@@ -1,0 +1,49 @@
+apiVersion: mcp.raghybrid.io/v1alpha1
+kind: MCPRuntimeTemplate
+metadata:
+  name: raghybrid-assistant
+  displayName: RAGHybrid Assistant
+spec:
+  runtimeClass: http-gateway
+  description: Exposes RAGHybrid retrieval APIs through a generic MCP HTTP runtime.
+  variables:
+    raghybridBaseUrl:
+      type: string
+      default: http://raghybrid-app:8000
+  tools:
+    - name: hybridrag_search
+      description: Retrieve source-grounded context from RAGHybrid.
+      executionType: http_request
+      capabilities:
+        - raghybrid.retrieval.read
+      inputSchema:
+        type: object
+        required:
+          - query
+        properties:
+          query:
+            type: string
+          max_vector:
+            type: integer
+            default: 5
+          max_graph:
+            type: integer
+            default: 10
+          max_evidence:
+            type: integer
+            default: 5
+      outputSchema:
+        type: object
+      execution:
+        method: POST
+        url: ${raghybridBaseUrl}/retrieve_json
+        timeout_seconds: 60
+        max_response_bytes: 5242880
+      security:
+        riskLevel: low
+        mode: read-only
+  policy:
+    allow_unknown_tools: false
+    require_read_only: true
+    block_write_tools: true
+    block_destructive_tools: true

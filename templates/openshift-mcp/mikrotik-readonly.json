@@ -1,0 +1,122 @@
+{
+  "id": "mikrotik-readonly",
+  "name": "MikroTik Router",
+  "description": "Monitoring routera MikroTik przez REST API — interfejsy, DHCP, routing, firewall, logi, zasoby systemowe. RouterOS 7.1+.",
+  "category": "other",
+  "risk_level": "medium",
+  "source": "builtin",
+  "runtime_class": {
+    "name": "shell-readonly",
+    "runtime_image": "mcp-runtime-shell:latest",
+    "allowed_execution_types": ["shell"],
+    "security_profile": "restricted"
+  },
+  "policy": {
+    "allowed_binaries": ["curl", "jq"],
+    "blocked_commands": ["post", "put", "patch", "delete", "set", "add", "remove"],
+    "require_read_only": true,
+    "block_write_tools": true,
+    "block_destructive_tools": true,
+    "timeout_seconds": 15
+  },
+  "tools": [
+    {
+      "name": "get_interfaces",
+      "description": "Stan wszystkich interfejsów sieciowych routera — nazwa, typ, status, prędkość, TX/RX.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": ["curl", "-sk", "-u", "${MIKROTIK_USER}:${MIKROTIK_PASS}", "${MIKROTIK_URL}/rest/interface"],
+        "timeout_seconds": 15
+      },
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "get_dhcp_leases",
+      "description": "Lista przydzielonych adresów DHCP — kto jest podłączony do sieci.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": ["curl", "-sk", "-u", "${MIKROTIK_USER}:${MIKROTIK_PASS}", "${MIKROTIK_URL}/rest/ip/dhcp-server/lease"],
+        "timeout_seconds": 15
+      },
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "get_routes",
+      "description": "Tabela routingu — aktywne trasy, bramy, odległości.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": ["curl", "-sk", "-u", "${MIKROTIK_USER}:${MIKROTIK_PASS}", "${MIKROTIK_URL}/rest/ip/route"],
+        "timeout_seconds": 15
+      },
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "get_firewall",
+      "description": "Reguły firewall filter — co jest blokowane/dozwolone.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": ["curl", "-sk", "-u", "${MIKROTIK_USER}:${MIKROTIK_PASS}", "${MIKROTIK_URL}/rest/ip/firewall/filter"],
+        "timeout_seconds": 15
+      },
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "get_logs",
+      "description": "Logi systemowe routera — ostatnie zdarzenia, błędy, logowania.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": ["curl", "-sk", "-u", "${MIKROTIK_USER}:${MIKROTIK_PASS}", "${MIKROTIK_URL}/rest/log"],
+        "timeout_seconds": 15
+      },
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "get_resource",
+      "description": "Zasoby systemowe routera — CPU, RAM, uptime, wersja RouterOS.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": ["curl", "-sk", "-u", "${MIKROTIK_USER}:${MIKROTIK_PASS}", "${MIKROTIK_URL}/rest/system/resource"],
+        "timeout_seconds": 15
+      },
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "get_dns_cache",
+      "description": "Cache DNS routera — jakie domeny były ostatnio rozwiązywane.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": ["curl", "-sk", "-u", "${MIKROTIK_USER}:${MIKROTIK_PASS}", "${MIKROTIK_URL}/rest/ip/dns/cache"],
+        "timeout_seconds": 15
+      },
+      "input_schema": { "type": "object", "properties": {} }
+    }
+  ]
+}

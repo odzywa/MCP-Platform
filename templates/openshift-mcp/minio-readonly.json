@@ -1,0 +1,125 @@
+{
+  "id": "minio-readonly",
+  "name": "MinIO S3 Storage",
+  "description": "Zarządzanie obiektami MinIO/S3 — listowanie bucketów, obiektów, statystyki, pobieranie plików. Wymaga mc (MinIO Client).",
+  "category": "other",
+  "risk_level": "low",
+  "source": "builtin",
+  "runtime_class": {
+    "name": "shell-readonly",
+    "runtime_image": "mcp-runtime-shell:latest",
+    "allowed_execution_types": ["shell"],
+    "security_profile": "restricted"
+  },
+  "policy": {
+    "allowed_binaries": ["curl", "jq"],
+    "blocked_commands": ["rm", "delete", "remove", "put", "cp", "mv", "mb", "rb"],
+    "require_read_only": true,
+    "block_write_tools": true,
+    "block_destructive_tools": true,
+    "timeout_seconds": 30
+  },
+  "tools": [
+    {
+      "name": "list_buckets",
+      "description": "Listuje wszystkie buckety w MinIO.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": ["curl", "-s", "-u", "${MINIO_USER}:${MINIO_PASS}", "${MINIO_URL}/minio/health/live"],
+        "timeout_seconds": 15
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "s3_list_buckets",
+      "description": "Listuje buckety MinIO przez S3 API.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": ["curl", "-s", "-u", "${MINIO_USER}:${MINIO_PASS}", "${MINIO_URL}/"],
+        "timeout_seconds": 15
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "s3_list_objects",
+      "description": "Listuje obiekty w buckecie MinIO.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": ["curl", "-s", "-u", "${MINIO_USER}:${MINIO_PASS}", "${MINIO_URL}/${bucket}?list-type=2"],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "bucket": {
+            "type": "string",
+            "description": "Nazwa bucketu"
+          }
+        },
+        "required": ["bucket"]
+      }
+    },
+    {
+      "name": "s3_get_object",
+      "description": "Pobiera zawartość obiektu (pliku) z bucketu MinIO.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": ["curl", "-s", "-u", "${MINIO_USER}:${MINIO_PASS}", "${MINIO_URL}/${bucket}/${key}"],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "bucket": {
+            "type": "string",
+            "description": "Nazwa bucketu"
+          },
+          "key": {
+            "type": "string",
+            "description": "Ścieżka/klucz obiektu, np. 'data/file.csv'"
+          }
+        },
+        "required": ["bucket", "key"]
+      }
+    },
+    {
+      "name": "minio_health",
+      "description": "Sprawdza status zdrowia MinIO.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": ["curl", "-s", "${MINIO_URL}/minio/health/live"],
+        "timeout_seconds": 10
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  ]
+}

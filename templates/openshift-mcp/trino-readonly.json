@@ -1,0 +1,131 @@
+{
+  "id": "trino-readonly",
+  "name": "Trino SQL Query Engine",
+  "description": "Zapytania SQL do Trino (Presto) — catalogi, schematy, tabele, zapytania SELECT. Tylko odczyt.",
+  "category": "database",
+  "risk_level": "medium",
+  "source": "builtin",
+  "runtime_class": {
+    "name": "shell-readonly",
+    "runtime_image": "mcp-runtime-shell:latest",
+    "allowed_execution_types": ["shell"],
+    "security_profile": "restricted"
+  },
+  "policy": {
+    "allowed_binaries": ["curl", "jq"],
+    "blocked_commands": ["DROP", "DELETE", "INSERT", "UPDATE", "TRUNCATE", "ALTER", "CREATE", "GRANT", "REVOKE"],
+    "require_read_only": true,
+    "block_write_tools": true,
+    "block_destructive_tools": true,
+    "timeout_seconds": 60
+  },
+  "tools": [
+    {
+      "name": "trino_query",
+      "description": "Wykonaj zapytanie SELECT na Trino. Obsługuje cross-catalog queries.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "medium",
+      "mode": "read-only",
+      "category": "database",
+      "config": {
+        "command": ["curl", "-s", "-X", "POST", "-H", "X-Trino-User: ${TRINO_USER}", "${TRINO_URL}/v1/statement", "-d", "${query}"],
+        "timeout_seconds": 60
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Zapytanie SQL (tylko SELECT, SHOW, DESCRIBE)",
+            "validation": {
+              "blocked_words": ["DROP", "DELETE", "INSERT", "UPDATE", "TRUNCATE", "ALTER", "CREATE"],
+              "max_length": 2000
+            }
+          }
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "list_catalogs",
+      "description": "Lista dostępnych catalogów w Trino.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "database",
+      "config": {
+        "command": ["curl", "-s", "-X", "POST", "-H", "X-Trino-User: ${TRINO_USER}", "${TRINO_URL}/v1/statement", "-d", "SHOW CATALOGS"],
+        "timeout_seconds": 15
+      },
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "list_schemas",
+      "description": "Lista schematów w katalogu Trino.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "database",
+      "config": {
+        "command": ["curl", "-s", "-X", "POST", "-H", "X-Trino-User: ${TRINO_USER}", "${TRINO_URL}/v1/statement", "-d", "SHOW SCHEMAS FROM ${catalog}"],
+        "timeout_seconds": 15
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "catalog": {
+            "type": "string",
+            "description": "Nazwa katalogu, np. 'hive', 'iceberg', 'postgresql'"
+          }
+        },
+        "required": ["catalog"]
+      }
+    },
+    {
+      "name": "list_tables",
+      "description": "Lista tabel w schemacie Trino.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "database",
+      "config": {
+        "command": ["curl", "-s", "-X", "POST", "-H", "X-Trino-User: ${TRINO_USER}", "${TRINO_URL}/v1/statement", "-d", "SHOW TABLES FROM ${catalog}.${schema}"],
+        "timeout_seconds": 15
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "catalog": { "type": "string", "description": "Katalog" },
+          "schema": { "type": "string", "description": "Schema" }
+        },
+        "required": ["catalog", "schema"]
+      }
+    },
+    {
+      "name": "describe_table",
+      "description": "Struktura tabeli w Trino — kolumny i typy.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "database",
+      "config": {
+        "command": ["curl", "-s", "-X", "POST", "-H", "X-Trino-User: ${TRINO_USER}", "${TRINO_URL}/v1/statement", "-d", "DESCRIBE ${catalog}.${schema}.${table}"],
+        "timeout_seconds": 15
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "catalog": { "type": "string", "description": "Katalog" },
+          "schema": { "type": "string", "description": "Schema" },
+          "table": { "type": "string", "description": "Nazwa tabeli" }
+        },
+        "required": ["catalog", "schema", "table"]
+      }
+    }
+  ]
+}

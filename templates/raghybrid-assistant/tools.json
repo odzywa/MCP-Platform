@@ -1,0 +1,40 @@
+[
+  {
+    "name": "hybridrag_search",
+    "description": "Retrieve source-grounded context from RAGHybrid. Send a standalone query with the concrete topic, not a follow-up like 'find fragments that confirm this'.",
+    "execution_type": "http_request",
+    "capabilities": ["raghybrid.retrieval.read"],
+    "input_schema": {
+      "type": "object",
+      "required": ["query"],
+      "properties": {
+        "query": {"type": "string"},
+        "top_k": {"type": "integer", "default": 8, "minimum": 1, "maximum": 20},
+        "max_vector": {"type": "integer", "default": 8, "minimum": 1, "maximum": 10},
+        "max_graph": {"type": "integer", "default": 12, "minimum": 0, "maximum": 30},
+        "max_evidence": {"type": "integer", "default": 8, "minimum": 0, "maximum": 12},
+        "tags": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "output_schema": {"type": "object"},
+    "execution": {
+      "method": "POST",
+      "url": "${raghybridBaseUrl}/retrieve_json",
+      "body": {
+        "query": "${query}",
+        "top_k": "${top_k}",
+        "max_vector": "${max_vector}",
+        "max_graph": "${max_graph}",
+        "max_evidence": "${max_evidence}",
+        "max_context_chars": 20000,
+        "telemetry": true
+      },
+      "timeout_seconds": 60,
+      "max_response_bytes": 5242880
+    },
+    "security": {
+      "risk_level": "low",
+      "mode": "read-only"
+    }
+  }
+]

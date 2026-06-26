@@ -1,0 +1,102 @@
+{
+  "id": "mssql-readonly",
+  "name": "MSSQL Server Read-Only",
+  "description": "Zapytania SELECT do Microsoft SQL Server przez sqlcmd. Tylko odczyt — blokuje INSERT/UPDATE/DELETE/DROP.",
+  "category": "database",
+  "risk_level": "medium",
+  "source": "builtin",
+  "runtime_class": {
+    "name": "shell-readonly",
+    "runtime_image": "mcp-runtime-shell:latest",
+    "allowed_execution_types": ["shell"],
+    "security_profile": "restricted"
+  },
+  "policy": {
+    "allowed_binaries": ["curl", "jq"],
+    "blocked_commands": ["DROP", "DELETE", "INSERT", "UPDATE", "TRUNCATE", "ALTER", "CREATE", "GRANT", "REVOKE", "EXEC", "EXECUTE", "xp_", "sp_"],
+    "require_read_only": true,
+    "block_write_tools": true,
+    "block_destructive_tools": true,
+    "timeout_seconds": 30
+  },
+  "tools": [
+    {
+      "name": "sql_query",
+      "description": "Wykonaj zapytanie SELECT na bazie MSSQL. Tylko SELECT — zapytania modyfikujące są zablokowane.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "medium",
+      "mode": "read-only",
+      "category": "database",
+      "config": {
+        "command": ["curl", "-s", "-X", "POST", "-H", "Content-Type: application/json", "-u", "${MSSQL_USER}:${MSSQL_PASS}", "${MSSQL_URL}", "-d", "{\"query\": \"${query}\"}"],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Zapytanie SQL (tylko SELECT)",
+            "validation": {
+              "blocked_words": ["DROP", "DELETE", "INSERT", "UPDATE", "TRUNCATE", "ALTER", "CREATE", "GRANT", "REVOKE", "EXEC"],
+              "max_length": 2000
+            }
+          }
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "list_tables",
+      "description": "Lista tabel w bazie danych MSSQL.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "database",
+      "config": {
+        "command": ["curl", "-s", "-X", "POST", "-H", "Content-Type: application/json", "-u", "${MSSQL_USER}:${MSSQL_PASS}", "${MSSQL_URL}", "-d", "{\"query\": \"SELECT TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE FROM INFORMATION_SCHEMA.TABLES ORDER BY TABLE_SCHEMA, TABLE_NAME\"}"],
+        "timeout_seconds": 15
+      },
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "describe_table",
+      "description": "Struktura tabeli MSSQL — kolumny, typy danych, nullability.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "database",
+      "config": {
+        "command": ["curl", "-s", "-X", "POST", "-H", "Content-Type: application/json", "-u", "${MSSQL_USER}:${MSSQL_PASS}", "${MSSQL_URL}", "-d", "{\"query\": \"SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '${table_name}' ORDER BY ORDINAL_POSITION\"}"],
+        "timeout_seconds": 15
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "table_name": {
+            "type": "string",
+            "description": "Nazwa tabeli"
+          }
+        },
+        "required": ["table_name"]
+      }
+    },
+    {
+      "name": "list_databases",
+      "description": "Lista baz danych na serwerze MSSQL.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "database",
+      "config": {
+        "command": ["curl", "-s", "-X", "POST", "-H", "Content-Type: application/json", "-u", "${MSSQL_USER}:${MSSQL_PASS}", "${MSSQL_URL}", "-d", "{\"query\": \"SELECT name, state_desc, recovery_model_desc FROM sys.databases ORDER BY name\"}"],
+        "timeout_seconds": 15
+      },
+      "input_schema": { "type": "object", "properties": {} }
+    }
+  ]
+}

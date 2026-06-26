@@ -1,0 +1,10 @@
+{
+  "name": "raghybrid-assistant",
+  "runtime_class": "http-gateway",
+  "runtime_type": "http-gateway",
+  "settings": {
+    "transport": "streamable_http",
+    "mcp_endpoint": "/mcp",
+    "hot_reload": true
+  }
+}

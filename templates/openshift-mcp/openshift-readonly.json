@@ -1,0 +1,183 @@
+{
+  "id": "openshift-readonly",
+  "name": "OpenShift Read-Only",
+  "description": "Narzędzia do monitorowania klastra OpenShift — oc get, describe, logs, events, status, top. Tylko odczyt.",
+  "category": "openshift",
+  "risk_level": "low",
+  "source": "builtin",
+  "runtime_class": {
+    "name": "shell-readonly",
+    "runtime_image": "mcp-runtime-shell:latest",
+    "allowed_execution_types": ["shell"],
+    "security_profile": "restricted"
+  },
+  "policy": {
+    "allowed_binaries": ["oc", "kubectl", "jq"],
+    "blocked_commands": ["delete", "apply", "patch", "edit", "create", "replace", "scale", "adm drain", "adm cordon"],
+    "allowed_command_prefixes": ["oc get", "oc describe", "oc logs", "oc status", "oc adm top", "oc whoami", "oc project", "oc version", "kubectl get", "kubectl describe", "kubectl logs"],
+    "blocked_command_prefixes": ["oc delete", "oc apply", "oc patch", "oc edit", "oc create", "oc replace", "oc scale"],
+    "require_read_only": true,
+    "block_write_tools": true,
+    "block_destructive_tools": true,
+    "timeout_seconds": 30,
+    "max_payload_bytes": 262144,
+    "max_response_bytes": 5242880
+  },
+  "tools": [
+    {
+      "name": "oc_get",
+      "description": "Pobiera zasoby z OpenShift — pods, services, routes, deployments, configmaps itp. Podaj typ zasobu i opcjonalnie namespace.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "openshift",
+      "config": {
+        "command": ["oc", "get", "${*args}"],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "type": "string",
+            "description": "Argumenty dla oc get, np. 'pods -n myproject' lub 'routes --all-namespaces' lub 'deployment myapp -n prod -o yaml'"
+          }
+        },
+        "required": ["args"]
+      }
+    },
+    {
+      "name": "oc_describe",
+      "description": "Szczegółowy opis zasobu OpenShift — eventy, warunki, konfiguracja. Podaj typ i nazwę zasobu.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "openshift",
+      "config": {
+        "command": ["oc", "describe", "${*args}"],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "type": "string",
+            "description": "Argumenty dla oc describe, np. 'pod myapp-xyz -n prod' lub 'node worker-1'"
+          }
+        },
+        "required": ["args"]
+      }
+    },
+    {
+      "name": "oc_logs",
+      "description": "Logi z poda OpenShift. Podaj nazwę poda, namespace i opcjonalnie --tail/--since.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "openshift",
+      "config": {
+        "command": ["oc", "logs", "${*args}"],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "type": "string",
+            "description": "Argumenty dla oc logs, np. 'myapp-xyz -n prod --tail=100' lub '-l app=nginx -n staging --since=1h'"
+          }
+        },
+        "required": ["args"]
+      }
+    },
+    {
+      "name": "oc_events",
+      "description": "Eventy z namespace OpenShift — błędy, restarty, skalowanie, deploy. Sortowane chronologicznie.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "openshift",
+      "config": {
+        "command": ["oc", "get", "events", "-n", "${namespace}", "--sort-by=.lastTimestamp"],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "namespace": {
+            "type": "string",
+            "description": "Namespace OpenShift, np. 'myproject' lub 'prod'"
+          }
+        },
+        "required": ["namespace"]
+      }
+    },
+    {
+      "name": "oc_status",
+      "description": "Ogólny status projektu OpenShift — deploymenty, serwisy, buildy, alerty.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "openshift",
+      "config": {
+        "command": ["oc", "status", "-n", "${namespace}"],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "namespace": {
+            "type": "string",
+            "description": "Namespace OpenShift"
+          }
+        },
+        "required": ["namespace"]
+      }
+    },
+    {
+      "name": "oc_top_pods",
+      "description": "Zużycie CPU i RAM przez pody w namespace — monitoring zasobów.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "openshift",
+      "config": {
+        "command": ["oc", "adm", "top", "pods", "-n", "${namespace}"],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "namespace": {
+            "type": "string",
+            "description": "Namespace OpenShift"
+          }
+        },
+        "required": ["namespace"]
+      }
+    },
+    {
+      "name": "oc_whoami",
+      "description": "Sprawdza aktualnie zalogowanego użytkownika i serwer OpenShift.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "openshift",
+      "config": {
+        "command": ["oc", "whoami", "--show-server"],
+        "timeout_seconds": 10
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  ]
+}

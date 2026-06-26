@@ -1,0 +1,11 @@
+{
+  "allow_unknown_tools": false,
+  "require_read_only": true,
+  "block_write_tools": true,
+  "block_destructive_tools": true,
+  "allowed_capabilities": ["raghybrid.retrieval.read"],
+  "egress": {
+    "mode": "allowlist",
+    "allowed_hosts": ["raghybrid-app", "rag.dom"]
+  }
+}

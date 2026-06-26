@@ -1,0 +1,146 @@
+{
+  "id": "git-readonly",
+  "name": "Git Repository",
+  "description": "Przeglądanie repozytoriów Git — log, diff, status, branches, blame, show. Tylko odczyt.",
+  "category": "other",
+  "risk_level": "low",
+  "source": "builtin",
+  "runtime_class": {
+    "name": "shell-readonly",
+    "runtime_image": "mcp-runtime-shell:latest",
+    "allowed_execution_types": ["shell"],
+    "security_profile": "restricted"
+  },
+  "policy": {
+    "allowed_binaries": ["git", "jq"],
+    "blocked_commands": ["push", "commit", "merge", "rebase", "reset", "checkout", "cherry-pick", "stash", "clean", "rm"],
+    "allowed_command_prefixes": ["git log", "git diff", "git show", "git status", "git branch", "git tag", "git blame", "git shortlog", "git ls-files", "git rev-parse"],
+    "blocked_command_prefixes": ["git push", "git commit", "git merge", "git rebase", "git reset", "git checkout", "git cherry-pick", "git clean", "git rm"],
+    "require_read_only": true,
+    "block_write_tools": true,
+    "block_destructive_tools": true,
+    "timeout_seconds": 30
+  },
+  "tools": [
+    {
+      "name": "git_log",
+      "description": "Historia commitów — autor, data, wiadomość. Podaj opcje jak --oneline, -n 20, --since='1 week ago'.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": ["git", "-C", "${GIT_REPO_PATH}", "log", "${*args}"],
+        "timeout_seconds": 15
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "type": "string",
+            "description": "Argumenty dla git log, np. '--oneline -20' lub '--since=\"1 week ago\" --author=admin'"
+          }
+        },
+        "required": ["args"]
+      }
+    },
+    {
+      "name": "git_diff",
+      "description": "Różnice między commitami lub plikami — zmiany w kodzie.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": ["git", "-C", "${GIT_REPO_PATH}", "diff", "${*args}"],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "type": "string",
+            "description": "Argumenty dla git diff, np. 'HEAD~3..HEAD' lub '--stat' lub 'main..feature-branch'"
+          }
+        },
+        "required": ["args"]
+      }
+    },
+    {
+      "name": "git_show",
+      "description": "Szczegóły konkretnego commita — diff + metadane.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": ["git", "-C", "${GIT_REPO_PATH}", "show", "${*args}"],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "type": "string",
+            "description": "Commit hash lub referencja, np. 'HEAD' lub 'abc1234' lub 'HEAD:src/main.py'"
+          }
+        },
+        "required": ["args"]
+      }
+    },
+    {
+      "name": "git_status",
+      "description": "Status repozytorium — zmodyfikowane pliki, staged, untracked.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": ["git", "-C", "${GIT_REPO_PATH}", "status"],
+        "timeout_seconds": 10
+      },
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "git_branches",
+      "description": "Lista branchy — lokalne i zdalne.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": ["git", "-C", "${GIT_REPO_PATH}", "branch", "-a", "--sort=-committerdate"],
+        "timeout_seconds": 10
+      },
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "git_blame",
+      "description": "Kto zmienił każdą linię pliku — autor i commit per linia.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": ["git", "-C", "${GIT_REPO_PATH}", "blame", "${file}"],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "Ścieżka do pliku, np. 'src/main.py'"
+          }
+        },
+        "required": ["file"]
+      }
+    }
+  ]
+}
