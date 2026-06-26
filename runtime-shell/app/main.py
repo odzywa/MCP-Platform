@@ -272,6 +272,10 @@ async def execute_tool(tool_name: str, arguments: dict[str, Any],
         return {"ok": False, "error": policy_error, "policy_blocked": True}
     if tool.get("execution_type") != "shell":
         return {"ok": False, "error": f"unsupported execution type: {tool.get('execution_type')}"}
+    # Normalize arguments — convert lists to strings (some models send arrays instead of strings)
+    for k, v in list(arguments.items()):
+        if isinstance(v, list):
+            arguments[k] = " ".join(str(x) for x in v)
     validate(arguments, tool.get("input_schema") or {})
     pydantic_error = validate_with_pydantic(tool_name, arguments, tool.get("input_schema") or {}, policy)
     if pydantic_error:
