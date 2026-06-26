@@ -363,4 +363,4 @@ If you run RAGHybrid alongside MCP Platform, use the auto-context filter:
 ## License
 
 Copyright (c) 2026 — All Rights Reserved.  
-See [LICENSE](LICENSE) for terms. Non-commercial use only.
+See [LICENSE](LICENSE) MIT
