@@ -1838,7 +1838,7 @@ def page_shell(active: str, body: str) -> str:
         ("images",     "🐳  Obrazy Docker",         "/runtime-images",  "Zbudowane obrazy kontenerów — historia buildów i zarządzanie",             "admin"),
         ("security",   "🔒  Bezpieczeństwo",       "/security",        "Przegląd polityk i hardening kontenerów",                                 "read_only"),
         ("audit",      "🔍  Audit",                "/audit",           "Historia wszystkich operacji — deploy, stop, reload, błędy",               "read_only"),
-        ("logs",       "📋  Logi",                 "/logs",            "Logi runtime'ów — informacje diagnostyczne i błędy kontenerów",            "read_only"),
+        ("logs",       "📋  Logi",                 "/logs",            "Logi runtimeów — informacje diagnostyczne i błędy kontenerów",            "read_only"),
         ("admin",      "👥  Użytkownicy",           "/admin/users",     "Zarządzanie użytkownikami — role, rejestracje, hasła",                    "admin"),
         ("docs",       "📖  Jak to działa?",       "/docs",            "Przewodnik po platformie dla użytkowników technicznych i nietech",         "read_only"),
     ]
@@ -2085,7 +2085,7 @@ def page_shell(active: str, body: str) -> str:
      'Policy overview and container hardening'],
     ['Historia wszystkich operacji — deploy, stop, reload, błędy',
      'Full operation history — deploy, stop, reload, errors'],
-    ['Logi runtime\'ów — informacje diagnostyczne i błędy kontenerów',
+    ['Logi runtimeów — informacje diagnostyczne i błędy kontenerów',
      'Runtime logs — diagnostics and container errors'],
     ['Zarządzanie użytkownikami — role, rejestracje, hasła',
      'User management — roles, registrations, passwords'],
@@ -2094,6 +2094,129 @@ def page_shell(active: str, body: str) -> str:
     ['Szybki start','Quick Start'],
     ['Kreator zaawansowany','Advanced Creator'],
     ['Webhooki','Webhooks'],
+    // ---- Quick Start page ----
+    ['Co chcesz podłączyć do AI?','What do you want to connect to AI?'],
+    ['Wybierz typ i wypełnij 2-3 pola — serwer uruchomi się automatycznie.','Choose a type and fill 2-3 fields — the server starts automatically.'],
+    ['Chcesz uruchomić komendę shell (psql, oc, curl)? Skorzystaj z','Want to run a shell command (psql, oc, curl)? Use the'],
+    ['Kreatora zaawansowanego','Advanced Creator'],
+    ['tam możesz wybrać środowisko i zdefiniować narzędzia.','where you can choose an environment and define tools.'],
+    ['Masz już runningjący serwer MCP? Podaj jego URL — platforma go zarejestruje i będzie monitorować','Already have a running MCP server? Enter its URL — the platform will register and monitor it'],
+    ['Zewnętrzny MCP','External MCP'],
+    ['Gotowy zestaw','Ready-made set'],
+    ['Wybierz gotowy zestaw narzędzi z katalogu — tools, silnik i polityka konfigurują się automatycznie','Choose a ready-made tool set from the catalog — tools, engine and policy are configured automatically'],
+    ['Importuj z pliku / Git / URL','Import from file / Git / URL'],
+    ['Masz gotowy plik JSON konfiguracji MCP? Wklej go, podaj URL albo wgraj plik — serwer uruchomi się automatycznie','Have a ready MCP config JSON? Paste it, enter a URL or upload a file — the server starts automatically'],
+    ['Create gotowy serwer MCP w kilku krokach bez pisania kodu. Wybierz gotowy zestaw z katalogu lub zaimportuj konfigurację.','Create a ready MCP server in a few steps without coding. Choose a set from catalog or import a config.'],
+    // ---- Advanced Creator ----
+    ['Wybierz źródło tools','Choose tool source'],
+    ['Zdefiniuj narzędzia','Define tools'],
+    ['Zdefiniuj komendy które AI będzie wykonywać w kontenerze.','Define commands that AI will execute in the container.'],
+    ['Ustawienia bezpieczeństwa','Security settings'],
+    ['Podsumowanie i utwórz','Summary and create'],
+    ['Źródło tools','Tool source'],
+    ['Dalej →','Next →'],
+    ['← Wróć','← Back'],
+    ['Dalej → Bezpieczeństwo','Next → Security'],
+    ['Dalej → Utwórz','Next → Create'],
+    // ---- Runtime types ----
+    ['REST API','REST API'],
+    ['Wywołania HTTP do zewnętrznych API: GitLab, Jira, własny serwis','HTTP calls to external APIs: GitLab, Jira, custom services'],
+    ['Shell / CLI','Shell / CLI'],
+    ['Komendy: curl, oc, kubectl, dowolne CLI dostępne w kontenerze','Commands: curl, oc, kubectl, any CLI available in the container'],
+    ['Shell + HTTP','Shell + HTTP'],
+    ['Mieszane narzędzia — część shell, część REST API','Mixed tools — some shell, some REST API'],
+    ['Od zera','From scratch'],
+    ['Niedostępne dla roli read_write','Not available for read_write role'],
+    // ---- Common UI elements ----
+    ['Nazwa serwera','Server name'],
+    ['Serwer MCP gotowy!','MCP Server ready!'],
+    ['Za chwilę uruchomi się automatycznie. Gdy status zmieni się na','It will start automatically. When the status changes to'],
+    ['skopiuj adres endpointu i wklej do Continue lub OpenWebUI.','copy the endpoint address and paste into Continue or OpenWebUI.'],
+    ['Następny krok:','Next step:'],
+    ['Znajdź pole','Find the field'],
+    ['poniżej → skopiuj URL → wklej do konfiguracji AI jako','below → copy URL → paste into AI config as'],
+    ['Powrót do dashboardu','Back to dashboard'],
+    ['Kontener:','Container:'],
+    ['Endpoint:','Endpoint:'],
+    // ---- Policy ----
+    ['Zapisz politykę shell','Save shell policy'],
+    ['Dozwolone binarki','Allowed binaries'],
+    ['Zablokowane tokeny','Blocked tokens'],
+    ['Dozwolone prefixy (jeden/linię)','Allowed prefixes (one per line)'],
+    ['Zablokowane prefixy (jeden/linię)','Blocked prefixes (one per line)'],
+    ['Komendy zaczynające się od tych prefiksów będą zablokowane.','Commands starting with these prefixes will be blocked.'],
+    ['Zostaw puste = brak ograniczeń na prefix.','Leave empty = no prefix restrictions.'],
+    ['Wymusza żeby każdy tool miał mode: read-only.','Enforces that every tool has mode: read-only.'],
+    // ---- Secrets/ENV ----
+    ['Zmienne środowiskowe (ENV)','Environment Variables (ENV)'],
+    ['Zmienne są wstrzykiwane do kontenera przy następnym deploy. Po zmianie kliknij','Variables are injected into the container on next deploy. After changes click'],
+    ['Brak zmiennych ENV — dodaj poniżej.','No ENV variables — add below.'],
+    ['Sekrety zaawansowane (pliki, mounty)','Advanced secrets (files, mounts)'],
+    ['wpisów','entries'],
+    ['Dodaj sekret','Add secret'],
+    // ---- Tools ----
+    ['Lista tools','Tool list'],
+    ['Edytuj tool','Edit tool'],
+    ['Usuń tool','Delete tool'],
+    ['Zapisz tool','Save tool'],
+    ['Dodaj tool','Add tool'],
+    ['Dodaj narzędzie','Add tool'],
+    // ---- Dashboard ----
+    ['Serwery MCP','MCP Servers'],
+    ['wszystkie środowiska','all environments'],
+    ['Działające','Running'],
+    ['Z problemami','With issues'],
+    ['Historia operacji','Operations History'],
+    ['Ostatnie logi','Recent Logs'],
+    ['brak endpointu','no endpoint'],
+    // ---- Docker Images ----
+    ['Wszystkie obrazy','All images'],
+    ['Zbudowane','Built'],
+    ['Nieudane','Failed'],
+    ['Obrazy Docker','Docker Images'],
+    ['bazowy obraz platformy','platform base image'],
+    ['wbudowany','built-in'],
+    ['Data buildu','Build date'],
+    ['Brak zbudowanych obrazów.','No built images.'],
+    ['Zbuduj obraz','Build image'],
+    ['Zbuduj własne środowisko','Build custom environment'],
+    // ---- Validation ----
+    ['Walidacja wartości parametrów (Pydantic)','Parameter Value Validation (Pydantic)'],
+    ['Allow list = tylko te wartości przejdą','Allow list = only these values pass'],
+    ['Block list = zabronione słowa','Block list = blocked words'],
+    ['Pattern = regex','Pattern = regex'],
+    ['blocked_commands z polityki','blocked_commands from policy'],
+    // ---- Users ----
+    ['Wszyscy użytkownicy','All users'],
+    ['Brak uprawnień','No permissions'],
+    ['Twoja rola','Your role'],
+    ['nie pozwala na modyfikacje.','does not allow modifications.'],
+    ['Zmień hasło','Change password'],
+    ['Oczekujące prośby o rejestrację','Pending registration requests'],
+    ['Zaakceptuj','Accept'],
+    ['Odrzuć','Reject'],
+    // ---- Misc ----
+    ['Kliknij żeby skopiować','Click to copy'],
+    ['Skopiowano','Copied'],
+    ['Pobierz logi','Fetch logs'],
+    ['Odśwież logi','Refresh logs'],
+    ['Pełna historia','Full history'],
+    ['Wszystkie logi','All logs'],
+    ['Klasa runtime','Runtime class'],
+    ['Błąd','Error'],
+    ['Typ','Type'],
+    ['Wartość','Value'],
+    ['Akcja','Action'],
+    ['Status','Status'],
+    ['Czas','Time'],
+    ['Wywołania narzędzi przez AI','AI tool invocations'],
+    ['ostatnich wywołań','recent invocations'],
+    ['Wywołaj tool przez platformę — serwer odpowie bezpośrednio.','Call a tool via the platform — the server responds directly.'],
+    ['Wdróż serwer żeby móc testować narzędzia.','Deploy the server to test tools.'],
+    ['Powiadomienia HTTP gdy serwer MCP padnie, health check się nie powiedzie lub tool zwróci błąd.','HTTP notifications when an MCP server fails, health check fails or a tool returns an error.'],
+    ['Serwer już gdzieś działa? Zarejestruj jego endpoint — platforma odkryje tools i będzie go monitorować.','Server already running? Register its endpoint — the platform will discover tools and monitor it.'],
+    ['Masz już runningjący serwer MCP?','Already have a running MCP server?'],
+    ['Podaj jego URL — platforma go zarejestruje i będzie monitorować','Enter its URL — the platform will register and monitor it'],
     // ---- Missing translations ----
     ['Zmienne środowiskowe (ENV)','Environment Variables (ENV)'],
     ['Zmienne są wstrzykiwane do kontenera przy następnym deploy. Po zmianie kliknij','Variables are injected into the container on next deploy. After changes click'],
@@ -7203,7 +7326,7 @@ def security_page(ok: str = "") -> str:
 
       <!-- Runtime policies table -->
       <section>
-        <h2>Polityki runtime'ów ({total})</h2>
+        <h2>Polityki runtimeów ({total})</h2>
         {'<p class="muted">Brak runtime\'ów.</p>' if not runtimes else f"""
         <table>
           <thead>
@@ -7573,7 +7696,7 @@ def logs_page() -> str:
     body = f"""
       <section>
         <h2>Logi platformy</h2>
-        <p class="muted">Ostatnie 300 wpisów logów ze wszystkich runtime'ów.</p>
+        <p class="muted">Ostatnie 300 wpisów logów ze wszystkich runtimeów.</p>
         <table>
           <thead><tr><th>Czas</th><th>Runtime</th><th>Poziom</th><th>Wiadomość</th></tr></thead>
           <tbody>{rows_html}</tbody>
