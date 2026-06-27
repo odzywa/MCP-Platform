@@ -301,9 +301,10 @@ async def execute_tool(tool_name: str, arguments: dict[str, Any],
         return {"ok": False, "tool": tool_name, "error": str(exc)}
     timeout = int(execution.get("timeout_seconds") or policy.get("timeout_seconds") or 20)
     max_response_bytes = int(execution.get("max_response_bytes") or policy.get("max_response_bytes") or 1_048_576)
-    use_shell = "|" in command or ">" in command or "&&" in command
+    _SHELL_OPS = {"|", ">", ">>", "&&", "||", ";", "<", "<<", "<<<", "2>", "2>&1"}
+    use_shell = any(tok in _SHELL_OPS for tok in command)
     if use_shell:
-        shell_cmd = shlex.join(command)
+        shell_cmd = " ".join(tok if tok in _SHELL_OPS else shlex.quote(tok) for tok in command)
         run_args: dict[str, Any] = {"args": shell_cmd, "shell": True}
     else:
         run_args = {"args": command, "shell": False}

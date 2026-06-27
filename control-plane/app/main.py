@@ -146,6 +146,7 @@ def startup() -> None:
     _ensure_admin()
     seed_platform_catalog()
     seed_raghybrid_template()
+    seed_openshift_monitor()
 
 
 def enqueue_runtime_image_build(
@@ -668,7 +669,45 @@ def builtin_tool_packages() -> list[dict[str, Any]]:
                     _extra_packages.append(_tp)
             except Exception:
                 pass
-    return [raghybrid_package, openshift_package, platform_manager_package] + _extra_packages
+    openshift_monitor_package = {
+        "id": "openshift-monitor",
+        "name": "OpenShift Monitor (Full Deploy)",
+        "description": "Pełne zarządzanie klastrem OCP — wdrażanie, skalowanie, monitorowanie, zarządzanie aplikacjami. Wymaga SA z rolą admin.",
+        "category": "openshift",
+        "risk_level": "high",
+        "runtime_class": {
+            "name": "shell-readwrite",
+            "runtime_image": "mcp-runtime-shell:latest",
+            "allowed_execution_types": ["shell"],
+            "risk_level": "high",
+            "security_profile": "cluster-admin",
+            "required_binaries": ["oc", "jq"],
+        },
+        "adapters": [
+            {
+                "name": "shell",
+                "description": "Adapter shell — wykonuje komendy oc w izolowanym kontenerze.",
+                "adapter_type": "shell",
+                "runtime_image": "mcp-runtime-shell:latest",
+                "implemented": True,
+                "enabled": True,
+                "risk_level": "high",
+                "mode": "read-only",
+                "schema": {"type": "object"},
+            }
+        ],
+        "policy": {
+            "allowed_binaries": ["oc", "kubectl", "jq", "printf", "rm", "cat", "bash", "sh"],
+            "blocked_commands": [],
+            "require_read_only": False,
+            "block_write_tools": False,
+            "block_destructive_tools": False,
+            "timeout_seconds": 60,
+        },
+        "credentials_hint": {"OC_TOKEN": "Service account token (oc create token <sa>)", "OC_SERVER": "API server URL (https://api.cluster.dom:6443)"},
+        "tools": _openshift_monitor_tools(),
+    }
+    return [raghybrid_package, openshift_package, openshift_monitor_package, platform_manager_package] + _extra_packages
 
 
 def seed_builtin_tool_packages() -> None:
@@ -785,6 +824,161 @@ def seed_raghybrid_template() -> None:
         ),
     )
     store.audit("system", "seed_runtime", "runtime", "raghybrid-assistant", {"template": "raghybrid-assistant"})
+
+
+def _openshift_monitor_tools() -> list[dict[str, Any]]:
+    """Tool definitions for the openshift-monitor runtime."""
+    _auth = ["oc", "--token=${OC_TOKEN}", "--server=${OC_SERVER}", "--insecure-skip-tls-verify"]
+    _args_schema = {"type": "object", "properties": {"args": {"type": "string", "description": "Argumenty komendy oc"}}, "required": ["args"]}
+    _yaml_schema = {
+        "type": "object",
+        "properties": {
+            "yaml_content": {"type": "string", "description": "Pełna treść YAML zasobu Kubernetes/OpenShift"},
+            "extra_args": {"type": "string", "description": "Dodatkowe argumenty, np. -n mynamespace"},
+        },
+        "required": ["yaml_content"],
+    }
+    return [
+        {"name": "oc_get", "description": "Execute oc get command with arguments",
+         "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "openshift",
+         "config": {"command": _auth + ["get", "${*args}"], "timeout_seconds": 30},
+         "input_schema": _args_schema},
+        {"name": "oc_describe", "description": "Describe a resource using oc describe command",
+         "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "openshift",
+         "config": {"command": _auth + ["describe", "${*args}"], "timeout_seconds": 30},
+         "input_schema": _args_schema},
+        {"name": "oc_logs", "description": "Get logs from a pod using oc logs command",
+         "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "openshift",
+         "config": {"command": _auth + ["logs", "${*args}"], "timeout_seconds": 30},
+         "input_schema": _args_schema},
+        {"name": "oc_events", "description": "Get events for a namespace",
+         "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "openshift",
+         "config": {"command": _auth + ["get", "events", "-n", "${namespace}", "--sort-by=.lastTimestamp"], "timeout_seconds": 30},
+         "input_schema": {"type": "object", "properties": {"namespace": {"type": "string"}}, "required": ["namespace"]}},
+        {"name": "oc_status", "description": "Get cluster status for a namespace",
+         "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "openshift",
+         "config": {"command": _auth + ["status", "-n", "${namespace}"], "timeout_seconds": 30},
+         "input_schema": {"type": "object", "properties": {"namespace": {"type": "string"}}, "required": ["namespace"]}},
+        {"name": "oc_top", "description": "Get pod resource usage for a namespace",
+         "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "openshift",
+         "config": {"command": _auth + ["adm", "top", "pods", "-n", "${namespace}"], "timeout_seconds": 30},
+         "input_schema": {"type": "object", "properties": {"namespace": {"type": "string"}}, "required": ["namespace"]}},
+        {"name": "oc_projects", "description": "Wyświetla dostępne projekty/namespace'y na klastrze.",
+         "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "openshift",
+         "config": {"command": _auth + ["get", "projects"], "timeout_seconds": 15},
+         "input_schema": {"type": "object"}},
+        {"name": "oc_apply", "description": "Aplikuje zasoby na klaster (flagi CLI, NIE pliki). Dla YAML użyj oc_apply_yaml.",
+         "execution_type": "shell", "enabled": True, "risk_level": "high", "mode": "write", "category": "openshift",
+         "config": {"command": _auth + ["apply", "${*args}"], "timeout_seconds": 60},
+         "input_schema": _args_schema},
+        {"name": "oc_apply_yaml",
+         "description": "GŁÓWNE NARZĘDZIE do wdrażania zasobów. Przyjmuje treść YAML inline w yaml_content i aplikuje na klaster (Deployment, Service, Route, ConfigMap itp.).",
+         "execution_type": "shell", "enabled": True, "risk_level": "high", "mode": "write", "category": "openshift",
+         "config": {"command": ["printf", "%s", "${yaml_content}", ">", "/tmp/_mcp_apply.yaml", "&&"] + _auth + ["apply", "-f", "/tmp/_mcp_apply.yaml", "${*extra_args}", "&&", "rm", "-f", "/tmp/_mcp_apply.yaml"], "timeout_seconds": 60},
+         "input_schema": _yaml_schema},
+        {"name": "oc_create", "description": "Tworzy zasób przez CLI (NIE pliki). Dla YAML użyj oc_create_yaml.",
+         "execution_type": "shell", "enabled": True, "risk_level": "high", "mode": "write", "category": "openshift",
+         "config": {"command": _auth + ["create", "${*args}"], "timeout_seconds": 60},
+         "input_schema": _args_schema},
+        {"name": "oc_create_yaml",
+         "description": "Tworzy zasoby z inline YAML na klastrze OpenShift. Podaj treść YAML w yaml_content.",
+         "execution_type": "shell", "enabled": True, "risk_level": "high", "mode": "write", "category": "openshift",
+         "config": {"command": ["printf", "%s", "${yaml_content}", ">", "/tmp/_mcp_create.yaml", "&&"] + _auth + ["create", "-f", "/tmp/_mcp_create.yaml", "${*extra_args}", "&&", "rm", "-f", "/tmp/_mcp_create.yaml"], "timeout_seconds": 60},
+         "input_schema": _yaml_schema},
+        {"name": "oc_delete", "description": "Usuwa zasób z klastra OpenShift. UWAGA: operacja nieodwracalna!",
+         "execution_type": "shell", "enabled": True, "risk_level": "high", "mode": "destructive", "category": "openshift",
+         "config": {"command": _auth + ["delete", "${*args}"], "timeout_seconds": 60},
+         "input_schema": _args_schema},
+        {"name": "oc_exec", "description": "Wykonuje komendę wewnątrz poda OpenShift.",
+         "execution_type": "shell", "enabled": True, "risk_level": "high", "mode": "write", "category": "openshift",
+         "config": {"command": _auth + ["exec", "${*args}"], "timeout_seconds": 60},
+         "input_schema": _args_schema},
+        {"name": "oc_patch", "description": "Patchuje zasób — zmienia pojedyncze pola bez zastępowania całego obiektu.",
+         "execution_type": "shell", "enabled": True, "risk_level": "high", "mode": "write", "category": "openshift",
+         "config": {"command": _auth + ["patch", "${*args}"], "timeout_seconds": 30},
+         "input_schema": _args_schema},
+        {"name": "oc_rollout", "description": "Zarządza rolloutami — restart, status, history, undo.",
+         "execution_type": "shell", "enabled": True, "risk_level": "high", "mode": "write", "category": "openshift",
+         "config": {"command": _auth + ["rollout", "${*args}"], "timeout_seconds": 30},
+         "input_schema": _args_schema},
+        {"name": "oc_scale", "description": "Skaluje deployment/statefulset — zmienia liczbę replik.",
+         "execution_type": "shell", "enabled": True, "risk_level": "high", "mode": "write", "category": "openshift",
+         "config": {"command": _auth + ["scale", "${*args}"], "timeout_seconds": 30},
+         "input_schema": _args_schema},
+        {"name": "oc_new_app", "description": "Tworzy nową aplikację na klastrze — deployment, service i inne zasoby z jednej komendy.",
+         "execution_type": "shell", "enabled": True, "risk_level": "high", "mode": "write", "category": "openshift",
+         "config": {"command": _auth + ["new-app", "${*args}"], "timeout_seconds": 120},
+         "input_schema": _args_schema},
+        {"name": "oc_expose", "description": "Tworzy route/expose dla serwisu — udostępnia aplikację na zewnątrz.",
+         "execution_type": "shell", "enabled": True, "risk_level": "high", "mode": "write", "category": "openshift",
+         "config": {"command": _auth + ["expose", "${*args}"], "timeout_seconds": 30},
+         "input_schema": _args_schema},
+        {"name": "oc_set", "description": "Ustawia właściwości zasobów — env vars, image, resources, volumes.",
+         "execution_type": "shell", "enabled": True, "risk_level": "high", "mode": "write", "category": "openshift",
+         "config": {"command": _auth + ["set", "${*args}"], "timeout_seconds": 30},
+         "input_schema": _args_schema},
+        {"name": "oc_adm", "description": "Operacje administracyjne — oc adm policy, oc adm top, oc adm prune. Np. policy add-scc-to-user anyuid -z mysa -n ns.",
+         "execution_type": "shell", "enabled": True, "risk_level": "high", "mode": "write", "category": "openshift",
+         "config": {"command": _auth + ["adm", "${*args}"], "timeout_seconds": 30},
+         "input_schema": _args_schema},
+    ]
+
+
+def seed_openshift_monitor() -> None:
+    runtime_id = "openshift-monitor"
+    if store.one(sql.SELECT_RUNTIME_ID_EXISTS, (runtime_id,)):
+        return
+    now = store.now_iso()
+    store.execute(
+        sql.INSERT_RUNTIME,
+        (
+            runtime_id,
+            "openshift-monitor",
+            "Full OpenShift cluster management — deploy, scale, monitor, manage applications.",
+            "shell-readwrite",
+            "openshift-monitor",
+            "draft",
+            "high",
+            "mcp-runtime-shell:latest",
+            now,
+            now,
+        ),
+    )
+    for tool in _openshift_monitor_tools():
+        store.execute(
+            sql.INSERT_TOOL,
+            (
+                runtime_id,
+                tool["name"],
+                tool.get("description", ""),
+                tool.get("execution_type", "shell"),
+                json.dumps(tool.get("config") or {}),
+                json.dumps(tool.get("input_schema") or {"type": "object"}),
+                json.dumps(tool.get("output_schema") or {"type": "object"}),
+                1 if tool.get("enabled", True) else 0,
+                tool.get("risk_level", "low"),
+                tool.get("mode", "read-only"),
+                tool.get("category", "openshift"),
+                now,
+                now,
+            ),
+        )
+    store.execute(
+        sql.INSERT_POLICY,
+        (
+            runtime_id,
+            json.dumps({
+                "allowed_binaries": ["oc", "kubectl", "jq", "printf", "rm", "cat", "bash", "sh"],
+                "blocked_commands": [],
+                "require_read_only": False,
+                "block_write_tools": False,
+                "block_destructive_tools": False,
+                "timeout_seconds": 60,
+            }),
+            now,
+        ),
+    )
+    store.audit("system", "seed_runtime", "runtime", runtime_id, {"template": "openshift-monitor"})
 
 
 def runtime_payload(runtime_id: str) -> dict[str, Any]:
@@ -1866,6 +2060,79 @@ def page_shell(active: str, body: str) -> str:
     ['Silniki','Engines'],
     ['Audit','Audit'],
     ['Test','Test'],
+    // ---- Missing translations ----
+    ['Zmienne środowiskowe (ENV)','Environment Variables (ENV)'],
+    ['Zmienne są wstrzykiwane do kontenera przy następnym deploy. Po zmianie kliknij','Variables are injected into the container on next deploy. After changes click'],
+    ['Walidacja wartości parametrów (Pydantic)','Parameter Value Validation (Pydantic)'],
+    ['Dozwolone binarki','Allowed binaries'],
+    ['Dozwolone prefixy (jeden/linię)','Allowed prefixes (one per line)'],
+    ['Zablokowane tokeny','Blocked tokens'],
+    ['Zablokowane prefixy (jeden/linię)','Blocked prefixes (one per line)'],
+    ['Zapisz politykę shell','Save shell policy'],
+    ['Zarządzanie serwerem','Server Management'],
+    ['Zarządzaj','Manage'],
+    ['Wywołania','Invocations'],
+    ['Ostatnie logi','Recent Logs'],
+    ['Pełna historia','Full history'],
+    ['brak endpointu','no endpoint'],
+    ['Brak zmiennych ENV','No ENV variables'],
+    ['dodaj poniżej','add below'],
+    ['Zmień hasło','Change password'],
+    ['wszystkie środowiska','all environments'],
+    ['zdefiniowanych','defined'],
+    ['Serwery MCP','MCP Servers'],
+    ['wszystkie środowiska','all environments'],
+    ['Gotowy zestaw','Ready-made set'],
+    ['Wybierz gotowy zestaw narzędzi','Choose a ready-made tool set'],
+    ['Zdefiniuj narzędzia','Define tools'],
+    ['Zdefiniuj komendy które AI będzie wykonywać w kontenerze','Define commands that AI will execute in the container'],
+    ['Dodaj kolejne narzędzie','Add another tool'],
+    ['Dodaj parametr','Add parameter'],
+    ['Komenda','Command'],
+    ['Wzorce','Patterns'],
+    ['Parametr','Parameter'],
+    ['Podstawy','Basics'],
+    ['Źródło','Source'],
+    ['Wdróż','Deploy'],
+    ['Wróć','Back'],
+    ['Logi','Logs'],
+    ['Pobierz','Download'],
+    ['Odśwież logi','Refresh logs'],
+    ['Odśwież','Refresh'],
+    ['Dodaj','Add'],
+    ['Gotowe','Done'],
+    ['Wszystkie','All'],
+    ['Zmienne','Variables'],
+    ['wartość / token','value / token'],
+    ['Pokaż/ukryj','Show/hide'],
+    ['Pobierz logi','Fetch logs'],
+    ['Serwer MCP gotowy!','MCP Server ready!'],
+    ['Za chwilę uruchomi się automatycznie','It will start automatically shortly'],
+    ['Powrót do dashboardu','Back to dashboard'],
+    ['Ustawienia bezpieczeństwa','Security Settings'],
+    ['Tryb dostępu','Access mode'],
+    ['Tylko odczyt','Read only'],
+    ['Blokuj zapis','Block writes'],
+    ['Blokuj destruktywne','Block destructive'],
+    ['Limity','Limits'],
+    ['Timeout (sekundy)','Timeout (seconds)'],
+    ['Dozwolone komendy','Allowed commands'],
+    ['Twoje serwery','Your servers'],
+    ['status: running','status: running'],
+    ['failed / unhealthy','failed / unhealthy'],
+    ['zarejestrowane serwery','registered servers'],
+    ['Zewnętrzne MCP','External MCP'],
+    ['Webhooks','Webhooks'],
+    ['Obrazy Docker','Docker Images'],
+    ['Typy środowisk','Environment Types'],
+    ['Silniki wykonania','Execution Engines'],
+    ['Dashboard','Dashboard'],
+    ['Brak zbudowanych obrazów','No built images'],
+    ['bazowy obraz platformy','platform base image'],
+    ['wbudowany','built-in'],
+    ['Data buildu','Build date'],
+    ['Błąd','Error'],
+    ['Klasa runtime','Runtime class'],
   ];
   // Sort longest key first so longer phrases replace before their substrings
   TRANS_RAW.sort(function(a,b){{ return b[0].length - a[0].length; }});
