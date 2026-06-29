@@ -2514,6 +2514,8 @@ def page_shell(active: str, body: str) -> str:
     ['Max rozmiar danych zwracanych AI','Max data size returned to AI'],
     ['Max rozmiar danych od AI','Max data size from AI'],
     ['KONTROLA KOMEND','COMMAND CONTROL'],
+    ['Kontrola komend','Command control'],
+    ['dla shell tools','for shell tools'],
     ['dla shell tools','for shell tools'],
     ['Spacja — tylko te binarki mogą być uruchamiane. Puste = no restrictions.','Space separated — only these binaries can run. Empty = no restrictions.'],
     ['Spacja — tylko te binarki mogą być uruchamiane. Puste = brak ograniczeń.','Space separated — only these binaries can run. Empty = no restrictions.'],
