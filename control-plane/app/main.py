@@ -3112,7 +3112,13 @@ def page_shell(active: str, body: str) -> str:
 
   var saved = localStorage.getItem('mcp_lang') || 'pl';
   document.getElementById(saved==='en' ? 'btn-en' : 'btn-pl').className = 'lang-active';
-  if(saved === 'en') window.addEventListener('DOMContentLoaded', function(){{ applyLang('en'); }});
+  if(saved === 'en') {{
+    if(document.readyState === 'loading') {{
+      document.addEventListener('DOMContentLoaded', function(){{ applyLang('en'); }});
+    }} else {{
+      applyLang('en');
+    }}
+  }}
 }})();
 </script>
     </body></html>
