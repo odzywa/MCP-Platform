@@ -2540,6 +2540,11 @@ def page_shell(active: str, body: str) -> str:
     ['tylko te binarki mogą być uruchamiane','only these binaries can run'],
     ['Puste = no restrictions','Empty = no restrictions'],
     ['mogą być uruchamiane','can be run'],
+    // ---- Container hardening ----
+    ['Zawsze aktywne (nie można wyłączyć):','Always active (cannot be disabled):'],
+    ['Zawsze aktywne','Always active'],
+    ['nie można wyłączyć','cannot be disabled'],
+    ['bez roota','no root'],
     // ---- Last remaining ----
     ['dodaj tylko brakujące narzędzia','add only the missing tools'],
     ['AI może zapytać','AI can ask'],
