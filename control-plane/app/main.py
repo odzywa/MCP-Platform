@@ -2561,10 +2561,15 @@ def page_shell(active: str, body: str) -> str:
     ['Blokuj zapis:','Block writes:'],
     ['Blokuj destruktywne:','Block destructive:'],
     ['Start od razu po utworzeniu','Start immediately after creation'],
+    ['Uruchom od razu po utworzeniu','Start immediately after creation'],
+    ['od razu po utworzeniu','immediately after creation'],
     ['Server zostanie automatycznie zdeplojowany — będzie running za kilka sekund','Server will be automatically deployed — will be running in a few seconds'],
     ['Server zostanie automatycznie zdeplojowany — będzie działać za kilka sekund','Server will be automatically deployed — will be running in a few seconds'],
+    ['Serwer zostanie automatycznie zdeplojowany — będzie działać za kilka sekund','Server will be automatically deployed — will be running in a few seconds'],
+    ['zdeplojowany','deployed'],
     ['zostanie automatycznie','will be automatically'],
     ['za kilka sekund','in a few seconds'],
+    ['będzie działać','will be running'],
     ['Możesz edytować tools i politykę po utworzeniu na stronie serwera.','You can edit tools and policy after creation on the server page.'],
     ['Możesz edytować tools i politykę po utworzeniu','You can edit tools and policy after creation'],
     ['na stronie serwera','on the server page'],
@@ -5466,7 +5471,7 @@ def create_page(error: str = "") -> str:
           <input type="checkbox" name="deploy_after_create" value="true" form="adv-form" checked style="width:auto">
           <div>
             <div style="font-weight:700;color:white">🚀 Uruchom od razu po utworzeniu</div>
-            <div style="color:var(--muted);font-size:12px">Serwer zostanie automatycznie zdeploy'owany — będzie działać za kilka sekund</div>
+            <div style="color:var(--muted);font-size:12px">Serwer zostanie automatycznie zdeplojowany — będzie działać za kilka sekund</div>
           </div>
         </label>
       </div>
