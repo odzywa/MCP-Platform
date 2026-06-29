@@ -2557,7 +2557,7 @@ def page_shell(active: str, body: str) -> str:
     ['Blokuj zapis:','Block writes:'],
     ['Blokuj destruktywne:','Block destructive:'],
     ['Start od razu po utworzeniu','Start immediately after creation'],
-    ['Server zostanie automatycznie zdeploy\'owany — będzie runningć za kilka sekund','Server will be automatically deployed — will be running in a few seconds'],
+    ['Server zostanie automatycznie zdeplojowany — będzie running za kilka sekund','Server will be automatically deployed — will be running in a few seconds'],
     ['Server zostanie automatycznie zdeplojowany — będzie działać za kilka sekund','Server will be automatically deployed — will be running in a few seconds'],
     ['zostanie automatycznie','will be automatically'],
     ['za kilka sekund','in a few seconds'],
