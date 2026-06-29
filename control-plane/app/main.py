@@ -2702,8 +2702,14 @@ def page_shell(active: str, body: str) -> str:
 
   function translateText(text) {{
     for(var i=0;i<TRANS_KEYS.length;i++) {{
-      if(text.indexOf(TRANS_KEYS[i]) !== -1) {{
-        text = text.split(TRANS_KEYS[i]).join(TRANS_VALS[i]);
+      var k = TRANS_KEYS[i];
+      if(text.indexOf(k) === -1) continue;
+      // For short keys (<=8 chars), only match if surrounded by word boundaries or punctuation
+      if(k.length <= 8) {{
+        var re = new RegExp('(^|[\\s>:,;.!?()\\[\\]])' + k.replace(/[.*+?^${{}}()|[\\]\\\\]/g, '\\\\$&') + '(?=$|[\\s<:,;.!?()\\[\\]])', 'g');
+        text = text.replace(re, function(m, prefix) {{ return prefix + TRANS_VALS[i]; }});
+      }} else {{
+        text = text.split(k).join(TRANS_VALS[i]);
       }}
     }}
     return text;
@@ -2717,7 +2723,7 @@ def page_shell(active: str, body: str) -> str:
     return nodes;
   }}
 
-  function applyLang(lang){{
+  window.applyLang = function(lang){{
     var toEN = lang === 'en';
     if(toEN) {{
       var nodes = collectNodes();
