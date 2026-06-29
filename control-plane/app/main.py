@@ -2565,6 +2565,15 @@ def page_shell(active: str, body: str) -> str:
     ['Możesz edytować tools i politykę po utworzeniu','You can edit tools and policy after creation'],
     ['na stronie serwera','on the server page'],
     ['po utworzeniu','after creation'],
+    // ---- Dynamic JS content ----
+    ['Narzędzia są już zdefiniowane w wybranej paczce — przejdź dalej.','Tools are already defined in the selected package — proceed.'],
+    ['Dodaj jedno lub więcej narzędzi — AI użyje ich definicji do wywołań.','Add one or more tools — AI will use their definitions for calls.'],
+    ['Pobiera dane / wykonuje komendę','Fetches data / executes command'],
+    ['GET na URL','GET to URL'],
+    ['Dowolna komenda curl','Any curl command'],
+    ['Logi z poda OC','OC pod logs'],
+    ['Wykonaj dowolne oc get','Run any oc get'],
+    ['Wykonaj dowolne kubectl get','Run any kubectl get'],
     // ---- Last remaining ----
     ['dodaj tylko brakujące narzędzia','add only the missing tools'],
     ['AI może zapytać','AI can ask'],
@@ -5547,6 +5556,8 @@ def create_page(error: str = "") -> str:
     if (!list) return;
     list.innerHTML = _s3Tools.map(function(_,i){{ return s3ToolHtml(i, _s3IsShell); }}).join('');
     s3RestoreValues();
+    var lang = localStorage.getItem('mcp_lang');
+    if (lang === 'en' && typeof applyLang === 'function') applyLang('en');
   }}
 
   window.s3AddTool = function() {{
@@ -5631,6 +5642,8 @@ def create_page(error: str = "") -> str:
     }});
     if (n === 5) buildSummary();
     window.scrollTo(0,0);
+    var lang = localStorage.getItem('mcp_lang');
+    if (lang === 'en' && typeof applyLang === 'function') setTimeout(function(){{ applyLang('en'); }}, 50);
   }};
 
   window.s3Preset = function(cmd, desc) {{
