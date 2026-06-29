@@ -2516,6 +2516,17 @@ def page_shell(active: str, body: str) -> str:
     ['KONTROLA KOMEND','COMMAND CONTROL'],
     ['Kontrola komend','Command control'],
     ['dla shell tools','for shell tools'],
+    // ---- Runtime detail page (Connect tab) ----
+    ['wklej poniższy URL','paste the URL below'],
+    ['OpenWebUI automatycznie doda','OpenWebUI will automatically add'],
+    ['Albo importuj jako Python tool (Workspace → Narzędzia → Importuj z linku):','Or import as Python tool (Workspace → Tools → Import from link):'],
+    ['Albo importuj jako Python tool','Or import as Python tool'],
+    ['Importuj z linku','Import from link'],
+    ['Pobierz .py','Download .py'],
+    ['zalecane','recommended'],
+    ['Continue, Cline, Claude Code, Claude Desktop, OpenChamber i inne klienty MCP','Continue, Cline, Claude Code, Claude Desktop, OpenChamber and other MCP clients'],
+    ['Starsze klienty lub gdy streamable-http nie działa','Older clients or when streamable-http does not work'],
+    ['Pełny przykład .continue/config.json','Full example .continue/config.json'],
     // ---- Runtime detail page ----
     ['Powrót do dashboardu','Back to dashboard'],
     ['Zarządzanie serwerem','Server management'],
