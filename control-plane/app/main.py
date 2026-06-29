@@ -2455,6 +2455,14 @@ def page_shell(active: str, body: str) -> str:
     ['Zarządzanie kontami — zatwierdzanie rejestracji, zmiana ról','Account management — approving registrations, changing roles'],
     ['włączanie i wyłączanie kont','enabling and disabling accounts'],
     ['Wybierz język / Select language','Select language'],
+    // ---- Last remaining ----
+    ['dodaj tylko brakujące narzędzia','add only the missing tools'],
+    ['AI może zapytać','AI can ask'],
+    ['błąd:','error:'],
+    ['Zaktualizowano typ środowiska','Environment type updated'],
+    ['Usunięto','Deleted'],
+    ['już istnieje','already exists'],
+    ['Usuń','Delete'],
     // ---- Advanced Creator step 2 (Basics) ----
     ['Podstawowe informacje','Basic information'],
     ['Nazwij serwer i opcjonalnie dostosuj typ środowiska.','Name the server and optionally adjust the environment type.'],
