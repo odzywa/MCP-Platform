@@ -5500,7 +5500,8 @@ def create_page(error: str = "") -> str:
   function s3ToolHtml(idx, isShell) {{
     var presets = '';
     if (isShell) {{
-      presets = '<div style="font-size:11px;color:#7dd3fc;font-weight:700;margin-bottom:6px">⚡ Wzorce:</div><div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">';
+      var _pLabel = (localStorage.getItem('mcp_lang')==='en') ? 'Patterns:' : 'Wzorce:';
+      presets = '<div style="font-size:11px;color:#7dd3fc;font-weight:700;margin-bottom:6px">⚡ '+_pLabel+'</div><div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">';
       for (var pi=0; pi<_s3ShellPresets.length; pi++) {{
         var pcmd = _s3ShellPresets[pi][0], plbl = _s3ShellPresets[pi][1];
         presets += '<button type="button" onclick="s3ToolPreset('+idx+',this.dataset.cmd)" data-cmd="'+pcmd+'" style="background:#1a2a3a;border:1px solid #2a4a6a;color:#7dd3fc;padding:3px 9px;border-radius:5px;font-size:11px;cursor:pointer">'+plbl+'</button>';
