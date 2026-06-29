@@ -8,7 +8,7 @@ AUTH_COOKIE = "mcp_session"
 SESSION_TTL_H = 24
 
 # Public paths that never require login
-_PUBLIC = re.compile(r"^/(login|register)(/?|\?.*)$|^/api/runtimes/[^/]+/openwebui-tool\.py$|^/api/tool-call$|^/api/runtime-callback|^/api/auto-create$|^/api/platform-docs$|^/api/runtimes/?$|^/api/runtimes/[^/]+/?$|^/api/tool-packages/?$")
+_PUBLIC = re.compile(r"^/(login|register)(/?|\?.*)$|^/api/runtimes/[^/]+/openwebui-tool\.py$|^/api/tool-call$|^/api/runtime-callback|^/api/auto-create$|^/api/platform-docs$|^/api/runtimes/?$|^/api/runtimes/[^/]+/?$|^/api/tool-packages/?$|^/api/lang\.js$")
 # Paths that are read-only (any logged-in user can GET them)
 _READONLY_GET = re.compile(
     r"^/(|runtimes.*|audit.*|logs.*|security.*|docs.*|external-mcp.*"
