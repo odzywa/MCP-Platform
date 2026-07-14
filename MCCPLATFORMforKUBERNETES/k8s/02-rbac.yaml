@@ -1,0 +1,46 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mcp-operator
+  namespace: __NAMESPACE__
+---
+# Operator musi umieć tworzyć/usuwać Deploymenty, Serwisy, ConfigMapy, Secrety i Route
+# dla każdego runtime który użytkownik tworzy w UI.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mcp-operator
+  namespace: __NAMESPACE__
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["services", "configmaps", "secrets", "pods", "pods/log"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # OpenShift Routes — zewnętrzny endpoint per runtime
+  - apiGroups: ["route.openshift.io"]
+    resources: ["routes"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # OpenShift BuildConfig — Runtime Image Builder
+  - apiGroups: ["build.openshift.io"]
+    resources: ["buildconfigs", "builds", "buildconfigs/instantiate"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["image.openshift.io"]
+    resources: ["imagestreams", "imagestreamtags"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mcp-operator
+  namespace: __NAMESPACE__
+subjects:
+  - kind: ServiceAccount
+    name: mcp-operator
+    namespace: __NAMESPACE__
+roleRef:
+  kind: Role
+  name: mcp-operator
+  apiGroup: rbac.authorization.k8s.io

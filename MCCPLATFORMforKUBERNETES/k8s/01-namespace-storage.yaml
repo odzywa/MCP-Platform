@@ -1,0 +1,23 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: __NAMESPACE__
+  labels:
+    app.kubernetes.io/name: mcp-platform
+---
+# SQLite WAL + config artifacts shared between control-plane and operator.
+# WYMAGA block storage (nie NFS) — SQLite WAL file locking nie działa na NFS.
+# Oba pody (control-plane i operator) muszą być na tym samym nodzie (patrz podAffinity w 04).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mcp-platform-data
+  namespace: __NAMESPACE__
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: __STORAGE_CLASS__
+  resources:
+    requests:
+      storage: 10Gi

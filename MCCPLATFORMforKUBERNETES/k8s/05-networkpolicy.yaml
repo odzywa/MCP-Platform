@@ -1,0 +1,49 @@
+---
+# Zezwól na ruch przychodzący z routera OpenShift do control-plane
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-control-plane
+  namespace: __NAMESPACE__
+spec:
+  podSelector:
+    matchLabels:
+      app: mcp-platform
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 8080
+---
+# Zezwól na ruch z routera OpenShift do wszystkich podów runtime
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-runtimes
+  namespace: __NAMESPACE__
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/managed-by: mcp-platform
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 8080
+---
+# Zezwól runtime podom na callback do control-plane (logowanie tool calls)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-runtimes-to-control-plane
+  namespace: __NAMESPACE__
+spec:
+  podSelector:
+    matchLabels:
+      app: mcp-platform
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/managed-by: mcp-platform
+      ports:
+        - protocol: TCP
+          port: 8080

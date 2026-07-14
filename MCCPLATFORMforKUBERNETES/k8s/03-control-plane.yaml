@@ -1,0 +1,112 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-platform-env
+  namespace: __NAMESPACE__
+data:
+  MCP_PLATFORM_DB: /data/mcp_platform.db
+  MCP_PLATFORM_CONFIG_ROOT: /data/configs
+  MCP_PLATFORM_CONFIG_HOST_ROOT: /data/configs
+  MCP_PLATFORM_CALLBACK_URL: http://mcp-platform:8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-platform
+  namespace: __NAMESPACE__
+  labels:
+    app: mcp-platform
+spec:
+  replicas: 1
+  # Recreate bo SQLite RWO — nie może być rolling update z dwoma podami jednocześnie
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: mcp-platform
+  template:
+    metadata:
+      labels:
+        app: mcp-platform
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: control-plane
+          image: __PULL_REGISTRY__/mcp-platform-control-plane:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - configMapRef:
+                name: mcp-platform-env
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+          readinessProbe:
+            httpGet:
+              path: /login
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /login
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: mcp-platform-data
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-platform
+  namespace: __NAMESPACE__
+spec:
+  selector:
+    app: mcp-platform
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+# OpenShift Route — UI dostępne z zewnątrz
+# host zostanie przypisany automatycznie jako mcp-platform.__NAMESPACE__.__APPS_DOMAIN__
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: mcp-platform
+  namespace: __NAMESPACE__
+spec:
+  to:
+    kind: Service
+    name: mcp-platform
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
