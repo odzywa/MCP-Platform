@@ -35,6 +35,7 @@ IMAGE_BUILD_CONTEXTS = {
     "mcp-runtime-http-gateway:latest": BUILD_CONTEXT_ROOT / "runtime-http-gateway",
     "mcp-generic-runtime:latest": BUILD_CONTEXT_ROOT / "runtime-generic",
     "mcp-runtime-shell:latest": BUILD_CONTEXT_ROOT / "runtime-shell",
+    "mcp-runtime-openapi:latest": BUILD_CONTEXT_ROOT / "runtime-openapi",
 }
 
 

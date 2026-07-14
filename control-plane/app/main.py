@@ -306,6 +306,7 @@ def seed_platform_catalog() -> None:
     for _rc_name, _rc_desc, _rc_image, _rc_types in [
         ("shell-readonly",  "Shell runtime for CLI tools (curl, psql, oc, ping...)",   "mcp-runtime-shell:latest",        ["shell"]),
         ("shell-readwrite", "Shell runtime — write mode allowed",                       "mcp-runtime-shell:latest",        ["shell"]),
+        ("openapi",         "Auto-MCP from OpenAPI spec via FastMCP.from_openapi()",    "mcp-runtime-openapi:latest",      ["http_request"]),
     ]:
         if not store.one(sql.SELECT_RUNTIME_CLASS_NAME_BY_NAME, (_rc_name,)):
             changed = True
@@ -3207,6 +3208,7 @@ def quick_start_page(error: str = "") -> str:
     _builtin_images = [
         ("mcp-runtime-shell:latest", "mcp-runtime-shell:latest — standardowy (oc, kubectl, curl, jq) [zalecane]"),
         ("mcp-runtime-http-gateway:latest", "mcp-runtime-http-gateway:latest — HTTP gateway"),
+        ("mcp-runtime-openapi:latest", "mcp-runtime-openapi:latest — auto-MCP z OpenAPI spec (FastMCP)"),
         ("python:3.12-slim", "python:3.12-slim — czysty Python/Debian"),
         ("python:3.11-slim", "python:3.11-slim — Python 3.11 Debian"),
         ("debian:bookworm-slim", "debian:bookworm-slim — czysty Debian"),
@@ -3912,6 +3914,7 @@ window.updateBaseHint = function() {{
   var hints = {{
     'mcp-runtime-shell:latest': '✅ Zawiera: <b>oc, kubectl, curl, jq</b> + Python 3.12 (Debian) — dodaj tylko brakujące narzędzia',
     'mcp-runtime-http-gateway:latest': '✅ HTTP gateway — brak oc/kubectl, Python 3.12',
+    'mcp-runtime-openapi:latest': '✅ <b>Auto-MCP z OpenAPI</b> — ustaw <code>BACKEND_BASE_URL</code> i <code>OPENAPI_SPEC_URL</code>; narzędzia generowane automatycznie z każdego endpointu',
     'python:3.12-slim': '⚠️ Czysty Python Debian — brak oc/kubectl/curl. Dodaj <b>curl ca-certificates</b> w APT',
     'python:3.11-slim': '⚠️ Python 3.11 Debian — brak oc/kubectl',
     'debian:bookworm-slim': '⚠️ Czysty Debian — brak wszystkiego, musisz dodać wszystkie potrzebne paczki APT',
@@ -4334,8 +4337,8 @@ def docs_page() -> str:
 
 <!-- Section: Sposoby tworzenia -->
 <section>
-  <h2>🛤️ Trzy sposoby tworzenia serwera MCP</h2>
-  <div class="doc-grid3">
+  <h2>🛤️ Sposoby tworzenia serwera MCP</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
 
     <div style="background:#0a1e10;border:2px solid #1a5a20;border-radius:12px;padding:18px">
       <div style="font-size:24px;margin-bottom:8px">⚡</div>
@@ -4356,13 +4359,13 @@ def docs_page() -> str:
       <div style="font-size:24px;margin-bottom:8px">🛠️</div>
       <div style="font-weight:800;color:white;margin-bottom:6px">Kreator zaawansowany</div>
       <div class="muted" style="font-size:13px;line-height:1.7;margin-bottom:12px">
-        4-krokowy wizard z pełną kontrolą. Wybierz paczkę lub zbuduj od zera — z własnym środowiskiem Docker, polityką i silnikiem.
+        4-krokowy wizard z pełną kontrolą. Wybierz silnik (HTTP, Shell lub OpenAPI), paczkę lub zbuduj od zera — z własnym środowiskiem Docker i polityką.
       </div>
       <div style="font-size:12px;color:#7dd3fc;line-height:1.8">
         ✅ Wybór paczki tools<br>
         ✅ Własny obraz Docker (APT packages)<br>
-        ✅ Pełna konfiguracja polityki<br>
-        ✅ Podsumowanie przed uruchomieniem
+        ✅ Silnik OpenAPI — auto-tools z dowolnego REST API<br>
+        ✅ Pełna konfiguracja polityki
       </div>
       <a href="/create" style="display:block;margin-top:14px;background:#1a3a6a;color:white;text-align:center;padding:8px;border-radius:6px;font-weight:700;font-size:13px;text-decoration:none">Otwórz →</a>
     </div>
@@ -4380,6 +4383,21 @@ def docs_page() -> str:
         ✅ Eksport / import / share
       </div>
       <a href="/tool-packages/generate" style="display:block;margin-top:14px;background:#3a1060;color:white;text-align:center;padding:8px;border-radius:6px;font-weight:700;font-size:13px;text-decoration:none">Otwórz →</a>
+    </div>
+
+    <div style="background:#0a1a10;border:2px solid #1a5040;border-radius:12px;padding:18px">
+      <div style="font-size:24px;margin-bottom:8px">📄</div>
+      <div style="font-weight:800;color:white;margin-bottom:6px">OpenAPI Auto-MCP <span style="font-size:11px;background:#1a4a30;color:#5ce89a;border-radius:4px;padding:2px 6px;margin-left:6px;vertical-align:middle">nowość</span></div>
+      <div class="muted" style="font-size:13px;line-height:1.7;margin-bottom:12px">
+        Masz serwis z dokumentacją REST (openapi.json)? Podaj URL — platforma automatycznie generuje osobny tool dla każdego endpointu. Zero definiowania narzędzi.
+      </div>
+      <div style="font-size:12px;color:#5ce89a;line-height:1.8">
+        ✅ Każdy endpoint REST = osobny tool MCP<br>
+        ✅ Nazwy i opisy z dokumentacji spec<br>
+        ✅ Wsparcie dla Bearer token / custom header<br>
+        ✅ Dostępne w Kreatorze zaawansowanym
+      </div>
+      <a href="/create" style="display:block;margin-top:14px;background:#1a5040;color:white;text-align:center;padding:8px;border-radius:6px;font-weight:700;font-size:13px;text-decoration:none">Kreator zaawansowany →</a>
     </div>
 
   </div>
@@ -4495,6 +4513,98 @@ def docs_page() -> str:
 
 </section>
 
+<!-- Section: OpenAPI Auto-MCP -->
+<section>
+  <h2>📄 OpenAPI Auto-MCP — MCP z dokumentacji REST API</h2>
+
+  <div style="background:#061810;border:1px solid #1a4a30;border-radius:12px;padding:18px 22px;margin-bottom:16px">
+    <div style="font-size:13px;color:var(--muted);line-height:1.9">
+      <b style="color:white">Jak to działa?</b><br>
+      Zamiast ręcznie definiować tools, podajesz URL serwisu który ma dokumentację OpenAPI (<code>openapi.json</code>).
+      Platforma uruchamia kontener z silnikiem <b style="color:#5ce89a">FastMCP.from_openapi()</b> który:<br>
+      <span style="margin-left:16px">1. Pobiera spec z <code>BACKEND_BASE_URL/openapi.json</code> lub <code>OPENAPI_SPEC_URL</code></span><br>
+      <span style="margin-left:16px">2. Automatycznie tworzy osobny tool MCP dla każdego endpointu REST</span><br>
+      <span style="margin-left:16px">3. Kieruje wywołania narzędzi bezpośrednio do serwisu backendowego</span><br>
+      Żadna ręczna konfiguracja tools nie jest wymagana — nazwy, opisy i parametry pochodzi z dokumentacji spec.
+    </div>
+  </div>
+
+  <div class="doc-grid2" style="gap:14px;margin-bottom:16px">
+
+    <div class="doc-card" style="background:#0a1a10;border-color:#1a4a20">
+      <h3 style="color:#5ce89a">Kiedy używać?</h3>
+      <div class="muted" style="font-size:13px;line-height:1.8">
+        ✅ Serwis ma gotową dokumentację <code>openapi.json</code> / <code>swagger.json</code><br>
+        ✅ Chcesz udostępnić <b>wiele endpointów</b> bez pisania każdego ręcznie<br>
+        ✅ API zmienia się często — spec auto-odświeża tools przy restarcie<br>
+        ✅ Zewnętrzne serwisy z publicznym spec (GitLab, Jira, własne API)<br><br>
+        ❌ Serwis nie ma dokumentacji OpenAPI → użyj HTTP Gateway lub Shell
+      </div>
+    </div>
+
+    <div class="doc-card" style="background:#0a1520;border-color:#1a3a50">
+      <h3 style="color:#7dd3fc">Jak uruchomić?</h3>
+      <div class="muted" style="font-size:13px;line-height:1.8">
+        1. Idź do <a href="/create" style="color:#7dd3fc">Kreator zaawansowany</a><br>
+        2. Krok 1 — wybierz silnik <b>📄 OpenAPI Spec</b><br>
+        3. Wpisz <b>URL serwisu</b> (np. <code>http://moja-api:8000</code>)<br>
+        4. Opcjonalnie: URL do spec, token autoryzacji<br>
+        5. Krok 2 → 3 → 4 — reszta jak zwykle<br><br>
+        Kontener startuje z obrazem <code>mcp-runtime-openapi:latest</code>.
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Env vars table -->
+  <div style="font-weight:700;color:white;margin-bottom:10px;font-size:14px">⚙️ Zmienne środowiskowe (konfiguracja kontenera)</div>
+  <div style="background:#060e18;border:1px solid #1a2e45;border-radius:10px;overflow:hidden;font-size:13px">
+    <div style="display:grid;grid-template-columns:220px 1fr 120px;background:#0a1830;padding:8px 14px;font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px">
+      <div>Zmienna</div><div>Opis</div><div>Wymagana</div>
+    </div>
+    <div style="display:grid;grid-template-columns:220px 1fr 120px;padding:10px 14px;border-top:1px solid #1a2e45">
+      <code style="color:#5ce89a">BACKEND_BASE_URL</code>
+      <div style="color:var(--muted);padding-left:12px">Bazowy URL serwisu backendowego (np. <code>http://moja-api:8000</code>). Używany do kierowania wywołań narzędzi.</div>
+      <div style="color:#f4c163;padding-left:8px">✅ wymagana</div>
+    </div>
+    <div style="display:grid;grid-template-columns:220px 1fr 120px;padding:10px 14px;border-top:1px solid #1a2e45;background:#080e18">
+      <code style="color:#7dd3fc">OPENAPI_SPEC_URL</code>
+      <div style="color:var(--muted);padding-left:12px">Pełny URL do pliku <code>openapi.json</code>. Domyślnie: <code>BACKEND_BASE_URL/openapi.json</code></div>
+      <div style="color:var(--muted);padding-left:8px">opcjonalna</div>
+    </div>
+    <div style="display:grid;grid-template-columns:220px 1fr 120px;padding:10px 14px;border-top:1px solid #1a2e45">
+      <code style="color:#7dd3fc">OPENAPI_SPEC_FILE</code>
+      <div style="color:var(--muted);padding-left:12px">Ścieżka do lokalnego pliku spec (nadpisuje URL). Przydatne gdy spec jest zamontowany jako plik.</div>
+      <div style="color:var(--muted);padding-left:8px">opcjonalna</div>
+    </div>
+    <div style="display:grid;grid-template-columns:220px 1fr 120px;padding:10px 14px;border-top:1px solid #1a2e45;background:#080e18">
+      <code style="color:#7dd3fc">BACKEND_AUTH_TOKEN</code>
+      <div style="color:var(--muted);padding-left:12px">Token autoryzacji do serwisu (Bearer token lub inny). Bezpiecznie przechowywany tylko w kontenerze.</div>
+      <div style="color:var(--muted);padding-left:8px">opcjonalna</div>
+    </div>
+    <div style="display:grid;grid-template-columns:220px 1fr 120px;padding:10px 14px;border-top:1px solid #1a2e45">
+      <code style="color:#7dd3fc">BACKEND_AUTH_HEADER</code>
+      <div style="color:var(--muted);padding-left:12px">Nazwa nagłówka autoryzacji. Domyślnie: <code>Authorization</code></div>
+      <div style="color:var(--muted);padding-left:8px">opcjonalna</div>
+    </div>
+    <div style="display:grid;grid-template-columns:220px 1fr 120px;padding:10px 14px;border-top:1px solid #1a2e45;background:#080e18">
+      <code style="color:#7dd3fc">BACKEND_AUTH_PREFIX</code>
+      <div style="color:var(--muted);padding-left:12px">Prefix wartości nagłówka autoryzacji. Domyślnie: <code>Bearer</code></div>
+      <div style="color:var(--muted);padding-left:8px">opcjonalna</div>
+    </div>
+    <div style="display:grid;grid-template-columns:220px 1fr 120px;padding:10px 14px;border-top:1px solid #1a2e45">
+      <code style="color:#7dd3fc">SERVER_NAME</code>
+      <div style="color:var(--muted);padding-left:12px">Nazwa serwera MCP widoczna dla klientów AI. Domyślnie: <code>openapi-mcp</code></div>
+      <div style="color:var(--muted);padding-left:8px">opcjonalna</div>
+    </div>
+  </div>
+
+  <div style="background:#0a1a10;border:1px solid #1a4a20;border-radius:8px;padding:12px 16px;margin-top:14px;font-size:13px">
+    💡 <b style="color:#5ce89a">Auto-detekcja spec:</b> Jeśli serwis to runtime tej platformy, kontener najpierw próbuje pobrać spec z <code>/openwebui/openapi.json</code> (tylko user-defined tools, czyste nazwy). Jeśli nie ma — pobiera standardowy <code>/openapi.json</code>. Dotyczy to scenariusza "MCP z MCP" — czyli gdy AI używa OpenAPI Auto-MCP do sterowania innym serwerem MCP z tej platformy.
+  </div>
+
+</section>
+
 <!-- Section: Schemat architektury -->
 <section>
   <h2>🏗️ Schemat — jak platforma działa pod spodem</h2>
@@ -4520,7 +4630,7 @@ def docs_page() -> str:
       <div style="font-size:11px;font-weight:800;color:#7dd3fc;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;text-align:center">
         🐳 Kontenery Docker — MCP Runtime
       </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
 
         <div style="background:#0a1a2a;border:1px solid #1a3a4a;border-radius:8px;padding:12px">
           <div style="font-size:11px;font-weight:800;color:#5ce89a;margin-bottom:6px">HTTP Gateway Runtime</div>
@@ -4545,6 +4655,19 @@ def docs_page() -> str:
           <div style="margin-top:8px;font-size:10px;background:#061018;border-radius:4px;padding:4px 7px;color:#3a7a5a">
             🔒 read-only FS · cap_drop ALL<br>
             policy check przed exec
+          </div>
+        </div>
+
+        <div style="background:#061810;border:1px solid #1a4a30;border-radius:8px;padding:12px">
+          <div style="font-size:11px;font-weight:800;color:#34d399;margin-bottom:6px">OpenAPI Runtime</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.7">
+            Auto-tools z OpenAPI spec<br>
+            <code style="color:#7dd3fc">FastMCP.from_openapi()</code><br>
+            Port: 8080 → <code>/mcp</code>
+          </div>
+          <div style="margin-top:8px;font-size:10px;background:#061018;border-radius:4px;padding:4px 7px;color:#3a7a5a">
+            🔒 read-only FS · cap_drop ALL<br>
+            spec → tools przy starcie
           </div>
         </div>
 
@@ -4746,7 +4869,7 @@ def docs_page() -> str:
 <!-- Section: Przykłady -->
 <section>
   <h2>💡 Przykłady zastosowań</h2>
-  <div class="doc-grid3">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
     <div class="doc-scenario">
       <div style="font-size:22px;margin-bottom:8px">🌐</div>
       <div style="font-weight:800;color:white;margin-bottom:6px">REST API firmy</div>
@@ -4761,6 +4884,13 @@ def docs_page() -> str:
       <div style="font-size:22px;margin-bottom:8px">🗄️</div>
       <div style="font-weight:800;color:white;margin-bottom:6px">Baza danych (psql)</div>
       <div class="muted" style="font-size:13px;line-height:1.7">Budujesz własny obraz z <code>postgresql-client</code> (Runtime Image Builder) → tool: <code>psql -h db.firma.pl -U user -c "${'{'}query{'}'}"</code> → AI może czytać dane z DB bez dostępu do hosta.</div>
+    </div>
+    <div class="doc-scenario" style="background:#061810;border-color:#1a4a30">
+      <div style="font-size:22px;margin-bottom:8px">📄</div>
+      <div style="font-weight:800;color:white;margin-bottom:6px">OpenAPI Auto-MCP (GitLab / Jira / własne API)</div>
+      <div class="muted" style="font-size:13px;line-height:1.7">
+        Masz serwis z <code>openapi.json</code> (np. GitLab CE, Jira, własne FastAPI). Kreator zaawansowany → silnik <b>OpenAPI Spec</b> → wpisz URL → platforma automatycznie tworzy tool dla każdego endpointu. AI może od razu pytać o zasoby — zero ręcznej konfiguracji tools.
+      </div>
     </div>
   </div>
 </section>
@@ -4857,6 +4987,14 @@ def docs_page() -> str:
         Baza: <code>python:3.12-slim</code> (Debian)<br>
         Zawiera: runtime HTTP do wywoływania REST API<br>
         Użyj gdy: wywołania REST API (GitLab, Jira, własny serwis)
+      </div>
+    </div>
+    <div class="doc-card" style="background:#061810;border-color:#1a4a30">
+      <h3 style="color:#34d399">📄 mcp-runtime-openapi:latest</h3>
+      <div class="muted" style="font-size:13px;line-height:1.8">
+        Baza: <code>python:3.12-slim</code> (Debian)<br>
+        Zawiera: <code>fastmcp</code>, <code>httpx</code>, <code>uvicorn</code> — auto-MCP z OpenAPI spec<br>
+        Użyj gdy: silnik OpenAPI w Kreatorze zaawansowanym — podajesz URL serwisu i dostajesz tools automatycznie
       </div>
     </div>
     <div class="doc-card" style="grid-column:1/-1;background:#1a1000;border-color:#3a2a00">
@@ -5665,7 +5803,7 @@ def create_page(error: str = "") -> str:
       <!-- Blank engine picker (hidden until "blank" chosen) -->
       <div id="engine-picker" style="display:none;margin-top:16px">
         <div style="font-weight:700;font-size:13px;color:#aac8e0;margin-bottom:10px">Wybierz silnik wykonania:</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
           <button type="button" class="adv-type-btn" onclick="chooseEngine('http_request','http-gateway')" id="eng-http">
             <div class="icon">🌐</div>
             <div class="name">HTTP Request</div>
@@ -5676,6 +5814,45 @@ def create_page(error: str = "") -> str:
             <div class="name">Shell</div>
             <div class="desc">Wykonuje komendy — curl, oc, kubectl, dowolne CLI</div>
           </button>
+          <button type="button" class="adv-type-btn" onclick="chooseEngine('openapi','openapi')" id="eng-openapi">
+            <div class="icon">📄</div>
+            <div class="name">OpenAPI Spec</div>
+            <div class="desc">Auto-generuje tools z dokumentacji REST API (openapi.json) — zero definiowania narzędzi</div>
+          </button>
+        </div>
+
+        <!-- OpenAPI config (shown when OpenAPI engine chosen) -->
+        <div id="openapi-cfg" style="display:none;margin-top:16px;background:#0a1a2a;border:1px solid #1a4060;border-radius:10px;padding:16px 18px">
+          <div style="font-weight:800;color:#7dd3fc;font-size:14px;margin-bottom:4px">📄 Konfiguracja OpenAPI</div>
+          <div style="color:var(--muted);font-size:12px;margin-bottom:14px">Podaj URL serwisu — tools zostaną wygenerowane automatycznie ze specyfikacji OpenAPI przy starcie kontenera.</div>
+          <div class="adv-field" style="margin-bottom:10px">
+            <label>🔗 URL serwisu (base URL) <span style="color:#f47a80">*</span></label>
+            <input id="oa-backend-url" name="openapi_backend_url" form="adv-form"
+                   placeholder="http://moja-api:8000" autocomplete="off"
+                   style="font-family:monospace;font-size:13px">
+            <div class="hint">Adres bazowy usługi REST API którą chcesz wyeksponować jako MCP</div>
+          </div>
+          <div class="adv-field" style="margin-bottom:10px">
+            <label>📋 URL do openapi.json (opcjonalny)</label>
+            <input id="oa-spec-url" name="openapi_spec_url" form="adv-form"
+                   placeholder="https://moja-api.com/openapi.json"
+                   autocomplete="off" style="font-family:monospace;font-size:13px">
+            <div class="hint">Zostaw puste — platforma automatycznie wykryje spec. Dla zewnętrznych API podaj dokładny URL ich dokumentacji OpenAPI.</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+            <div class="adv-field" style="margin:0">
+              <label>🔑 Token autoryzacyjny (opcjonalny)</label>
+              <input type="password" id="oa-auth-token" name="openapi_auth_token" form="adv-form"
+                     placeholder="ghp_xxx / Bearer token" autocomplete="new-password" style="font-size:13px">
+            </div>
+            <div class="adv-field" style="margin:0">
+              <label>📛 Nagłówek auth (opcjonalny)</label>
+              <input id="oa-auth-header" name="openapi_auth_header" form="adv-form"
+                     placeholder="Authorization" autocomplete="off" style="font-size:13px">
+              <div class="hint">Domyślnie: <code>Authorization</code> z prefixem <code>Bearer</code></div>
+            </div>
+          </div>
+          <button type="button" class="adv-big-btn" onclick="openapiGoNext()">Dalej →</button>
         </div>
       </div>
     </div>
@@ -5750,6 +5927,17 @@ def create_page(error: str = "") -> str:
       <button type="button" class="adv-back" onclick="goStep(2)">← Wróć</button>
       <h2>🔧 Zdefiniuj narzędzia</h2>
       <div class="sub" id="s3-sub">Dodaj jedno lub więcej narzędzi — AI użyje ich definicji do wywołań.</div>
+
+      <!-- OpenAPI auto-gen info (shown only in openapi mode) -->
+      <div id="s3-openapi-info" style="display:none;background:#0a1a2a;border:1px solid #1a4060;border-radius:10px;padding:18px 20px;margin-bottom:16px">
+        <div style="font-size:22px;margin-bottom:8px">📄</div>
+        <div style="font-weight:800;color:#7dd3fc;font-size:15px;margin-bottom:6px">Tools generowane automatycznie z OpenAPI spec</div>
+        <div style="color:var(--muted);font-size:13px;line-height:1.6">
+          Przy starcie kontenera runtime pobierze <code>openapi.json</code> z podanego serwisu
+          i automatycznie wygeneruje z niego wszystkie narzędzia MCP.<br><br>
+          <span id="s3-oa-summary" style="color:#5ce89a;font-family:monospace;font-size:12px"></span>
+        </div>
+      </div>
 
       <!-- Dynamic tool list -->
       <div id="s3-tools-list" style="display:grid;gap:12px;margin-bottom:12px"></div>
@@ -5896,6 +6084,7 @@ def create_page(error: str = "") -> str:
   var _s3Tools = [];   // [{{cmd,name,desc,url,method,isShell}}]
   var _s3IsShell = true;
   var _s3IsPkg = false;
+  var _s3IsOpenAPI = false;
 
   var _s3ShellPresets = [
     ['psql ${{*args}}','🐘 psql'],
@@ -6001,6 +6190,7 @@ def create_page(error: str = "") -> str:
   }};
 
   window.s3Proceed = function() {{
+    if (_s3IsOpenAPI) {{ goStep(4); return; }}
     var tools = [];
     for (var i=0; i<_s3Tools.length; i++) {{
       var name = (document.getElementById('s3t-name-'+i)||{{}}).value || ('tool_'+i);
@@ -6039,20 +6229,35 @@ def create_page(error: str = "") -> str:
       var name = document.getElementById('adv-name').value.trim();
       if (!name) {{ document.getElementById('adv-name').focus(); return; }}
       var adapter = document.getElementById('adapter-hidden').value;
-      _s3IsShell = adapter === 'shell';
-      _s3IsPkg   = source === 'package';
-      if (_s3Tools.length === 0) _s3Tools.push({{}});
-      s3Render();
+      _s3IsShell   = adapter === 'shell';
+      _s3IsPkg     = source === 'package';
+      _s3IsOpenAPI = adapter === 'openapi';
+      var hideTools = _s3IsPkg || _s3IsOpenAPI;
+      if (!hideTools && _s3Tools.length === 0) _s3Tools.push({{}});
+      if (!hideTools) s3Render();
       var sub = document.getElementById('s3-sub');
       if (sub) {{
-        if (_s3IsPkg)       sub.textContent = 'Narzędzia są już zdefiniowane w wybranej paczce — przejdź dalej.';
+        if (_s3IsOpenAPI)    sub.textContent = 'Tools zostaną wygenerowane automatycznie z OpenAPI spec — nie musisz nic definiować.';
+        else if (_s3IsPkg)   sub.textContent = 'Narzędzia są już zdefiniowane w wybranej paczce — przejdź dalej.';
         else if (_s3IsShell) sub.textContent = 'Zdefiniuj komendy które AI będzie wykonywać w kontenerze.';
         else                 sub.textContent = 'Podaj adresy API które AI ma wywoływać.';
       }}
-      var addBtn = document.querySelector('#s3 button[onclick="s3AddTool()"]');
-      if (addBtn) addBtn.style.display = _s3IsPkg ? 'none' : '';
+      var oaInfo = document.getElementById('s3-openapi-info');
+      if (oaInfo) {{
+        oaInfo.style.display = _s3IsOpenAPI ? 'block' : 'none';
+        if (_s3IsOpenAPI) {{
+          var oaSummEl = document.getElementById('s3-oa-summary');
+          if (oaSummEl) {{
+            var backUrl = (document.getElementById('oa-backend-url')||{{}}).value || '';
+            var specUrl = (document.getElementById('oa-spec-url')||{{}}).value || (backUrl ? backUrl.replace(/\/$/, '') + '/openapi.json' : '');
+            oaSummEl.textContent = 'Backend: ' + backUrl + (specUrl ? '\nSpec: ' + specUrl : '');
+          }}
+        }}
+      }}
+      var addBtn = document.querySelector('#s3 > button[onclick="s3AddTool()"]') || document.querySelector('#s3 button[onclick="s3AddTool()"]');
+      if (addBtn) addBtn.style.display = hideTools ? 'none' : '';
       var toolList = document.getElementById('s3-tools-list');
-      if (toolList) toolList.style.display = _s3IsPkg ? 'none' : '';
+      if (toolList) toolList.style.display = hideTools ? 'none' : '';
     }}
     [1,2,3,4,5].forEach(function(i) {{
       var s = document.getElementById('s'+i);
@@ -6106,11 +6311,18 @@ def create_page(error: str = "") -> str:
     document.getElementById('adapter-hidden').value = adapter;
     document.getElementById('rc-hidden').value = rc;
     document.getElementById('pkg-hidden').value = '';
-    ['http','shell'].forEach(function(e) {{
-      document.getElementById('eng-'+e).style.borderColor = '';
+    ['http','shell','openapi'].forEach(function(e) {{
+      var el = document.getElementById('eng-'+e);
+      if (el) el.style.borderColor = '';
     }});
-    var key = adapter === 'http_request' ? 'http' : 'shell';
-    document.getElementById('eng-'+key).style.borderColor = 'var(--blue)';
+    var key = adapter === 'http_request' ? 'http' : (adapter === 'openapi' ? 'openapi' : 'shell');
+    var selBtn = document.getElementById('eng-'+key);
+    if (selBtn) selBtn.style.borderColor = 'var(--blue)';
+    // OpenAPI: show inline config form, stay on step 1
+    _s3IsOpenAPI = (adapter === 'openapi');
+    var oaCfg = document.getElementById('openapi-cfg');
+    if (oaCfg) oaCfg.style.display = _s3IsOpenAPI ? 'block' : 'none';
+    if (_s3IsOpenAPI) return;
     document.getElementById('rc-field').style.display = 'block';
     // Show shell env builder only for shell
     var envBox = document.getElementById('adv-shell-env');
@@ -6119,6 +6331,19 @@ def create_page(error: str = "") -> str:
     for (var i=0; i<sel.options.length; i++) {{
       if (sel.options[i].value === rc) {{ sel.selectedIndex = i; break; }}
     }}
+    goStep(2);
+  }};
+
+  window.openapiGoNext = function() {{
+    var url = (document.getElementById('oa-backend-url')||{{}}).value || '';
+    if (!url.trim()) {{
+      var el = document.getElementById('oa-backend-url');
+      if (el) {{ el.style.borderColor = '#f47a80'; el.focus(); }}
+      return;
+    }}
+    document.getElementById('rc-field').style.display = 'none';
+    var envBox = document.getElementById('adv-shell-env');
+    if (envBox) envBox.style.display = 'none';
     goStep(2);
   }};
 
@@ -6237,9 +6462,16 @@ def create_page(error: str = "") -> str:
     var bw = document.querySelector('input[name="policy_block_write"]')?.checked;
     var bd = document.querySelector('input[name="policy_block_destructive"]')?.checked;
     var to = document.querySelector('input[name="timeout_seconds"]')?.value;
-    var cmd = (document.getElementById('s3-cmd')||{{}}).value || '';
-    var toolUrl = (document.querySelector('input[name="first_tool_url"]')||{{}}).value || '';
-    var toolLine = cmd ? ('🔧 <b>Komenda:</b> <code>' + cmd + '</code><br>') : (toolUrl ? ('🌐 <b>URL:</b> <code>' + toolUrl + '</code><br>') : '');
+    var toolLine = '';
+    if (_s3IsOpenAPI) {{
+      var oaBack = (document.getElementById('oa-backend-url')||{{}}).value || '';
+      var oaSpec = (document.getElementById('oa-spec-url')||{{}}).value || (oaBack ? oaBack.replace(/\/$/, '') + '/openapi.json' : '');
+      toolLine = '📄 <b>Backend URL:</b> <code>' + oaBack + '</code><br>📋 <b>OpenAPI spec:</b> <code>' + oaSpec + '</code><br>';
+    }} else {{
+      var cmd = (document.getElementById('s3-cmd')||{{}}).value || '';
+      var toolUrl = (document.querySelector('input[name="first_tool_url"]')||{{}}).value || '';
+      toolLine = cmd ? ('🔧 <b>Komenda:</b> <code>' + cmd + '</code><br>') : (toolUrl ? ('🌐 <b>URL:</b> <code>' + toolUrl + '</code><br>') : '');
+    }}
     var envKeys = document.querySelectorAll('#adv-env-list input[name^="env_key_"]');
     var envLine = envKeys.length ? ('🔑 <b>ENV vars:</b> ' + envKeys.length + ' zdefiniowanych<br>') : '';
     document.getElementById('summary').innerHTML =
@@ -8728,6 +8960,21 @@ async def create_runtime(request: Request):
         elif f"env_key_{i}" not in form:
             break
         i += 1
+    # OpenAPI runtime: inject connection config from dedicated form fields as env vars
+    if data.runtime_class == "openapi":
+        _oa_backend = str(form.get("openapi_backend_url") or "").strip()
+        _oa_spec    = str(form.get("openapi_spec_url")    or "").strip()
+        _oa_token   = str(form.get("openapi_auth_token")  or "").strip()
+        _oa_header  = str(form.get("openapi_auth_header") or "").strip()
+        if _oa_backend:
+            env_vars["BACKEND_BASE_URL"] = _oa_backend
+        if _oa_spec:
+            env_vars["OPENAPI_SPEC_URL"] = _oa_spec
+        if _oa_token:
+            env_vars["BACKEND_AUTH_TOKEN"] = _oa_token
+        if _oa_header:
+            env_vars["BACKEND_AUTH_HEADER"] = _oa_header
+        env_vars.setdefault("SERVER_NAME", data.name)
     # Create config directory and files so operator can deploy
     config_dir = store.CONFIG_ROOT / runtime_id
     config_dir.mkdir(parents=True, exist_ok=True)
