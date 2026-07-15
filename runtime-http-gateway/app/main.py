@@ -1,6 +1,7 @@
 import json
 import os
 import asyncio
+import secrets
 import threading
 import time
 import urllib.request
@@ -19,6 +20,23 @@ CONFIG_DIR = Path(os.getenv("RUNTIME_CONFIG_DIR", "/config"))
 CALLBACK_URL = os.getenv("MCP_PLATFORM_CALLBACK_URL", "")
 RUNTIME_ID = os.getenv("MCP_RUNTIME_ID", "")
 app = FastAPI(title="Generic MCP Runtime HTTP Gateway", version="0.1.0")
+
+
+@app.middleware("http")
+async def _mcp_auth(request: Request, call_next: Any) -> Response:
+    if request.url.path in ("/health", "/reload"):
+        return await call_next(request)
+    token: str = runtime_config.get("auth_token", "")
+    if not token:
+        return await call_next(request)
+    auth = request.headers.get("Authorization", "")
+    api_key = request.headers.get("X-API-Key", "")
+    bearer_ok = auth.startswith("Bearer ") and secrets.compare_digest(auth[7:], token)
+    key_ok = bool(api_key) and secrets.compare_digest(api_key, token)
+    if bearer_ok or key_ok:
+        return await call_next(request)
+    return JSONResponse({"error": "Unauthorized"}, status_code=401,
+                        headers={"WWW-Authenticate": "Bearer"})
 
 
 def _fire_tool_call_log(tool_name: str, arguments: dict, result: dict, duration_ms: int,

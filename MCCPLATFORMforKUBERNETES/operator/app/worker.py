@@ -96,24 +96,22 @@ def run_action(driver: KubernetesDeploymentDriver, conn: sqlite3.Connection,
                    {"deployment": status.container_name, "endpoint": status.endpoint_url})
 
     elif action == "rebuild_redeploy":
-        image = runtime["image"]
-        log(conn, runtime_id, f"Building image {image} via BuildConfig")
-        try:
-            driver.build_image(Path("/dev/null"), image)
-        except NotImplementedError as exc:
-            raise RuntimeError(str(exc))
-        log(conn, runtime_id, f"BuildConfig triggered for {image}, deploying...")
+        # Na K8s obrazy buduje deploy.sh zewnętrznie — tu robimy tylko redeploy
+        # z aktualnym obrazem z rejestru (imagePullPolicy: Always)
+        log(conn, runtime_id, "Kubernetes mode: skipping image build, redeploying with latest image from registry")
         config_path = runtime["config_path"]
         if not config_path or not Path(config_path).exists():
             raise RuntimeError(f"config path missing: {config_path}")
         status = driver.apply(build_deploy_spec(runtime))
+        # Wymuś pull nowego obrazu przez rollout restart
+        driver.restart(runtime_id)
         conn.execute(
             "UPDATE runtimes SET status=?, endpoint_url=?, container_name=?, last_error=NULL, updated_at=? WHERE id=?",
             (status.state, status.endpoint_url, status.container_name, now_sql(), runtime_id),
         )
-        log(conn, runtime_id, f"Runtime redeployed: {status.endpoint_url}")
+        log(conn, runtime_id, f"Runtime redeployed with latest image: {status.endpoint_url}")
         audit_json(conn, "rebuild_redeploy", runtime_id,
-                   {"image": image, "endpoint": status.endpoint_url})
+                   {"image": runtime["image"], "endpoint": status.endpoint_url})
 
     elif action == "stop":
         status = driver.stop(runtime_id)

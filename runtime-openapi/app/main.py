@@ -17,16 +17,21 @@ Optional:
 """
 import json
 import os
+import pathlib
+import secrets
 from typing import Any
 
 import httpx
 from fastmcp import FastMCP
 from starlette.applications import Starlette
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 from starlette.routing import Mount, Route
 
 # ── Config ─────────────────────────────────────────────────────────────────────
+_CONFIG_DIR = pathlib.Path(os.getenv("RUNTIME_CONFIG_DIR", "/config"))
+
 BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", "")
 OPENAPI_SPEC_URL = os.getenv("OPENAPI_SPEC_URL", "")
 OPENAPI_SPEC_FILE = os.getenv("OPENAPI_SPEC_FILE", "")
@@ -34,6 +39,14 @@ SERVER_NAME = os.getenv("SERVER_NAME", "openapi-mcp")
 BACKEND_AUTH_TOKEN = os.getenv("BACKEND_AUTH_TOKEN", "")
 BACKEND_AUTH_HEADER = os.getenv("BACKEND_AUTH_HEADER", "Authorization")
 BACKEND_AUTH_PREFIX = os.getenv("BACKEND_AUTH_PREFIX", "Bearer")
+
+
+def _runtime_auth_token() -> str:
+    try:
+        cfg = json.loads((_CONFIG_DIR / "runtime-config.json").read_text(encoding="utf-8"))
+        return cfg.get("auth_token", "")
+    except Exception:
+        return ""
 
 
 def _auth_headers() -> dict[str, str]:
@@ -155,6 +168,23 @@ async def mcp_info(request: Request) -> JSONResponse:
     })
 
 
+class _McpAuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next: Any) -> Response:
+        if request.url.path in ("/health",):
+            return await call_next(request)
+        token = _runtime_auth_token()
+        if not token:
+            return await call_next(request)
+        auth = request.headers.get("Authorization", "")
+        api_key = request.headers.get("X-API-Key", "")
+        bearer_ok = auth.startswith("Bearer ") and secrets.compare_digest(auth[7:], token)
+        key_ok = bool(api_key) and secrets.compare_digest(api_key, token)
+        if bearer_ok or key_ok:
+            return await call_next(request)
+        return JSONResponse({"error": "Unauthorized"}, status_code=401,
+                            headers={"WWW-Authenticate": "Bearer"})
+
+
 # ── App ─────────────────────────────────────────────────────────────────────────
 # Named routes are matched first; Mount("/") catches everything else (including /mcp).
 app = Starlette(
@@ -168,3 +198,4 @@ app = Starlette(
     ],
     lifespan=_mcp_asgi.lifespan,
 )
+app.add_middleware(_McpAuthMiddleware)

@@ -258,6 +258,20 @@ def init_db() -> None:
               created_at TEXT NOT NULL,
               updated_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS approval_requests (
+              id TEXT PRIMARY KEY,
+              runtime_id TEXT NOT NULL,
+              tool_name TEXT NOT NULL,
+              arguments_json TEXT NOT NULL DEFAULT '{}',
+              mode TEXT NOT NULL DEFAULT 'write',
+              status TEXT NOT NULL DEFAULT 'pending',
+              caller_ip TEXT NOT NULL DEFAULT '',
+              model TEXT NOT NULL DEFAULT '',
+              created_at TEXT NOT NULL,
+              decided_at TEXT,
+              decided_by TEXT,
+              reject_reason TEXT
+            );
             """
         )
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(tool_packages)").fetchall()}
@@ -271,6 +285,9 @@ def init_db() -> None:
             conn.execute("ALTER TABLE tool_calls ADD COLUMN caller_ip TEXT NOT NULL DEFAULT ''")
         if "model" not in tc_columns:
             conn.execute("ALTER TABLE tool_calls ADD COLUMN model TEXT NOT NULL DEFAULT ''")
+        rt_columns = {row["name"] for row in conn.execute("PRAGMA table_info(runtimes)").fetchall()}
+        if "mcp_auth_token" not in rt_columns:
+            conn.execute("ALTER TABLE runtimes ADD COLUMN mcp_auth_token TEXT NOT NULL DEFAULT ''")
 
 
 def rows(query: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:

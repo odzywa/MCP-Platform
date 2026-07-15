@@ -1,9 +1,11 @@
 import hashlib
 import ipaddress
 import json
+import os
 import re
 import secrets as _secrets_mod
 import shlex
+import socket
 import uuid
 from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
@@ -876,7 +878,7 @@ def _openshift_monitor_tools() -> list[dict[str, Any]]:
         {"name": "oc_apply_yaml",
          "description": "GŁÓWNE NARZĘDZIE do wdrażania zasobów. Przyjmuje treść YAML inline w yaml_content i aplikuje na klaster (Deployment, Service, Route, ConfigMap itp.).",
          "execution_type": "shell", "enabled": True, "risk_level": "high", "mode": "write", "category": "openshift",
-         "config": {"command": ["printf", "%s", "${yaml_content}", ">", "/tmp/_mcp_apply.yaml", "&&"] + _auth + ["apply", "-f", "/tmp/_mcp_apply.yaml", "${*extra_args}", "&&", "rm", "-f", "/tmp/_mcp_apply.yaml"], "timeout_seconds": 60},
+         "config": {"command": ["printf", "%s", "${yaml_content}", "|"] + _auth + ["apply", "-f", "-", "${*extra_args}"], "timeout_seconds": 60},
          "input_schema": _yaml_schema},
         {"name": "oc_create", "description": "Tworzy zasób przez CLI (NIE pliki). Dla YAML użyj oc_create_yaml.",
          "execution_type": "shell", "enabled": True, "risk_level": "high", "mode": "write", "category": "openshift",
@@ -885,7 +887,7 @@ def _openshift_monitor_tools() -> list[dict[str, Any]]:
         {"name": "oc_create_yaml",
          "description": "Tworzy zasoby z inline YAML na klastrze OpenShift. Podaj treść YAML w yaml_content.",
          "execution_type": "shell", "enabled": True, "risk_level": "high", "mode": "write", "category": "openshift",
-         "config": {"command": ["printf", "%s", "${yaml_content}", ">", "/tmp/_mcp_create.yaml", "&&"] + _auth + ["create", "-f", "/tmp/_mcp_create.yaml", "${*extra_args}", "&&", "rm", "-f", "/tmp/_mcp_create.yaml"], "timeout_seconds": 60},
+         "config": {"command": ["printf", "%s", "${yaml_content}", "|"] + _auth + ["create", "-f", "-", "${*extra_args}"], "timeout_seconds": 60},
          "input_schema": _yaml_schema},
         {"name": "oc_delete", "description": "Usuwa zasób z klastra OpenShift. UWAGA: operacja nieodwracalna!",
          "execution_type": "shell", "enabled": True, "risk_level": "high", "mode": "destructive", "category": "openshift",
@@ -1337,11 +1339,13 @@ def write_runtime_config(runtime_id: str) -> str:
                 "security": {"risk_level": tool["risk_level"], "mode": tool["mode"], "category": tool["category"]},
             }
         )
+    runtime_row = store.one("SELECT mcp_auth_token FROM runtimes WHERE id = ?", (runtime_id,)) or {}
     runtime_config = {
         "server_id": runtime_id,
         "name": payload["name"],
         "runtime_class": payload["runtime_class"],
         "transport": {"type": "streamable_http", "mcp_endpoint": "/mcp"},
+        "auth_token": runtime_row.get("mcp_auth_token") or "",
     }
     adapter_config = {
         "adapters": [
@@ -1439,6 +1443,22 @@ def _is_safe_fetch_url(url: str) -> bool:
                 or addr.is_multicast
             )
         except ValueError:
+            # hostname is not a numeric IP literal — resolve it and check every
+            # returned address to block DNS rebinding to private/loopback ranges.
+            try:
+                infos = socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP)
+            except socket.gaierror:
+                return False
+            if not infos:
+                return False
+            for info in infos:
+                try:
+                    addr = ipaddress.ip_address(info[4][0])
+                except ValueError:
+                    return False
+                if (addr.is_private or addr.is_loopback or addr.is_link_local
+                        or addr.is_reserved or addr.is_multicast):
+                    return False
             return True
     except Exception:
         return False
@@ -1887,6 +1907,7 @@ def page_shell(active: str, body: str) -> str:
         ("create",     "🛠️  Kreator zaawansowany", "/create",          "Kreator krok po kroku z pełną kontrolą — wybór paczki, silnika, polityki","read_write"),
         ("runtimes",   "🖥️  Moje serwery",         "/runtimes",        "Lista wszystkich serwerów MCP — status, endpointy, zarządzanie",          "read_only"),
         ("external",   "🔗  Zewnętrzne MCP",       "/external-mcp",    "Rejestruj i monitoruj serwery MCP uruchomione poza platformą",            "read_only"),
+        ("approvals",  "✅  Zatwierdzenia",          "/approvals",       "Oczekujące zatwierdzenia wywołań narzędzi write/destructive",              "read_write"),
         ("webhooks",   "🔔  Webhooki",              "/webhooks",        "Powiadomienia gdy serwer padnie lub tool zwróci błąd",                     "admin"),
         ("packages",   "🏗️  Build",                "/tool-packages",   "Buduj i wdrażaj serwery MCP — gotowe paczki + własne obrazy Docker",       "read_only"),
         ("adapters",   "⚙️  Silniki wykonania",    "/tool-types",      "Globalne typy egzekucji (http_request, shell…)",                          "admin"),
@@ -5071,6 +5092,8 @@ def docs_page() -> str:
 
 async def _probe_mcp_server(url: str, auth_type: str, auth_token: str) -> dict[str, Any]:
     """Probe an external MCP server — tries /health, /tools REST, then MCP protocol."""
+    if not _is_safe_fetch_url(url):
+        return {"status": "error", "tools": [], "error": f"URL not allowed: private/internal addresses are blocked"}
     headers: dict[str, str] = {}
     if auth_type == "bearer" and auth_token:
         headers["Authorization"] = f"Bearer {auth_token}"
@@ -5349,15 +5372,15 @@ async def login_post(request: Request) -> Any:
     form = await request.form()
     username = str(form.get("username") or "").strip()
     password = str(form.get("password") or "")
-    next_url = str(form.get("next") or "/")
-    if not re.match(r"^/", next_url):
-        next_url = "/"
+    next_url = safe_return_to(str(form.get("next") or ""), "/")
     user = store.one("SELECT * FROM users WHERE username=? AND active=1", (username,))
     if not user or not _verify_pw(password, user["password_hash"]):
         return RedirectResponse(f"/login?error={quote('Nieprawidłowy login lub hasło')}&next={quote(next_url)}", status_code=303)
     token = _create_session(user["id"], user["username"], user["role"])
     resp = RedirectResponse(next_url, status_code=303)
-    resp.set_cookie(AUTH_COOKIE, token, httponly=True, samesite="lax", max_age=SESSION_TTL_H * 3600)
+    _secure = os.getenv("MCP_HTTPS_ONLY", "").lower() in ("1", "true", "yes")
+    resp.set_cookie(AUTH_COOKIE, token, httponly=True, samesite="lax",
+                    max_age=SESSION_TTL_H * 3600, secure=_secure)
     return resp
 
 
@@ -9867,6 +9890,7 @@ def runtime_detail(runtime_id: str, request: Request, welcome: str = "", tool_ad
         <button class="rt-tab rt-tab-active" onclick="rtTab('connect')" id="tab-connect">🔌 Podłącz</button>
         <button class="rt-tab" onclick="rtTab('tools')" id="tab-tools">🔧 Narzędzia ({len(payload['tools'])})</button>
         <button class="rt-tab" onclick="rtTab('policy')" id="tab-policy">🔒 Polityka</button>
+        <button class="rt-tab" onclick="rtTab('auth')" id="tab-auth">🔐 Auth {'<span style="background:#0a2a14;color:#22c55e;font-size:10px;padding:1px 5px;border-radius:999px;margin-left:4px">ON</span>' if payload.get('mcp_auth_token') else ''}</button>
         <button class="rt-tab" onclick="rtTab('creds')" id="tab-creds">🔑 Sekrety ({len(credentials)})</button>
         <button class="rt-tab" onclick="rtTab('adapters')" id="tab-adapters">⚙️ Silniki ({len(runtime_adapters)})</button>
         <button class="rt-tab" onclick="rtTab('logs')" id="tab-logs">📋 Logi</button>
@@ -10113,6 +10137,29 @@ function ntPreset(cmd, desc) {{
       </details>
 
       </div><!-- /pane-adapters -->
+
+      <!-- PANE: Auth -->
+      <div class="rt-pane" id="pane-auth">
+        <h2>🔐 Bearer Token Authentication</h2>
+        <p class="muted">Włącz uwierzytelnianie Bearer Token, aby wymagać klucza API od klientów AI (Claude Desktop, Cline, Continue). Po wygenerowaniu tokenu podaj go jako nagłówek <code>Authorization: Bearer &lt;token&gt;</code> lub <code>X-API-Key: &lt;token&gt;</code>.</p>
+
+        {'<div style="background:#0a2a14;border:1px solid #155228;border-radius:10px;padding:20px;margin-bottom:20px">' if payload.get('mcp_auth_token') else '<div style="background:#1a1000;border:1px solid #3a2800;border-radius:10px;padding:20px;margin-bottom:20px">'}
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+            {'<span style="background:#155228;color:#4ade80;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700">● AKTYWNE</span>' if payload.get('mcp_auth_token') else '<span style="background:#2a1800;color:#a06020;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700">○ WYŁĄCZONE</span>'}
+            <span style="color:var(--muted);font-size:13px">{'Token wygenerowany — uwierzytelnianie włączone' if payload.get('mcp_auth_token') else 'Brak tokenu — serwer MCP jest otwarty dla wszystkich klientów'}</span>
+          </div>
+          {'<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><code id="auth-token-display" data-secret="' + escape(payload.get("mcp_auth_token","")) + '" style="flex:1;padding:9px 12px;background:#0d1a0d;border:1px solid #1a5f2e;border-radius:6px;font-size:13px;color:#4ade80;letter-spacing:1px">••••••••••••••••••••••••</code><button onclick="toggleSecret(this.previousElementSibling)" title="Pokaż/ukryj" style="background:none;border:1px solid #1a5f2e;color:#4ade80;padding:7px 12px;border-radius:6px;cursor:pointer">👁</button><button onclick="navigator.clipboard.writeText(document.getElementById(\'auth-token-display\').dataset.secret).then(()=>{{let b=event.target;let t=b.textContent;b.textContent=\'✓\';setTimeout(()=>b.textContent=t,1500)}})" style="background:#155228;border:1px solid #1a5f2e;color:#4ade80;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:13px">Kopiuj</button></div>' if payload.get('mcp_auth_token') else ''}
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <form method="post" action="/api/runtimes/{runtime_id}/generate-mcp-token" style="display:inline">
+              <button type="submit" style="background:#1f6b35;border:1px solid #27a147;color:#d1fae5;padding:8px 18px;border-radius:7px;cursor:pointer;font-size:13px">{'↻ Regeneruj token' if payload.get('mcp_auth_token') else '+ Generuj token'}</button>
+            </form>
+            {'<form method="post" action="/api/runtimes/' + runtime_id + '/revoke-mcp-token" style="display:inline" onsubmit="return confirm(\'Usunąć token? Klienci z obecnym tokenem stracą dostęp.\')"><button type="submit" style="background:#3a1010;border:1px solid #6a2020;color:#f47a80;padding:8px 18px;border-radius:7px;cursor:pointer;font-size:13px">✕ Usuń token</button></form>' if payload.get('mcp_auth_token') else ''}
+          </div>
+        </div>
+
+        {'<div style="background:#0d1117;border:1px solid #30363d;border-radius:10px;padding:20px"><h3 style="margin-top:0;font-size:15px;color:var(--text)">Konfiguracja klientów</h3><p class="muted" style="font-size:13px">Skopiuj poniższe konfiguracje do swojego klienta AI.</p><div style="margin-bottom:18px"><div style="font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.5px;margin-bottom:6px">CLAUDE DESKTOP (~/.claude.json)</div><pre style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:14px;margin:0;overflow-x:auto;font-size:12px;color:#e6edf3">{\'{\'}\n  "mcpServers": {\'{\'}\n    "' + escape(payload.get("name","runtime")) + '": {\'{\'}\n      "type": "http",\n      "url": "' + escape(payload.get("endpoint_url") or "") + '/mcp",\n      "headers": {\'{\'}\n        "Authorization": "Bearer <TWÓJ_TOKEN>"\n      {\'}\'}\n    {\'}\'}\n  {\'}\'}\n{\'}\'}</pre></div><div style="margin-bottom:18px"><div style="font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.5px;margin-bottom:6px">CLINE / CONTINUE (settings.json)</div><pre style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:14px;margin:0;overflow-x:auto;font-size:12px;color:#e6edf3">{\'{\'}\n  "mcp.servers": [{\'{\'}\n    "name": "' + escape(payload.get("name","runtime")) + '",\n    "transport": "streamable-http",\n    "url": "' + escape(payload.get("endpoint_url") or "") + '/mcp",\n    "headers": {\'{\'}\n      "Authorization": "Bearer <TWÓJ_TOKEN>"\n    {\'}\'}\n  {\'}\'}]\n{\'}\'}</pre></div><div><div style="font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.5px;margin-bottom:6px">CURL (testowanie)</div><pre style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:14px;margin:0;overflow-x:auto;font-size:12px;color:#e6edf3">curl -H "Authorization: Bearer &lt;TWÓJ_TOKEN&gt;" ' + escape(payload.get("endpoint_url") or "") + '/health</pre></div></div>' if payload.get('mcp_auth_token') else ''}
+
+      </div><!-- /pane-auth -->
 
       <!-- PANE: Sekrety -->
       <div class="rt-pane" id="pane-creds">
@@ -10852,6 +10899,52 @@ async def update_shell_policy(runtime_id: str, request: Request):
     return RedirectResponse(f"/runtimes/{runtime_id}", status_code=303)
 
 
+@app.post("/api/runtimes/{runtime_id}/generate-mcp-token")
+async def generate_mcp_token(runtime_id: str, request: Request):
+    """Generate (or rotate) the Bearer token that MCP clients must present."""
+    form = await request.form()
+    return_to = safe_return_to(str(form.get("return_to") or ""), f"/runtimes/{runtime_id}#pane-auth")
+    runtime = store.one("SELECT id FROM runtimes WHERE id = ?", (runtime_id,))
+    if not runtime:
+        raise HTTPException(status_code=404, detail="Runtime not found")
+    token = _secrets_mod.token_urlsafe(32)
+    store.execute(
+        "UPDATE runtimes SET mcp_auth_token = ?, updated_at = ? WHERE id = ?",
+        (token, store.now_iso(), runtime_id),
+    )
+    # Re-write runtime-config.json so the running container picks up the new token on /reload
+    try:
+        write_runtime_config(runtime_id)
+        enqueue_runtime_action(runtime_id, "reload")
+    except Exception:
+        pass
+    user = _current_user.get() or {}
+    store.audit(user.get("username", "admin"), "generate_mcp_token", "runtime", runtime_id, {})
+    return RedirectResponse(return_to, status_code=303)
+
+
+@app.post("/api/runtimes/{runtime_id}/revoke-mcp-token")
+async def revoke_mcp_token(runtime_id: str, request: Request):
+    """Remove the MCP auth token — runtime becomes accessible without authentication."""
+    form = await request.form()
+    return_to = safe_return_to(str(form.get("return_to") or ""), f"/runtimes/{runtime_id}#pane-auth")
+    runtime = store.one("SELECT id FROM runtimes WHERE id = ?", (runtime_id,))
+    if not runtime:
+        raise HTTPException(status_code=404, detail="Runtime not found")
+    store.execute(
+        "UPDATE runtimes SET mcp_auth_token = '', updated_at = ? WHERE id = ?",
+        (store.now_iso(), runtime_id),
+    )
+    try:
+        write_runtime_config(runtime_id)
+        enqueue_runtime_action(runtime_id, "reload")
+    except Exception:
+        pass
+    user = _current_user.get() or {}
+    store.audit(user.get("username", "admin"), "revoke_mcp_token", "runtime", runtime_id, {})
+    return RedirectResponse(return_to, status_code=303)
+
+
 @app.post("/api/runtimes/{runtime_id}/deploy")
 async def deploy_runtime(runtime_id: str, request: Request):
     form = await request.form()
@@ -11280,3 +11373,216 @@ async def platform_health():
             except Exception as exc:
                 checked.append({"runtime_id": runtime["id"], "error": str(exc)})
     return {"status": "ok", "runtimes": checked}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# APPROVAL SYSTEM — Human-in-the-Loop for write/destructive tool calls
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.post("/api/approval-request")
+async def create_approval_request(request: Request) -> JSONResponse:
+    """Called by runtime containers (no auth). Creates a pending approval."""
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid JSON")
+    req_id = str(payload.get("id") or _secrets_mod.token_urlsafe(16))
+    now = store.now_iso()
+    store.execute(
+        """INSERT OR IGNORE INTO approval_requests
+           (id, runtime_id, tool_name, arguments_json, mode, status, caller_ip, model, created_at)
+           VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)""",
+        (
+            req_id,
+            str(payload.get("runtime_id", "")),
+            str(payload.get("tool_name", "")),
+            json.dumps(payload.get("arguments") or {}),
+            str(payload.get("mode", "write")),
+            str(payload.get("caller_ip", "")),
+            str(payload.get("model", "")),
+            now,
+        ),
+    )
+    return JSONResponse({"id": req_id, "status": "pending"})
+
+
+@app.get("/api/approval-status/{req_id}")
+def get_approval_status(req_id: str) -> JSONResponse:
+    """Polled by runtime containers (no auth). Returns current status."""
+    row = store.one(
+        "SELECT status, reject_reason FROM approval_requests WHERE id = ?", (req_id,)
+    )
+    if not row:
+        return JSONResponse({"status": "not_found"}, status_code=404)
+    return JSONResponse({"status": row["status"], "reject_reason": row.get("reject_reason")})
+
+
+@app.post("/api/approval/{req_id}/approve")
+async def approve_request(req_id: str) -> Any:
+    user = _current_user.get() or {}
+    now = store.now_iso()
+    store.execute(
+        "UPDATE approval_requests SET status='approved', decided_at=?, decided_by=? WHERE id=? AND status='pending'",
+        (now, user.get("username", "admin"), req_id),
+    )
+    store.audit(user.get("username", "admin"), "approve_tool_call", "approval", req_id, {})
+    return RedirectResponse("/approvals?ok=Zatwierdzone", status_code=303)
+
+
+@app.post("/api/approval/{req_id}/reject")
+async def reject_request(req_id: str, request: Request) -> Any:
+    user = _current_user.get() or {}
+    form = await request.form()
+    reason = str(form.get("reason") or "Odrzucono przez administratora")
+    now = store.now_iso()
+    store.execute(
+        """UPDATE approval_requests
+           SET status='rejected', decided_at=?, decided_by=?, reject_reason=?
+           WHERE id=? AND status='pending'""",
+        (now, user.get("username", "admin"), reason, req_id),
+    )
+    store.audit(user.get("username", "admin"), "reject_tool_call", "approval", req_id, {"reason": reason})
+    return RedirectResponse("/approvals?ok=Odrzucono", status_code=303)
+
+
+@app.get("/approvals")
+def approvals_page(request: Request) -> HTMLResponse:
+    ok_msg = request.query_params.get("ok", "")
+    pending = store.rows(
+        """SELECT ar.*, r.name AS runtime_name
+           FROM approval_requests ar
+           LEFT JOIN runtimes r ON r.id = ar.runtime_id
+           WHERE ar.status = 'pending'
+           ORDER BY ar.created_at DESC"""
+    )
+    recent = store.rows(
+        """SELECT ar.*, r.name AS runtime_name
+           FROM approval_requests ar
+           LEFT JOIN runtimes r ON r.id = ar.runtime_id
+           WHERE ar.status != 'pending'
+           ORDER BY ar.decided_at DESC LIMIT 50"""
+    )
+
+    def _mode_badge(mode: str) -> str:
+        colors = {
+            "destructive": ("#ff4444", "#3a0a0a"),
+            "write": ("#f59e0b", "#2a1e08"),
+            "read-only": ("#22c55e", "#0a2a14"),
+        }
+        fg, bg = colors.get(mode, ("#8ea2b8", "#1e2530"))
+        return f'<span style="background:{bg};color:{fg};padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700">{escape(mode)}</span>'
+
+    def _status_badge(status: str) -> str:
+        colors = {
+            "pending": ("#f59e0b", "#2a1e08"),
+            "approved": ("#22c55e", "#0a2a14"),
+            "rejected": ("#ff4444", "#3a0a0a"),
+            "timeout": ("#8ea2b8", "#1e2530"),
+        }
+        fg, bg = colors.get(status, ("#8ea2b8", "#1e2530"))
+        return f'<span style="background:{bg};color:{fg};padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700">{escape(status)}</span>'
+
+    def _pending_card(row: dict) -> str:
+        args = json.loads(row.get("arguments_json") or "{}")
+        args_html = "".join(
+            f'<tr><td style="color:#7a9db8;padding:3px 8px;font-size:12px">{escape(k)}</td>'
+            f'<td style="padding:3px 8px;font-size:12px;word-break:break-all"><code style="color:#e2e8f0">{escape(str(v)[:500])}</code></td></tr>'
+            for k, v in args.items()
+        )
+        caller_info = ""
+        if row.get("caller_ip"):
+            caller_info += f' | IP: <code>{escape(row["caller_ip"])}</code>'
+        if row.get("model"):
+            caller_info += f' | Model: <code>{escape(row["model"])}</code>'
+        return f"""
+        <div style="background:#0d1a2a;border:1px solid #1a3a5a;border-radius:10px;padding:18px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+            <span style="font-size:16px;font-weight:700;color:#e2e8f0">{escape(row["tool_name"])}</span>
+            {_mode_badge(row.get("mode","write"))}
+            <span style="color:#7a9db8;font-size:12px">Runtime: <b>{escape(row.get("runtime_name") or row["runtime_id"])}</b></span>
+            <span style="color:#7a9db8;font-size:12px">{escape(row["created_at"])}{caller_info}</span>
+          </div>
+          <table style="width:100%;border-collapse:collapse;margin-bottom:14px">
+            <tr><th style="text-align:left;padding:3px 8px;font-size:11px;color:#4a7a9b;border-bottom:1px solid #1a3a5a" colspan="2">Argumenty</th></tr>
+            {args_html if args_html else '<tr><td colspan="2" style="color:#7a9db8;padding:3px 8px;font-size:12px">(brak)</td></tr>'}
+          </table>
+          <div style="display:flex;gap:10px;align-items:center">
+            <form method="post" action="/api/approval/{escape(row['id'])}/approve" style="display:inline">
+              <button style="background:#0a2a14;color:#22c55e;border:1px solid #22c55e;padding:7px 20px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">
+                ✅ Zatwierdź
+              </button>
+            </form>
+            <form method="post" action="/api/approval/{escape(row['id'])}/reject" style="display:inline;display:flex;gap:6px;align-items:center">
+              <input name="reason" placeholder="Powód odrzucenia (opcjonalnie)" style="background:#0d1a2a;border:1px solid #1a3a5a;color:#e2e8f0;padding:6px 10px;border-radius:6px;font-size:13px;width:280px">
+              <button style="background:#3a0a0a;color:#ff4444;border:1px solid #ff4444;padding:7px 20px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">
+                ❌ Odrzuć
+              </button>
+            </form>
+          </div>
+        </div>"""
+
+    def _recent_row(row: dict) -> str:
+        args = json.loads(row.get("arguments_json") or "{}")
+        args_short = ", ".join(f"{k}={str(v)[:40]}" for k, v in list(args.items())[:3])
+        reason_cell = f'<td style="font-size:12px;color:#ff8888;padding:6px 10px">{escape(row.get("reject_reason") or "")}</td>' if row["status"] == "rejected" else '<td></td>'
+        return f"""<tr>
+          <td style="padding:6px 10px;font-size:13px"><code>{escape(row["tool_name"])}</code></td>
+          <td style="padding:6px 10px">{_mode_badge(row.get("mode","write"))}</td>
+          <td style="padding:6px 10px;font-size:12px;color:#7a9db8">{escape(row.get("runtime_name") or row["runtime_id"])}</td>
+          <td style="padding:6px 10px">{_status_badge(row["status"])}</td>
+          <td style="padding:6px 10px;font-size:12px;color:#7a9db8">{escape(row.get("decided_by") or "")}</td>
+          <td style="padding:6px 10px;font-size:12px;color:#7a9db8">{escape(row.get("decided_at") or "")}</td>
+          {reason_cell}
+        </tr>"""
+
+    pending_html = "".join(_pending_card(r) for r in pending) if pending else (
+        '<div style="color:#4a7a9b;padding:24px;text-align:center">Brak oczekujących zatwierdzeń ✓</div>'
+    )
+    recent_html = "".join(_recent_row(r) for r in recent) if recent else (
+        '<tr><td colspan="7" style="color:#4a7a9b;padding:16px;text-align:center">Brak historii</td></tr>'
+    )
+    ok_banner = f'<div style="background:#0a2a14;color:#22c55e;border:1px solid #22c55e;padding:10px 16px;border-radius:8px;margin-bottom:16px">{escape(ok_msg)}</div>' if ok_msg else ""
+
+    body = f"""
+    {ok_banner}
+    <div style="max-width:900px;margin:0 auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <h2 style="margin:0;color:#e2e8f0">Zatwierdzenia wywołań narzędzi</h2>
+        <span style="color:#4a7a9b;font-size:13px">Odświeżaj co 10s lub przeładuj stronę</span>
+      </div>
+
+      <div style="background:#0a1520;border:1px solid #1a3a5a;border-radius:8px;padding:14px 18px;margin-bottom:24px;font-size:13px;color:#8ea2b8">
+        Narzędzia z trybem <b style="color:#f59e0b">write</b> lub <b style="color:#ff4444">destructive</b>
+        mogą wymagać ręcznego zatwierdzenia zanim zostaną wykonane.
+        Aktywuj to w ustawieniach polityki serwera: <code>"require_approval_for": ["write", "destructive"]</code>.
+      </div>
+
+      <h3 style="color:#f59e0b;margin:0 0 14px">⏳ Oczekujące ({len(pending)})</h3>
+      {pending_html}
+
+      <h3 style="color:#7a9db8;margin:24px 0 14px">📋 Historia (ostatnie 50)</h3>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="border-bottom:1px solid #1a3a5a">
+              <th style="text-align:left;padding:6px 10px;font-size:12px;color:#4a7a9b">Narzędzie</th>
+              <th style="text-align:left;padding:6px 10px;font-size:12px;color:#4a7a9b">Tryb</th>
+              <th style="text-align:left;padding:6px 10px;font-size:12px;color:#4a7a9b">Serwer</th>
+              <th style="text-align:left;padding:6px 10px;font-size:12px;color:#4a7a9b">Status</th>
+              <th style="text-align:left;padding:6px 10px;font-size:12px;color:#4a7a9b">Przez</th>
+              <th style="text-align:left;padding:6px 10px;font-size:12px;color:#4a7a9b">Kiedy</th>
+              <th style="text-align:left;padding:6px 10px;font-size:12px;color:#4a7a9b">Powód</th>
+            </tr>
+          </thead>
+          <tbody>{recent_html}</tbody>
+        </table>
+      </div>
+    </div>
+    <script>
+      // Auto-refresh every 10 seconds when there are pending approvals
+      if ({len(pending)} > 0) {{
+        setTimeout(() => location.reload(), 10000);
+      }}
+    </script>
+    """
+    return HTMLResponse(page_shell("approvals", body))
