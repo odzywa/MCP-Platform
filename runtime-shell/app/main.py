@@ -270,16 +270,20 @@ def _policy_check_stage(argv: list[str]) -> None:
     if binary in blocked:
         raise ValueError(f"blocked binary: {binary!r}")
 
-    # Check prefix allowlist/blocklist against this stage's full argv string.
+    # Check prefix allowlist/blocklist.
+    # Use both the full shlex.join string AND a "subcommand key" (binary + first
+    # non-flag arg) so that global flags inserted before the subcommand
+    # (e.g. "oc --token=X --server=Y create ...") still match prefix "oc create".
     stage_text = shlex.join(argv)
+    sub = _stage_sub(argv)
     allowed_prefixes = [str(p).strip() for p in (policy.get("allowed_command_prefixes") or []) if str(p).strip()]
     blocked_prefixes = [str(p).strip() for p in (policy.get("blocked_command_prefixes") or []) if str(p).strip()]
     if allowed_prefixes and not any(
-        stage_text == pfx or stage_text.startswith(pfx + " ") for pfx in allowed_prefixes
+        _pfx_match(stage_text, pfx) or _pfx_match(sub, pfx) for pfx in allowed_prefixes
     ):
         raise ValueError(f"command prefix not allowed: {stage_text}")
     for pfx in blocked_prefixes:
-        if stage_text == pfx or stage_text.startswith(pfx + " "):
+        if _pfx_match(stage_text, pfx) or _pfx_match(sub, pfx):
             raise ValueError(f"blocked command prefix: {stage_text}")
 
     # Check blocked tokens in arguments (not the binary itself).
@@ -380,6 +384,39 @@ _AUTO_APPROVAL_KEYWORDS = frozenset({
     "create", "apply", "deploy", "install", "patch", "scale", "expose",
     "rollout", "new", "add", "set", "update", "replace", "restart",
 })
+
+
+def _pfx_match(text: str, pfx: str) -> bool:
+    return text == pfx or text.startswith(pfx + " ")
+
+
+def _stage_sub(stage_argv: list[str]) -> str:
+    """Return 'binary subcommand' skipping leading flags, for prefix matching."""
+    parts = [stage_argv[0]]
+    for a in stage_argv[1:]:
+        if not a.startswith("-"):
+            parts.append(a)
+            break
+    return " ".join(parts)
+
+
+def _stages_need_approval(stages: list[list[str]]) -> bool:
+    """Return True if any pipeline stage matches require_approval_for_prefixes."""
+    approval_prefixes = [
+        str(p).strip()
+        for p in (policy.get("require_approval_for_prefixes") or [])
+        if str(p).strip()
+    ]
+    if not approval_prefixes:
+        return False
+    for stage_argv in stages:
+        if not stage_argv:
+            continue
+        stage_text = shlex.join(stage_argv)
+        sub = _stage_sub(stage_argv)
+        if any(_pfx_match(stage_text, p) or _pfx_match(sub, p) for p in approval_prefixes):
+            return True
+    return False
 
 
 def _needs_approval(tool: dict[str, Any]) -> bool:
@@ -587,21 +624,16 @@ async def execute_tool(tool_name: str, arguments: dict[str, Any],
     except Exception as exc:
         return {"ok": False, "error": f"command build error: {exc}"}
 
-    # ── Check allowlist for argv[0] of EVERY stage independently.
-    for stage_argv in stages:
-        try:
-            _policy_check_stage(stage_argv)
-        except ValueError as exc:
-            return {"ok": False, "tool": tool_name, "error": str(exc)}
-
     timeout = int(execution.get("timeout_seconds") or policy.get("timeout_seconds") or 20)
     max_response_bytes = min(
         int(execution.get("max_response_bytes") or policy.get("max_response_bytes") or 1_048_576),
         MAX_OUTPUT_BYTES,
     )
 
-    # ── Human-in-the-Loop approval for write/destructive tools.
-    if _needs_approval(tool):
+    # ── Human-in-the-Loop approval — checked BEFORE hard policy block so that
+    # prefixes listed in require_approval_for_prefixes go through approval
+    # instead of being silently blocked by blocked_command_prefixes.
+    if _needs_approval(tool) or _stages_need_approval(stages):
         tool_mode = (tool.get("security") or {}).get("mode") or tool.get("mode", "write")
         decision = await _request_approval(tool_name, arguments, tool_mode, caller_ip, model)
         if not decision["approved"]:
@@ -614,6 +646,13 @@ async def execute_tool(tool_name: str, arguments: dict[str, Any],
                                 int((time.monotonic() - _t0) * 1000),
                                 caller_ip=caller_ip, model=model)
             return result
+
+    # ── Hard policy check for every pipeline stage.
+    for stage_argv in stages:
+        try:
+            _policy_check_stage(stage_argv)
+        except ValueError as exc:
+            return {"ok": False, "tool": tool_name, "error": str(exc)}
 
     # ── Execute — always shell=False; pipelines via explicit Popen chain.
     try:

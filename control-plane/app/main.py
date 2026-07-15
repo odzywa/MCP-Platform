@@ -10210,7 +10210,7 @@ function ntPreset(cmd, desc) {{
       <details id="sec-policy" style="border-radius:12px" open>
         <summary style="font-size:16px;font-weight:800;padding:4px 0">🔒 Polityka bezpieczeństwa</summary>
         <div style="margin-top:16px;display:grid;gap:14px">
-          <form method="post" action="/api/runtimes/{runtime_id}/policy/shell-preset">
+          <form id="shell-policy-form" method="post" action="/api/runtimes/{runtime_id}/policy/shell-preset">
             <div class="grid">
               <label>Dozwolone binarki<input name="allowed_binaries" value="{escape(' '.join(payload['policy'].get('allowed_binaries') or []))}" placeholder="oc kubectl jq"></label>
               <label>Zablokowane tokeny<input name="blocked_commands" value="{escape(' '.join(payload['policy'].get('blocked_commands') or []))}" placeholder="delete apply patch"></label>
@@ -10219,6 +10219,30 @@ function ntPreset(cmd, desc) {{
             </div>
             <button>Zapisz politykę shell</button>
           </form>
+          <details style="border-radius:6px;border:1px solid var(--line);padding:14px;margin-top:4px" {'open' if payload['policy'].get('require_approval_for') else ''}>
+            <summary style="font-size:14px;font-weight:700;cursor:pointer;color:var(--text)">✅ Zatwierdzenia (Human-in-the-Loop)</summary>
+            <div style="margin-top:14px;display:grid;gap:12px">
+              <p class="muted" style="font-size:12px;margin:0">Gdy AI wywoła narzędzie wymagające zatwierdzenia, wykonanie jest wstrzymane do czasu decyzji admina na stronie <a href="/approvals" style="color:var(--blue)">/approvals</a>.</p>
+              <label style="display:grid;gap:6px;font-size:13px;font-weight:600">
+                Wymagaj zatwierdzenia dla
+                <select name="require_approval_for" form="shell-policy-form" style="padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel-2);color:var(--text);font-size:13px">
+                  <option value="" {"selected" if not payload["policy"].get("require_approval_for") else ""}>Wyłączone — brak zatwierdzeń</option>
+                  <option value="auto" {"selected" if payload["policy"].get("require_approval_for") == "auto" else ""}>Auto — narzędzia write/destructive + słowa kluczowe (delete, create, apply…)</option>
+                  <option value="destructive" {"selected" if payload["policy"].get("require_approval_for") == ["destructive"] or payload["policy"].get("require_approval_for") == "destructive" else ""}>Tylko destructive (delete, destroy, purge…)</option>
+                  <option value="write_destructive" {"selected" if payload["policy"].get("require_approval_for") in [["write","destructive"],["destructive","write"]] else ""}>Write + Destructive (create, apply, delete…)</option>
+                </select>
+              </label>
+              <label style="display:grid;gap:6px;font-size:13px;font-weight:600">
+                Prefiksy wymagające zatwierdzenia (jeden/linię)
+                <textarea name="require_approval_for_prefixes" form="shell-policy-form" placeholder="oc delete&#10;oc apply&#10;kubectl delete" style="min-height:80px;font-family:monospace;font-size:12px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel-2);color:var(--text)">{escape(chr(10).join(payload['policy'].get('require_approval_for_prefixes') or []))}</textarea>
+                <span style="font-size:11px;color:var(--muted)">Komendy pasujące do tych prefiksów zatrzymają się i poczekają na zatwierdzenie. <strong>Nie dodawaj ich do Zablokowanych prefiksów</strong> — zatwierdzenie działa zamiast blokady.</span>
+              </label>
+              <label style="display:grid;gap:6px;font-size:13px;font-weight:600">
+                Limit czasu zatwierdzenia (sekundy)
+                <input type="number" name="approval_timeout_seconds" form="shell-policy-form" min="30" max="3600" value="{payload['policy'].get('approval_timeout_seconds', 300)}" style="padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel-2);color:var(--text);font-size:13px;width:140px">
+              </label>
+            </div>
+          </details>
           <details style="border-radius:6px">
             <summary style="font-size:13px;color:var(--muted)">Zaawansowane: edytuj policy JSON bezpośrednio</summary>
             <form method="post" action="/api/runtimes/{runtime_id}/policy/update" style="margin-top:10px">
@@ -10890,6 +10914,23 @@ async def update_shell_policy(runtime_id: str, request: Request):
     policy["blocked_commands"] = clean_words(str(form.get("blocked_commands") or ""), r"[A-Za-z0-9_.:/-]+", "blocked token")
     policy["allowed_command_prefixes"] = [line.strip() for line in str(form.get("allowed_command_prefixes") or "").splitlines() if line.strip()]
     policy["blocked_command_prefixes"] = [line.strip() for line in str(form.get("blocked_command_prefixes") or "").splitlines() if line.strip()]
+    _approval_val = str(form.get("require_approval_for") or "").strip()
+    if _approval_val == "":
+        policy.pop("require_approval_for", None)
+    elif _approval_val == "auto":
+        policy["require_approval_for"] = "auto"
+    elif _approval_val == "destructive":
+        policy["require_approval_for"] = ["destructive"]
+    elif _approval_val == "write_destructive":
+        policy["require_approval_for"] = ["write", "destructive"]
+    policy["require_approval_for_prefixes"] = [
+        line.strip() for line in str(form.get("require_approval_for_prefixes") or "").splitlines()
+        if line.strip()
+    ]
+    try:
+        policy["approval_timeout_seconds"] = max(30, int(form.get("approval_timeout_seconds") or 300))
+    except (ValueError, TypeError):
+        policy["approval_timeout_seconds"] = 300
     store.execute(
         sql.UPSERT_POLICY,
         (runtime_id, json.dumps(policy), store.now_iso()),

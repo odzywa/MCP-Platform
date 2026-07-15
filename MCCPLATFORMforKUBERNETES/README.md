@@ -112,3 +112,84 @@ operator/
 | Start/Stop | `docker start/stop` | `scale replicas 1/0` |
 
 Control plane i format plików konfiguracyjnych — **bez zmian**.
+
+---
+
+## Bezpieczeństwo
+
+### Cookie Secure (HTTPS)
+
+Na Kubernetes ruch do control plane przechodzi przez Route z TLS — ustaw flagę `Secure` na sesyjnym cookie:
+
+```yaml
+# k8s/03-control-plane.yaml — env control-plane
+- name: MCP_HTTPS_ONLY
+  value: "1"
+```
+
+### SSRF — ochrona wewnętrznych zasobów klastra
+
+Control plane blokuje zapytania do prywatnych zakresów IP (w tym adresów serwisów Kubernetes w `10.0.0.0/8` i `172.16.0.0/12`). Hostnamy są rozwiązywane przez DNS przed sprawdzeniem — ochrona przed DNS rebinding. Nie wymaga żadnej konfiguracji.
+
+### Runtime Shell — brak shell=True
+
+Runtime `mcp-runtime-shell` wykonuje komendy bez interpretera shella. Argumenty użytkownika nigdy nie są konkatenowane do stringa i przekazywane do powłoki — każdy etap pipeline'u to lista argv bezpośrednio do `Popen`. Szczegóły w głównym [README.md](../README.md#bezpieczeństwo).
+
+---
+
+## System zatwierdzeń (Human-in-the-Loop)
+
+Narzędzia MCP z trybem `write` lub `destructive` mogą wymagać ręcznego zatwierdzenia administratora zanim zostaną wykonane. Konfiguracja w `policy.json` runtime'u:
+
+```json
+{
+  "require_approval_for": "auto",
+  "approval_timeout_seconds": 300
+}
+```
+
+| Wartość | Zachowanie |
+|---|---|
+| pominięta | Brak zatwierdzeń (domyślne) |
+| `"auto"` | Auto-detekcja z trybu narzędzia i jego nazwy |
+| `["destructive"]` | Tylko narzędzia delete/destroy |
+| `["write", "destructive"]` | Create i delete |
+
+Strona zatwierdzeń: `/approvals` — widoczna dla ról `read_write` i `admin`, auto-refresh co 10s.
+
+Na Kubernetes przepływ jest identyczny jak w Docker — operator i runtime pody komunikują się z control plane przez wewnętrzny `Service`.
+
+---
+
+## Uwierzytelnianie MCP (Bearer Token)
+
+Każdy runtime MCP może wymagać tokenu od klienta AI. Włączenie w UI:
+
+1. **Runtimes → nazwa serwera → zakładka 🔐 Auth**
+2. Kliknij **+ Generuj token**
+3. Skopiuj token do konfiguracji klienta
+
+Na Kubernetes token działa identycznie jak w Docker — jest zapisywany w `runtime-config.json` (montowanym jako `ConfigMap`) i ładowany bez restartu poda przez `/reload`.
+
+Obsługiwane nagłówki:
+```
+Authorization: Bearer <token>
+X-API-Key: <token>
+```
+
+Konfiguracja Claude Desktop:
+```json
+{
+  "mcpServers": {
+    "moj-serwer": {
+      "type": "http",
+      "url": "https://mcp-runtime-<id>-mcp-platform.<APPS_DOMAIN>/mcp",
+      "headers": {
+        "Authorization": "Bearer <TOKEN>"
+      }
+    }
+  }
+}
+```
+
+Ścieżki `/health` i `/reload` są zawsze publiczne (wymagane przez operator do monitorowania i przeładowania konfigu).
