@@ -90,6 +90,12 @@ runtime_config: dict[str, Any] = {}
 policy: dict[str, Any] = {}
 tools: dict[str, dict[str, Any]] = {}
 
+# Pending approvals: hash(tool_name + frozen_args) → expires_at
+# When a tool returns approval_required, the same call within the window is auto-confirmed.
+_pending_approvals: dict[str, float] = {}
+_APPROVAL_WINDOW_SECONDS = 300
+_CONFIRM_VALUES = frozenset(["yes", "tak", "true", "1", "y", "ok", "ja", "si", "oui", "confirm", "approve", "yep", "yeah"])
+
 
 def load_config() -> None:
     global runtime_config, policy, tools
@@ -632,24 +638,41 @@ async def execute_tool(tool_name: str, arguments: dict[str, Any],
     )
 
     # ── Human-in-the-Loop approval — in-chat confirmation flow.
-    # When approval is needed: if __confirm=yes is present → execute normally.
-    # Otherwise → return a message asking the AI to ask the user for confirmation.
-    # The AI should call the same tool again with __confirm="yes" after user confirms.
-    user_confirmed = str(arguments.pop("__confirm", "")).strip().lower() == "yes"
+    # Confirmation accepted via:
+    #   1. __confirm parameter with any truthy value (yes/tak/true/1/ok/...)
+    #   2. Repeated call with identical args within the approval window (AI re-calls after user confirms)
+    confirm_val = str(arguments.pop("__confirm", "")).strip().lower()
+    user_confirmed = confirm_val in _CONFIRM_VALUES
+
+    if not user_confirmed:
+        # Check pending approval window — same tool + same args repeated after approval_required
+        _args_key = f"{tool_name}:{json.dumps(arguments, sort_keys=True)}"
+        _now = time.monotonic()
+        # Expire old entries
+        for k in list(_pending_approvals):
+            if _pending_approvals[k] < _now:
+                del _pending_approvals[k]
+        if _args_key in _pending_approvals:
+            user_confirmed = True
+            del _pending_approvals[_args_key]
 
     if not user_confirmed and (_needs_approval(tool) or _stages_need_approval(stages)):
         cmd_preview = " | ".join(shlex.join(s) for s in stages)
+        # Register pending approval so the next identical call is auto-confirmed
+        _args_key = f"{tool_name}:{json.dumps(arguments, sort_keys=True)}"
+        _pending_approvals[_args_key] = time.monotonic() + _APPROVAL_WINDOW_SECONDS
         result = {
             "ok": False,
             "tool": tool_name,
             "approval_required": True,
             "message": (
-                f"⚠️ Ta operacja wymaga potwierdzenia użytkownika przed wykonaniem.\n\n"
-                f"Komenda do wykonania:\n  {cmd_preview}\n\n"
-                f"Zapytaj użytkownika czy chce wykonać tę komendę.\n"
-                f"Jeśli potwierdzi — wywołaj to samo narzędzie z dokładnie tymi samymi parametrami "
-                f"oraz dodatkowym parametrem __confirm=\"yes\".\n"
-                f"Jeśli odmówi — nie wykonuj niczego."
+                f"⚠️ This operation requires user confirmation before execution.\n\n"
+                f"Command to execute:\n  {cmd_preview}\n\n"
+                f"Ask the user if they want to run this command.\n"
+                f"If they confirm — call this same tool again with the EXACT same parameters "
+                f"(the tool will execute automatically on the second call).\n"
+                f"Alternatively add __confirm=\"yes\" to the parameters.\n"
+                f"If they decline — do nothing."
             ),
         }
         _fire_tool_call_log(tool_name, arguments, result,

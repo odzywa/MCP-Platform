@@ -930,10 +930,11 @@ user="1000:1000"</code></pre>
       <tr><td><code>timeout_seconds</code></td><td><code>int</code></td><td>Maksymalny czas wykonania komendy (domyślnie: 20).</td></tr>
       <tr><td><code>max_response_bytes</code></td><td><code>int</code></td><td>Limit wielkości stdout (domyślnie: 1 MB, max: 10 MB).</td></tr>
       <tr><td><code>max_payload_bytes</code></td><td><code>int</code></td><td>Limit wielkości argumentów żądania (domyślnie: 1 MB).</td></tr>
-      <tr><td><code>require_approval_for</code></td><td><code>string[] | "auto"</code></td><td>Tryby wymagające zatwierdzenia: <code>[]</code> (brak), <code>"auto"</code>, <code>["write","destructive"]</code>.</td></tr>
-      <tr><td><code>approval_timeout_seconds</code></td><td><code>int</code></td><td>Czas oczekiwania na zatwierdzenie (domyślnie: 300).</td></tr>
-      <tr><td><code>allowed_command_prefixes</code></td><td><code>string[]</code></td><td>Tylko komendy zaczynające się od tych prefiksów są dozwolone.</td></tr>
-      <tr><td><code>blocked_command_prefixes</code></td><td><code>string[]</code></td><td>Blokuje komendy o podanych prefiksach.</td></tr>
+      <tr><td><code>require_approval_for</code></td><td><code>string[] | "auto"</code></td><td>Tryby wymagające zatwierdzenia: <code>""</code> (brak), <code>"auto"</code>, <code>["write","destructive"]</code>.</td></tr>
+      <tr><td><code>require_approval_for_prefixes</code></td><td><code>string[]</code></td><td>Prefiksy komend wymagające zatwierdzenia niezależnie od mode, np. <code>["oc delete","oc apply"]</code>. <strong>Nie łącz z <code>blocked_command_prefixes</code>.</strong></td></tr>
+      <tr><td><code>approval_timeout_seconds</code></td><td><code>int</code></td><td>Okno auto-potwierdzenia przy ponownym wywołaniu (domyślnie: 300). Drugie identyczne wywołanie w tym oknie jest automatycznie zatwierdzone.</td></tr>
+      <tr><td><code>allowed_command_prefixes</code></td><td><code>string[]</code></td><td>Allowlist — tylko komendy zaczynające się od tych prefiksów są dozwolone. Jeśli pusta, wszystkie przechodzą.</td></tr>
+      <tr><td><code>blocked_command_prefixes</code></td><td><code>string[]</code></td><td>Blokuje komendy o podanych prefiksach. Pomijane gdy <code>__confirm</code> lub auto-confirm z okna.</td></tr>
     </table>
   </div>
 </div>
