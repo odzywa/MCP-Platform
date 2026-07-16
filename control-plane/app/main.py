@@ -833,12 +833,14 @@ def seed_raghybrid_template() -> None:
 def _openshift_monitor_tools() -> list[dict[str, Any]]:
     """Tool definitions for the openshift-monitor runtime."""
     _auth = ["oc", "--token=${OC_TOKEN}", "--server=${OC_SERVER}", "--insecure-skip-tls-verify"]
-    _args_schema = {"type": "object", "properties": {"args": {"type": "string", "description": "Argumenty komendy oc"}}, "required": ["args"]}
+    _confirm_prop = {"__confirm": {"type": "string", "description": "Wpisz 'yes' aby potwierdzić wykonanie po zatwierdzeniu przez użytkownika (wymagane gdy narzędzie zgłosi approval_required)"}}
+    _args_schema = {"type": "object", "properties": {"args": {"type": "string", "description": "Argumenty komendy oc"}, **_confirm_prop}, "required": ["args"]}
     _yaml_schema = {
         "type": "object",
         "properties": {
             "yaml_content": {"type": "string", "description": "Pełna treść YAML zasobu Kubernetes/OpenShift"},
             "extra_args": {"type": "string", "description": "Dodatkowe argumenty, np. -n mynamespace"},
+            **_confirm_prop,
         },
         "required": ["yaml_content"],
     }
@@ -930,7 +932,21 @@ def _openshift_monitor_tools() -> list[dict[str, Any]]:
 
 def seed_openshift_monitor() -> None:
     runtime_id = "openshift-monitor"
+    now = store.now_iso()
     if store.one(sql.SELECT_RUNTIME_ID_EXISTS, (runtime_id,)):
+        # Runtime exists — patch tool schemas and configs to match current code
+        for tool in _openshift_monitor_tools():
+            store.execute(
+                """UPDATE tools SET config_json=?, input_schema_json=?, updated_at=?
+                   WHERE runtime_id=? AND name=?""",
+                (
+                    json.dumps(tool.get("config") or {}),
+                    json.dumps(tool.get("input_schema") or {"type": "object"}),
+                    now,
+                    runtime_id,
+                    tool["name"],
+                ),
+            )
         return
     now = store.now_iso()
     store.execute(
@@ -978,6 +994,11 @@ def seed_openshift_monitor() -> None:
                 "block_write_tools": False,
                 "block_destructive_tools": False,
                 "timeout_seconds": 60,
+                "require_approval_for": "auto",
+                "require_approval_for_prefixes": ["oc delete", "oc apply", "oc patch", "kubectl delete"],
+                "approval_timeout_seconds": 120,
+                "allowed_command_prefixes": [],
+                "blocked_command_prefixes": [],
             }),
             now,
         ),
@@ -10217,12 +10238,11 @@ function ntPreset(cmd, desc) {{
               <label>Dozwolone prefixy (jeden/linię)<textarea name="allowed_command_prefixes" placeholder="oc get&#10;oc describe&#10;oc logs">{escape(chr(10).join(payload['policy'].get('allowed_command_prefixes') or []))}</textarea></label>
               <label>Zablokowane prefixy (jeden/linię)<textarea name="blocked_command_prefixes" placeholder="oc delete&#10;oc apply&#10;oc patch">{escape(chr(10).join(payload['policy'].get('blocked_command_prefixes') or []))}</textarea></label>
             </div>
-            <button>Zapisz politykę shell</button>
           </form>
           <details style="border-radius:6px;border:1px solid var(--line);padding:14px;margin-top:4px" {'open' if payload['policy'].get('require_approval_for') else ''}>
             <summary style="font-size:14px;font-weight:700;cursor:pointer;color:var(--text)">✅ Zatwierdzenia (Human-in-the-Loop)</summary>
             <div style="margin-top:14px;display:grid;gap:12px">
-              <p class="muted" style="font-size:12px;margin:0">Gdy AI wywoła narzędzie wymagające zatwierdzenia, wykonanie jest wstrzymane do czasu decyzji admina na stronie <a href="/approvals" style="color:var(--blue)">/approvals</a>.</p>
+              <p class="muted" style="font-size:12px;margin:0">Gdy AI wywoła narzędzie wymagające zatwierdzenia, narzędzie zwraca komunikat z prośbą o potwierdzenie. AI pyta użytkownika w chacie — po odpowiedzi "tak" wywołuje narzędzie ponownie z <code>__confirm="yes"</code>.</p>
               <label style="display:grid;gap:6px;font-size:13px;font-weight:600">
                 Wymagaj zatwierdzenia dla
                 <select name="require_approval_for" form="shell-policy-form" style="padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel-2);color:var(--text);font-size:13px">
@@ -10243,6 +10263,9 @@ function ntPreset(cmd, desc) {{
               </label>
             </div>
           </details>
+          <div style="padding:8px 0">
+            <button type="submit" form="shell-policy-form" style="background:#1a7a3f;padding:9px 20px;font-size:13px;font-weight:700;border-radius:8px;border:none;color:#fff;cursor:pointer">💾 Zapisz politykę shell</button>
+          </div>
           <details style="border-radius:6px">
             <summary style="font-size:13px;color:var(--muted)">Zaawansowane: edytuj policy JSON bezpośrednio</summary>
             <form method="post" action="/api/runtimes/{runtime_id}/policy/update" style="margin-top:10px">
@@ -10937,6 +10960,12 @@ async def update_shell_policy(runtime_id: str, request: Request):
     )
     store.audit("admin", "update_shell_policy", "runtime", runtime_id, {"allowed": policy["allowed_command_prefixes"], "blocked": policy["blocked_command_prefixes"]})
     store.log(runtime_id, "Shell policy updated")
+    # Regenerate policy.json on disk and trigger reload so changes take effect without manual "Reload Config".
+    try:
+        write_runtime_config(runtime_id)
+        enqueue_runtime_action(runtime_id, "reload")
+    except Exception:
+        pass
     return RedirectResponse(f"/runtimes/{runtime_id}", status_code=303)
 
 

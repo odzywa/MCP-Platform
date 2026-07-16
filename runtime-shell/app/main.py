@@ -247,7 +247,7 @@ def validate_with_pydantic(tool_name: str, arguments: dict, schema: dict, tool_p
         return str(exc)
 
 
-def _policy_check_stage(argv: list[str]) -> None:
+def _policy_check_stage(argv: list[str], skip_blocked_prefixes: bool = False) -> None:
     """Validate one pipeline stage. Raises ValueError on violation."""
     if not argv:
         raise ValueError("empty command stage")
@@ -282,9 +282,10 @@ def _policy_check_stage(argv: list[str]) -> None:
         _pfx_match(stage_text, pfx) or _pfx_match(sub, pfx) for pfx in allowed_prefixes
     ):
         raise ValueError(f"command prefix not allowed: {stage_text}")
-    for pfx in blocked_prefixes:
-        if _pfx_match(stage_text, pfx) or _pfx_match(sub, pfx):
-            raise ValueError(f"blocked command prefix: {stage_text}")
+    if not skip_blocked_prefixes:
+        for pfx in blocked_prefixes:
+            if _pfx_match(stage_text, pfx) or _pfx_match(sub, pfx):
+                raise ValueError(f"blocked command prefix: {stage_text}")
 
     # Check blocked tokens in arguments (not the binary itself).
     for arg in argv[1:]:
@@ -630,27 +631,38 @@ async def execute_tool(tool_name: str, arguments: dict[str, Any],
         MAX_OUTPUT_BYTES,
     )
 
-    # ── Human-in-the-Loop approval — checked BEFORE hard policy block so that
-    # prefixes listed in require_approval_for_prefixes go through approval
-    # instead of being silently blocked by blocked_command_prefixes.
-    if _needs_approval(tool) or _stages_need_approval(stages):
-        tool_mode = (tool.get("security") or {}).get("mode") or tool.get("mode", "write")
-        decision = await _request_approval(tool_name, arguments, tool_mode, caller_ip, model)
-        if not decision["approved"]:
-            result = {
-                "ok": False, "tool": tool_name,
-                "error": f"Tool call requires approval — {decision.get('reason') or 'rejected'}",
-                "approval_required": True,
-            }
-            _fire_tool_call_log(tool_name, arguments, result,
-                                int((time.monotonic() - _t0) * 1000),
-                                caller_ip=caller_ip, model=model)
-            return result
+    # ── Human-in-the-Loop approval — in-chat confirmation flow.
+    # When approval is needed: if __confirm=yes is present → execute normally.
+    # Otherwise → return a message asking the AI to ask the user for confirmation.
+    # The AI should call the same tool again with __confirm="yes" after user confirms.
+    user_confirmed = str(arguments.pop("__confirm", "")).strip().lower() == "yes"
+
+    if not user_confirmed and (_needs_approval(tool) or _stages_need_approval(stages)):
+        cmd_preview = " | ".join(shlex.join(s) for s in stages)
+        result = {
+            "ok": False,
+            "tool": tool_name,
+            "approval_required": True,
+            "message": (
+                f"⚠️ Ta operacja wymaga potwierdzenia użytkownika przed wykonaniem.\n\n"
+                f"Komenda do wykonania:\n  {cmd_preview}\n\n"
+                f"Zapytaj użytkownika czy chce wykonać tę komendę.\n"
+                f"Jeśli potwierdzi — wywołaj to samo narzędzie z dokładnie tymi samymi parametrami "
+                f"oraz dodatkowym parametrem __confirm=\"yes\".\n"
+                f"Jeśli odmówi — nie wykonuj niczego."
+            ),
+        }
+        _fire_tool_call_log(tool_name, arguments, result,
+                            int((time.monotonic() - _t0) * 1000),
+                            caller_ip=caller_ip, model=model)
+        return result
 
     # ── Hard policy check for every pipeline stage.
+    # When user_confirmed=True the blocked_command_prefixes check is skipped —
+    # the explicit user confirmation takes precedence over prefix blocklist.
     for stage_argv in stages:
         try:
-            _policy_check_stage(stage_argv)
+            _policy_check_stage(stage_argv, skip_blocked_prefixes=user_confirmed)
         except ValueError as exc:
             return {"ok": False, "tool": tool_name, "error": str(exc)}
 

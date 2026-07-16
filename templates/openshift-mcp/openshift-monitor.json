@@ -1,0 +1,677 @@
+{
+  "id": "openshift-monitor",
+  "name": "OpenShift Monitor (Read + Write)",
+  "description": "Pełny zestaw narzędzi OpenShift — odczyt, deploy, zarządzanie zasobami. Wymaga OC_TOKEN i OC_SERVER w Runtime Credentials.",
+  "category": "openshift",
+  "risk_level": "high",
+  "source": "builtin",
+  "runtime_class": {
+    "name": "shell",
+    "runtime_image": "mcp-runtime-shell:latest",
+    "allowed_execution_types": [
+      "shell"
+    ],
+    "security_profile": "default"
+  },
+  "policy": {
+    "allowed_binaries": [
+      "oc",
+      "kubectl",
+      "jq",
+      "printf",
+      "rm",
+      "cat",
+      "bash",
+      "sh"
+    ],
+    "blocked_commands": [],
+    "require_read_only": false,
+    "block_write_tools": false,
+    "block_destructive_tools": false,
+    "timeout_seconds": 30,
+    "require_approval_for": "auto",
+    "require_approval_for_prefixes": [
+      "oc delete",
+      "oc apply",
+      "oc patch",
+      "kubectl delete"
+    ],
+    "approval_timeout_seconds": 120,
+    "max_response_bytes": 5242880,
+    "allowed_command_prefixes": [],
+    "blocked_command_prefixes": []
+  },
+  "tools": [
+    {
+      "name": "oc_adm",
+      "description": "Operacje administracyjne OpenShift — oc adm policy, oc adm top, oc adm prune itp. Np. policy add-scc-to-user anyuid -z mysa -n mynamespace.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "high",
+      "mode": "write",
+      "category": "openshift",
+      "config": {
+        "command": [
+          "oc",
+          "--token=${OC_TOKEN}",
+          "--server=${OC_SERVER}",
+          "--insecure-skip-tls-verify",
+          "adm",
+          "${*args}"
+        ],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "type": "string",
+            "description": "Argumenty adm, np. policy add-scc-to-user anyuid -z mysa -n mynamespace"
+          }
+        },
+        "required": [
+          "args"
+        ]
+      }
+    },
+    {
+      "name": "oc_apply",
+      "description": "Aplikuje zasoby na klaster OpenShift za pomocą flag CLI (NIE Z PLIKU). Dla YAML użyj narzędzia oc_apply_yaml. To narzędzie służy do prostych operacji jak oc apply -k lub z flagami.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "high",
+      "mode": "write",
+      "category": "openshift",
+      "config": {
+        "command": [
+          "oc",
+          "--token=${OC_TOKEN}",
+          "--server=${OC_SERVER}",
+          "--insecure-skip-tls-verify",
+          "apply",
+          "${*args}"
+        ],
+        "timeout_seconds": 60
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "type": "string",
+            "description": "Argumenty CLI (NIE ścieżki do plików - pliki nie istnieją w kontenerze). Dla YAML użyj oc_apply_yaml."
+          }
+        },
+        "required": [
+          "args"
+        ]
+      }
+    },
+    {
+      "name": "oc_apply_yaml",
+      "description": "GŁÓWNE NARZĘDZIE do wdrażania zasobów. Przyjmuje treść YAML inline w parametrze yaml_content i aplikuje ją na klaster. Użyj tego zamiast oc_apply gdy masz definicję YAML (Deployment, Service, Route, ConfigMap itp.).",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "high",
+      "mode": "write",
+      "category": "openshift",
+      "config": {
+        "command": [
+          "printf",
+          "%s",
+          "${yaml_content}",
+          "|",
+          "oc",
+          "--token=${OC_TOKEN}",
+          "--server=${OC_SERVER}",
+          "--insecure-skip-tls-verify",
+          "apply",
+          "${*extra_args}",
+          "-f",
+          "-"
+        ],
+        "timeout_seconds": 60
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "yaml_content": {
+            "type": "string",
+            "description": "Pełna treść YAML zasobu Kubernetes/OpenShift (Deployment, Service, Route, ConfigMap itp.)"
+          },
+          "extra_args": {
+            "type": "string",
+            "description": "Dodatkowe argumenty, np. -n mynamespace"
+          }
+        },
+        "required": [
+          "yaml_content"
+        ]
+      }
+    },
+    {
+      "name": "oc_create",
+      "description": "Tworzy zasób przez CLI (NIE Z PLIKU). Dla tworzenia z YAML użyj oc_create_yaml. Służy do prostych operacji jak oc create namespace, oc create secret itp.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "high",
+      "mode": "write",
+      "category": "openshift",
+      "config": {
+        "command": [
+          "oc",
+          "--token=${OC_TOKEN}",
+          "--server=${OC_SERVER}",
+          "--insecure-skip-tls-verify",
+          "create",
+          "${*args}"
+        ],
+        "timeout_seconds": 60
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "type": "string",
+            "description": "Argumenty CLI, np. namespace myproject lub secret generic mysecret --from-literal=key=val -n prod"
+          }
+        },
+        "required": [
+          "args"
+        ]
+      }
+    },
+    {
+      "name": "oc_create_yaml",
+      "description": "Tworzy zasoby z inline YAML na klastrze OpenShift. Podaj treść YAML w yaml_content.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "high",
+      "mode": "write",
+      "category": "openshift",
+      "config": {
+        "command": [
+          "printf",
+          "%s",
+          "${yaml_content}",
+          "|",
+          "oc",
+          "--token=${OC_TOKEN}",
+          "--server=${OC_SERVER}",
+          "--insecure-skip-tls-verify",
+          "create",
+          "${*extra_args}",
+          "-f",
+          "-"
+        ],
+        "timeout_seconds": 60
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "yaml_content": {
+            "type": "string",
+            "description": "Treść YAML do stworzenia na klastrze"
+          },
+          "extra_args": {
+            "type": "string",
+            "description": "Dodatkowe argumenty, np. -n mynamespace"
+          }
+        },
+        "required": [
+          "yaml_content"
+        ]
+      }
+    },
+    {
+      "name": "oc_delete",
+      "description": "Usuwa zasób z klastra OpenShift. UWAGA: operacja nieodwracalna!",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "high",
+      "mode": "destructive",
+      "category": "openshift",
+      "config": {
+        "command": [
+          "oc",
+          "--token=${OC_TOKEN}",
+          "--server=${OC_SERVER}",
+          "--insecure-skip-tls-verify",
+          "delete",
+          "${*args}"
+        ],
+        "timeout_seconds": 60
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "type": "string",
+            "description": "Argumenty, np. pod myapp-xyz -n prod lub deployment myapp -n staging"
+          }
+        },
+        "required": [
+          "args"
+        ]
+      }
+    },
+    {
+      "name": "oc_describe",
+      "description": "Describe a resource using oc describe command",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "openshift",
+      "config": {
+        "command": [
+          "oc",
+          "--token=${OC_TOKEN}",
+          "--server=${OC_SERVER}",
+          "--insecure-skip-tls-verify",
+          "describe",
+          "${*args}"
+        ],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "type": "string",
+            "description": "Argumenty komendy, np. 'pods -n myproject' lub 'deployment myapp -n prod -o yaml'"
+          }
+        },
+        "required": [
+          "args"
+        ]
+      }
+    },
+    {
+      "name": "oc_events",
+      "description": "Get events for a namespace",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "openshift",
+      "config": {
+        "command": [
+          "oc",
+          "--token=${OC_TOKEN}",
+          "--server=${OC_SERVER}",
+          "--insecure-skip-tls-verify",
+          "get",
+          "events",
+          "-n",
+          "${namespace}",
+          "--sort-by=.lastTimestamp"
+        ],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "oc_exec",
+      "description": "Wykonuje komendę wewnątrz poda OpenShift.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "high",
+      "mode": "write",
+      "category": "openshift",
+      "config": {
+        "command": [
+          "oc",
+          "--token=${OC_TOKEN}",
+          "--server=${OC_SERVER}",
+          "--insecure-skip-tls-verify",
+          "exec",
+          "${*args}"
+        ],
+        "timeout_seconds": 60
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "type": "string",
+            "description": "Argumenty, np. myapp-xyz -n prod -- ls /app"
+          }
+        },
+        "required": [
+          "args"
+        ]
+      }
+    },
+    {
+      "name": "oc_expose",
+      "description": "Tworzy route/expose dla serwisu — udostępnia aplikację na zewnątrz.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "high",
+      "mode": "write",
+      "category": "openshift",
+      "config": {
+        "command": [
+          "oc",
+          "--token=${OC_TOKEN}",
+          "--server=${OC_SERVER}",
+          "--insecure-skip-tls-verify",
+          "expose",
+          "${*args}"
+        ],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "type": "string",
+            "description": "Argumenty, np. svc/myapp -n prod"
+          }
+        },
+        "required": [
+          "args"
+        ]
+      }
+    },
+    {
+      "name": "oc_get",
+      "description": "Execute oc get command with arguments",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "openshift",
+      "config": {
+        "command": [
+          "oc",
+          "--token=${OC_TOKEN}",
+          "--server=${OC_SERVER}",
+          "--insecure-skip-tls-verify",
+          "get",
+          "${*args}"
+        ],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "type": "string",
+            "description": "Argumenty komendy, np. 'pods -n myproject' lub 'deployment myapp -n prod -o yaml'"
+          }
+        },
+        "required": [
+          "args"
+        ]
+      }
+    },
+    {
+      "name": "oc_logs",
+      "description": "Get logs from a pod using oc logs command",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "openshift",
+      "config": {
+        "command": [
+          "oc",
+          "--token=${OC_TOKEN}",
+          "--server=${OC_SERVER}",
+          "--insecure-skip-tls-verify",
+          "logs",
+          "${*args}"
+        ],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "type": "string",
+            "description": "Argumenty komendy, np. 'pods -n myproject' lub 'deployment myapp -n prod -o yaml'"
+          }
+        },
+        "required": [
+          "args"
+        ]
+      }
+    },
+    {
+      "name": "oc_new_app",
+      "description": "Tworzy nową aplikację na klastrze OpenShift — deployment, service i inne zasoby z jednej komendy.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "high",
+      "mode": "write",
+      "category": "openshift",
+      "config": {
+        "command": [
+          "oc",
+          "--token=${OC_TOKEN}",
+          "--server=${OC_SERVER}",
+          "--insecure-skip-tls-verify",
+          "new-app",
+          "${*args}"
+        ],
+        "timeout_seconds": 120
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "type": "string",
+            "description": "Argumenty, np. nginx --name=myapp -n prod"
+          }
+        },
+        "required": [
+          "args"
+        ]
+      }
+    },
+    {
+      "name": "oc_patch",
+      "description": "Patchuje zasób — zmienia pojedyncze pola bez zastępowania całego obiektu.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "high",
+      "mode": "write",
+      "category": "openshift",
+      "config": {
+        "command": [
+          "oc",
+          "--token=${OC_TOKEN}",
+          "--server=${OC_SERVER}",
+          "--insecure-skip-tls-verify",
+          "patch",
+          "${*args}"
+        ],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "type": "string",
+            "description": "Argumenty, np. deployment myapp -n prod -p {\"spec\":{\"replicas\":2}}"
+          }
+        },
+        "required": [
+          "args"
+        ]
+      }
+    },
+    {
+      "name": "oc_projects",
+      "description": "Wyświetla dostępne projekty/namespace'y na klastrze.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "openshift",
+      "config": {
+        "command": [
+          "oc",
+          "--token=${OC_TOKEN}",
+          "--server=${OC_SERVER}",
+          "--insecure-skip-tls-verify",
+          "get",
+          "projects"
+        ],
+        "timeout_seconds": 15
+      },
+      "input_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "oc_rollout",
+      "description": "Zarządza rolloutami — restart, status, history, undo.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "high",
+      "mode": "write",
+      "category": "openshift",
+      "config": {
+        "command": [
+          "oc",
+          "--token=${OC_TOKEN}",
+          "--server=${OC_SERVER}",
+          "--insecure-skip-tls-verify",
+          "rollout",
+          "${*args}"
+        ],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "type": "string",
+            "description": "Argumenty, np. restart deployment myapp -n prod lub status deployment myapp -n prod"
+          }
+        },
+        "required": [
+          "args"
+        ]
+      }
+    },
+    {
+      "name": "oc_scale",
+      "description": "Skaluje deployment/statefulset — zmienia liczbę replik.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "high",
+      "mode": "write",
+      "category": "openshift",
+      "config": {
+        "command": [
+          "oc",
+          "--token=${OC_TOKEN}",
+          "--server=${OC_SERVER}",
+          "--insecure-skip-tls-verify",
+          "scale",
+          "${*args}"
+        ],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "type": "string",
+            "description": "Argumenty, np. deployment myapp --replicas=3 -n prod"
+          }
+        },
+        "required": [
+          "args"
+        ]
+      }
+    },
+    {
+      "name": "oc_set",
+      "description": "Ustawia właściwości zasobów — env vars, image, resources, volumes.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "high",
+      "mode": "write",
+      "category": "openshift",
+      "config": {
+        "command": [
+          "oc",
+          "--token=${OC_TOKEN}",
+          "--server=${OC_SERVER}",
+          "--insecure-skip-tls-verify",
+          "set",
+          "${*args}"
+        ],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "type": "string",
+            "description": "Argumenty, np. env deployment/myapp KEY=VALUE -n prod"
+          }
+        },
+        "required": [
+          "args"
+        ]
+      }
+    },
+    {
+      "name": "oc_status",
+      "description": "Get cluster status for a namespace",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "openshift",
+      "config": {
+        "command": [
+          "oc",
+          "--token=${OC_TOKEN}",
+          "--server=${OC_SERVER}",
+          "--insecure-skip-tls-verify",
+          "status",
+          "-n",
+          "${namespace}"
+        ],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "oc_top",
+      "description": "Get pod resource usage for a namespace",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "openshift",
+      "config": {
+        "command": [
+          "oc",
+          "--token=${OC_TOKEN}",
+          "--server=${OC_SERVER}",
+          "--insecure-skip-tls-verify",
+          "adm",
+          "top",
+          "pods",
+          "-n",
+          "${namespace}"
+        ],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object"
+      }
+    }
+  ]
+}

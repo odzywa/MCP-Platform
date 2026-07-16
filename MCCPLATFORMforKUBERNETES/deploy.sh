@@ -93,8 +93,10 @@ oc apply -f "$WORK_DIR/05-networkpolicy.yaml"
 
 rm -rf "$WORK_DIR"
 
-# ── 5. Czekaj na rollout ──────────────────────────────────────────────────────
+# ── 5. Wymusz rollout (nowy obraz pod tym samym tagiem) i czekaj ─────────────
 echo "[5/5] Czekam na gotowość control-plane..."
+oc rollout restart deployment/mcp-platform -n "$NAMESPACE"
+oc rollout restart deployment/mcp-platform-operator -n "$NAMESPACE"
 oc rollout status deployment/mcp-platform -n "$NAMESPACE" --timeout=120s
 
 echo ""

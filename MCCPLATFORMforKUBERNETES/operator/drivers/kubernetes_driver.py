@@ -161,7 +161,7 @@ def _make_deployment(spec: DeploySpec) -> k8s.V1Deployment:
                     containers=[k8s.V1Container(
                         name="runtime",
                         image=_qualify_image(spec.runtime_image),
-                        image_pull_policy="IfNotPresent",
+                        image_pull_policy="Always",
                         ports=[k8s.V1ContainerPort(container_port=8080, name="mcp")],
                         env=env,
                         env_from=env_from,
