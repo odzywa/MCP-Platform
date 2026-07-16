@@ -954,7 +954,8 @@ def seed_openshift_monitor() -> None:
         (
             runtime_id,
             "openshift-monitor",
-            "Full OpenShift cluster management — deploy, scale, monitor, manage applications.",
+            "Full OpenShift cluster management — deploy, scale, monitor, manage applications. "
+        "Add OC_TOKEN and OC_SERVER in Secrets tab, then Deploy.",
             "shell-readwrite",
             "openshift-monitor",
             "draft",
@@ -10189,18 +10190,20 @@ function ntPreset(cmd, desc) {{
         <p class="muted">Zmienne są wstrzykiwane do kontenera przy następnym deploy. Po zmianie kliknij <b>Redeploy</b>.</p>
         <div style="background:#1a1200;border:1px solid #3a2800;border-radius:8px;padding:14px;margin-bottom:16px">
           <div id="env-rows" style="display:grid;gap:6px;margin-bottom:10px">
-            {"".join(f'''<div style="display:grid;grid-template-columns:160px 1fr auto auto;gap:8px;align-items:center">
+            {"".join(f'''<div id="env-row-{escape(k)}" style="display:grid;grid-template-columns:160px 1fr auto auto auto;gap:8px;align-items:center">
               <code style="padding:6px 10px;background:#0d1000;border:1px solid #3a2800;border-radius:6px;font-size:12px;color:#d4a820">{escape(k)}</code>
-              <span data-secret="{escape(v)}" style="padding:6px 10px;background:#0d1000;border:1px solid #3a2800;border-radius:6px;font-size:12px;color:var(--muted)">{'*' * min(len(v),8) if v else '(puste)'}</span>
-              <button onclick="toggleSecret(this)" title="Pokaż/ukryj" style="background:none;border:1px solid #3a2800;color:var(--muted);padding:4px 8px;border-radius:6px;font-size:13px;cursor:pointer">👁</button>
-              <button onclick="delEnvVar('{escape(runtime_id)}','{escape(k)}')" style="background:#3a1010;border:1px solid #6a2020;color:#f47a80;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">✕</button>
+              <span id="env-display-{escape(k)}" data-secret="{escape(v)}" style="padding:6px 10px;background:#0d1000;border:1px solid #3a2800;border-radius:6px;font-size:12px;color:var(--muted)">{'*' * min(len(v),8) if v else '(puste)'}</span>
+              <button onclick="toggleSecret(this)" data-target="env-display-{escape(k)}" title="Pokaż/ukryj" style="background:none;border:1px solid #3a2800;color:var(--muted);padding:4px 8px;border-radius:6px;font-size:13px;cursor:pointer">👁</button>
+              <button onclick="startEditEnv('{escape(runtime_id)}','{escape(k)}')" title="Edytuj wartość" style="background:none;border:1px solid #1a3a5a;color:#5a9fd4;padding:4px 8px;border-radius:6px;font-size:13px;cursor:pointer">✏️</button>
+              <button onclick="delEnvVar('{escape(runtime_id)}','{escape(k)}')" title="Usuń" style="background:#3a1010;border:1px solid #6a2020;color:#f47a80;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">✕</button>
             </div>''' for k,v in _env_vars.items()) or '<p class="muted" style="margin:0">Brak zmiennych ENV — dodaj poniżej.</p>'}
           </div>
-          <div style="display:grid;grid-template-columns:160px 1fr auto auto;gap:8px;align-items:center">
+          <div style="display:grid;grid-template-columns:160px 1fr auto auto auto;gap:8px;align-items:center">
             <input id="new-env-key" placeholder="NAZWA_ZMIENNEJ" style="padding:7px 10px;border:1px solid #3a2800;border-radius:6px;background:#0d1000;color:var(--text);font-size:12px;font-family:monospace">
             <input id="new-env-val" type="password" placeholder="wartość / token" style="padding:7px 10px;border:1px solid #3a2800;border-radius:6px;background:#0d1000;color:var(--text);font-size:12px">
             <button onclick="var i=document.getElementById('new-env-val');i.type=i.type==='password'?'text':'password'" title="Pokaż/ukryj" style="background:none;border:1px solid #3a2800;color:var(--muted);padding:7px 8px;border-radius:6px;font-size:13px;cursor:pointer">👁</button>
             <button onclick="addEnvVar('{escape(runtime_id)}')" style="background:#1a2800;border:1px solid #3a5000;color:#8ac840;padding:7px 12px;border-radius:6px;font-size:12px;cursor:pointer">+ Dodaj</button>
+            <span></span>
           </div>
         </div>
 
@@ -10503,6 +10506,61 @@ function ntPreset(cmd, desc) {{
         if (!confirm('Usunąć zmienną ' + key + '?')) return;
         fetch('/api/runtimes/' + rid + '/env/' + encodeURIComponent(key), {{method:'DELETE'}})
           .then(function(r) {{ if(r.ok) location.reload(); }});
+      }};
+
+      window.startEditEnv = function(rid, key) {{
+        var row = document.getElementById('env-row-' + key);
+        if (!row) return;
+        var spanEl  = row.children[1];
+        var toggleEl = row.children[2];
+        var editEl  = row.children[3];
+        var delEl   = row.children[4];
+        var currentValue = spanEl.dataset.secret || '';
+
+        var inp = document.createElement('input');
+        inp.id = 'env-edit-input-' + key;
+        inp.type = 'password';
+        inp.value = currentValue;
+        inp.style.cssText = 'padding:6px 10px;border:1px solid #1a3a5a;border-radius:6px;background:#0d1a2a;color:var(--text);font-size:12px;width:100%;box-sizing:border-box';
+        inp.onkeydown = function(e) {{ if (e.key === 'Enter') window.saveEnvVar(rid, key); }};
+        spanEl.replaceWith(inp);
+
+        var toggleBtn = document.createElement('button');
+        toggleBtn.textContent = '👁';
+        toggleBtn.title = 'Pokaż/ukryj';
+        toggleBtn.style.cssText = 'background:none;border:1px solid #3a2800;color:var(--muted);padding:4px 8px;border-radius:6px;font-size:13px;cursor:pointer';
+        toggleBtn.onclick = function() {{ inp.type = inp.type === 'password' ? 'text' : 'password'; }};
+        toggleEl.replaceWith(toggleBtn);
+
+        var saveBtn = document.createElement('button');
+        saveBtn.textContent = '💾';
+        saveBtn.title = 'Zapisz';
+        saveBtn.style.cssText = 'background:#0d2a0d;border:1px solid #1a5a1a;color:#4ade80;padding:4px 8px;border-radius:6px;font-size:13px;cursor:pointer';
+        saveBtn.onclick = function() {{ window.saveEnvVar(rid, key); }};
+        editEl.replaceWith(saveBtn);
+
+        var cancelBtn = document.createElement('button');
+        cancelBtn.textContent = '✕';
+        cancelBtn.title = 'Anuluj';
+        cancelBtn.style.cssText = 'background:none;border:1px solid #4a2800;color:#8a6040;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer';
+        cancelBtn.onclick = function() {{ location.reload(); }};
+        delEl.replaceWith(cancelBtn);
+
+        inp.focus();
+        inp.select();
+      }};
+
+      window.saveEnvVar = function(rid, key) {{
+        var inp = document.getElementById('env-edit-input-' + key);
+        if (!inp) return;
+        fetch('/api/runtimes/' + rid + '/env', {{
+          method: 'POST',
+          headers: {{'Content-Type': 'application/json'}},
+          body: JSON.stringify({{key: key, value: inp.value}})
+        }}).then(function(r) {{
+          if (r.ok) location.reload();
+          else r.text().then(function(t) {{ alert('Błąd zapisu: ' + t); }});
+        }});
       }};
 
       window.copySnippet = function(el) {{

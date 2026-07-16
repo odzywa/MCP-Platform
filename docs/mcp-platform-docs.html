@@ -323,7 +323,7 @@ td code { font-size: 12px; }
       <li><a href="#security-shell">Runtime Shell</a></li>
       <li><a href="#security-policy">Polityka bezpieczeństwa</a></li>
       <li><a href="#security-ssrf">SSRF / sieć</a></li>
-      <li><a href="#approvals">Zatwierdzenia <span class="badge green">NOWE</span></a></li>
+      <li><a href="#approvals">Human-in-the-Loop <span class="badge green">NOWE</span></a></li>
       <li><a href="#mcp-auth">Uwierzytelnianie MCP <span class="badge green">NOWE</span></a></li>
     </ul>
     <div class="nav-section">Konfiguracja</div>
@@ -334,6 +334,7 @@ td code { font-size: 12px; }
     </ul>
     <div class="nav-section">Operacje</div>
     <ul>
+      <li><a href="#lifecycle">Cykl życia runtimeu</a></li>
       <li><a href="#rebuild">Rebuild obrazu</a></li>
       <li><a href="#troubleshoot">Rozwiązywanie problemów</a></li>
     </ul>
@@ -498,6 +499,47 @@ chmod +x deploy.sh
 oc -n mcp-platform get routes</code></pre>
 
   <p>UI dostępne pod <code>https://mcp-platform-mcp-platform.&lt;APPS_DOMAIN&gt;</code>.</p>
+
+  <h3>4. OpenShift MCP — auto-konfiguracja (opcjonalna)</h3>
+
+  <p>Platforma automatycznie tworzy runtime <strong>openshift-monitor</strong> w statusie <code>draft</code> przy starcie. Żeby go wdrożyć razem z <code>deploy.sh</code>, wypełnij dwa pola w <code>config.env</code> <strong>przed</strong> uruchomieniem skryptu:</p>
+
+  <div class="callout info">
+    <strong>Utwórz dedykowany Service Account</strong>
+    Nie używaj tokena admina — utwórz osobne SA z minimalnym zakresem uprawnień.
+  </div>
+
+  <div class="code-label">Krok 1 — SA + token (jednorazowo)</div>
+  <pre><code>oc create sa mcp-admin -n mcp-platform
+oc adm policy add-cluster-role-to-user cluster-admin -z mcp-admin -n mcp-platform
+
+# Token ważny 1 rok:
+OC_MCP_TOKEN=$(oc create token mcp-admin -n mcp-platform --duration=8760h)
+OC_MCP_SERVER=$(oc whoami --show-server)
+
+echo "OC_MCP_TOKEN=$OC_MCP_TOKEN" >> config.env
+echo "OC_MCP_SERVER=$OC_MCP_SERVER" >> config.env</code></pre>
+
+  <div class="code-label">Krok 2 — deploy</div>
+  <pre><code>./deploy.sh
+# Krok 6 automatycznie: loguje się do API platformy, ustawia credentials, deployuje openshift-monitor</code></pre>
+
+  <div class="callout ok">
+    <strong>Wynik</strong>
+    Runtime <code>openshift-monitor</code> jest uruchomiony ~30s po zakończeniu deploy.sh. UI → openshift-monitor → Auth → Generate token → wklej jako <code>X-API-Key</code> w kliencie AI.
+  </div>
+
+  <h3>Ręczna konfiguracja (bez config.env)</h3>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>Krok</th><th>Akcja</th></tr>
+      <tr><td>1</td><td>UI → Runtimes → <strong>openshift-monitor</strong></td></tr>
+      <tr><td>2</td><td>Secrets → + Add → <code>OC_TOKEN</code> = token SA, <code>OC_SERVER</code> = URL API</td></tr>
+      <tr><td>3</td><td>Kliknij <strong>▶ Deploy</strong></td></tr>
+      <tr><td>4</td><td>Auth → Generate token → skopiuj do klienta AI jako <code>X-API-Key</code></td></tr>
+    </table>
+  </div>
 </div>
 
 <!-- ─── OCP REGISTRY ────────────────────────────────────────────── -->
@@ -826,9 +868,14 @@ user="1000:1000"</code></pre>
   <div class="table-wrap">
     <table>
       <tr><th>Nagłówek</th><th>Format</th><th>Opis</th></tr>
-      <tr><td><code>Authorization</code></td><td><code>Bearer &lt;token&gt;</code></td><td>Standard OAuth2 / RFC 6750</td></tr>
-      <tr><td><code>X-API-Key</code></td><td><code>&lt;token&gt;</code></td><td>Alternatywa dla klientów bez Bearer</td></tr>
+      <tr><td><code>Authorization</code></td><td><code>Bearer &lt;token&gt;</code></td><td>Standard OAuth2 / RFC 6750 — zalecany</td></tr>
+      <tr><td><code>X-API-Key</code></td><td><code>&lt;token&gt;</code></td><td>Prostszy format — sam token, bez prefiksu <code>Bearer</code></td></tr>
     </table>
+  </div>
+
+  <div class="callout warn">
+    <strong>Zmienne środowiskowe NIE zastępują nagłówka</strong>
+    Niektóre klienty (np. OpenCode) mają sekcję "Zmienne środowiskowe" w konfiguracji MCP. Dla serwerów zdalnych (transport <code>zdalny-SSE</code> lub <code>streamable-HTTP</code>) te zmienne <strong>nie są wysyłane do serwera</strong> — służą tylko do lokalnych procesów (<code>stdio</code>). Token zawsze musi iść w nagłówku żądania.
   </div>
 
   <h3>Konfiguracja klientów</h3>
@@ -846,6 +893,17 @@ user="1000:1000"</code></pre>
   }
 }</code></pre>
 
+  <div class="code-label">OpenCode — Nagłówki żądań (prostszy wariant z X-API-Key)</div>
+  <pre><code>Transport:  zdalny - SSE
+URL serwera: https://&lt;runtime-route&gt;/sse
+
+Nagłówki żądań:
+  Klucz:   X-API-Key
+  Wartość: &lt;TWÓJ_TOKEN&gt;
+
+# NIE używaj sekcji "Zmienne środowiskowe" — nie docierają do serwera zdalnego.
+# OAuth zostawić odznaczone.</code></pre>
+
   <div class="code-label">Cline / Continue (settings.json)</div>
   <pre><code>{
   "mcp.servers": [{
@@ -860,6 +918,10 @@ user="1000:1000"</code></pre>
 
   <div class="code-label">curl — test połączenia</div>
   <pre><code>curl -H "Authorization: Bearer &lt;TWÓJ_TOKEN&gt;" \
+     http://localhost:19001/health
+
+# lub z X-API-Key:
+curl -H "X-API-Key: &lt;TWÓJ_TOKEN&gt;" \
      http://localhost:19001/health</code></pre>
 
   <h3>Ścieżki wyłączone z autoryzacji</h3>
@@ -984,6 +1046,88 @@ user="1000:1000"</code></pre>
 </div>
 
 <!-- ─── REBUILD ──────────────────────────────────────────────────── -->
+<div class="section" id="lifecycle">
+  <h2>Cykl życia runtimeu — deploy, konfiguracja, reload</h2>
+
+  <p>Każdy serwer MCP przechodzi przez kilka etapów. Zrozumienie co wymaga <strong>Reload</strong>, a co <strong>Redeploy</strong> pozwala unikać niepotrzebnych restartów.</p>
+
+  <h3>Pierwsze uruchomienie</h3>
+  <ol class="steps">
+    <li><strong>Utwórz runtime</strong> — UI → Szybki start (lub Kreator zaawansowany) → wybierz klasę (np. <code>shell-readwrite</code>) → Utwórz serwer.</li>
+    <li><strong>Dodaj narzędzia</strong> — zakładka Narzędzia → + Dodaj narzędzie → wypełnij nazwę, komendę, mode, schemat argumentów.</li>
+    <li><strong>Ustaw politykę</strong> — zakładka Polityka → ustaw <code>allowed_binaries</code>, <code>require_approval_for</code> itp. → Zapisz.</li>
+    <li><strong>Dodaj sekrety/zmienne</strong> — zakładka Sekrety → + Dodaj (wartości wstrzykiwane jako env vars do kontenera).</li>
+    <li><strong>Wdróż</strong> — przycisk <strong>▶ Deploy</strong> (lub operator automatycznie wykrywa nowy rekord). Status zmieni się na <code>running</code>.</li>
+    <li><strong>Podłącz klienta AI</strong> — skopiuj endpoint MCP z nagłówka strony (np. <code>http://localhost:19001/mcp</code>) do konfiguracji Claude Desktop / Continue / Open WebUI.</li>
+  </ol>
+
+  <h3>Co wymaga tylko Reload (bez restartu kontenera)</h3>
+
+  <p><strong>Reload</strong> (<code>POST /reload</code> na runtimeie) przeładowuje pliki konfiguracyjne z dysku bez ubijania procesu. Jest automatycznie wyzwalany przez control plane po zapisie zmian.</p>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>Zmiana</th><th>Jak zastosować</th><th>Reload automatyczny?</th></tr>
+      <tr><td>Edycja narzędzia (nazwa, komenda, schemat, mode)</td><td>UI → Narzędzia → Edytuj → Zapisz</td><td>✅ Tak — control plane woła <code>/reload</code></td></tr>
+      <tr><td>Zmiana polityki (allowed_binaries, approval, timeouty)</td><td>UI → Polityka → Zapisz politykę shell</td><td>✅ Tak</td></tr>
+      <tr><td>Zmiana tokenu auth</td><td>UI → Auth → Generuj / Regeneruj token</td><td>✅ Tak</td></tr>
+      <tr><td>Import paczki narzędzi</td><td>UI → Import JSON</td><td>✅ Tak</td></tr>
+    </table>
+  </div>
+
+  <div class="callout ok">
+    <strong>Reload nie przerywa działających wywołań</strong>
+    Proces runtimeu działa dalej — tylko config files są ponownie wczytywane. Klienci MCP nie tracą połączenia.
+  </div>
+
+  <h3>Co wymaga Redeploy (restart kontenera)</h3>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>Zmiana</th><th>Jak zastosować</th></tr>
+      <tr><td>Dodanie / usunięcie sekretów (env vars)</td><td>UI → Sekrety → zapisz → kliknij <strong>🔄 Redeploy</strong></td></tr>
+      <tr><td>Zmiana klasy runtimeu (inny obraz Docker)</td><td>UI → Redeploy</td></tr>
+      <tr><td>Zmiana limitu pamięci / CPU (wymaga modyfikacji polityki)</td><td>UI → Redeploy</td></tr>
+      <tr><td>Nowa wersja obrazu runtime-shell po <code>./deploy.sh</code></td><td>UI → <strong>Przebuduj obraz + Deploy</strong> (na K8s: robi rollout restart)</td></tr>
+    </table>
+  </div>
+
+  <div class="callout warn">
+    <strong>Sekrety wymagają Redeploy</strong>
+    Zmienne środowiskowe są wstrzykiwane do kontenera przy starcie. Zmiana wartości sekretu <strong>nie jest widoczna</strong> dla działającego kontenera dopóki nie zostanie zrobiony Redeploy.
+  </div>
+
+  <h3>Jak Reload działa technicznie</h3>
+  <p>Control plane zapisuje artefakty do <code>./data/configs/&lt;runtime-id&gt;/</code> (Docker) lub ConfigMap (K8s), następnie woła <code>POST /reload</code> na endpoincie runtimeu. Runtime wczytuje ponownie:</p>
+  <ul>
+    <li><code>tools.json</code> — definicje narzędzi z komendami</li>
+    <li><code>policy.json</code> — polityka bezpieczeństwa</li>
+    <li><code>runtime-config.json</code> — metadata + token auth</li>
+    <li><code>adapter-config.json</code> — konfiguracja adapterów</li>
+  </ul>
+  <p><code>runtime-env.json</code> (env vars z sekretów) <strong>nie jest przeładowywany</strong> — wymaga restartu procesu.</p>
+
+  <h3>Ręczny reload (jeśli automatyczny nie zadziałał)</h3>
+  <pre><code># Docker — bezpośrednio na kontenerze
+curl -X POST http://localhost:19001/reload
+
+# OpenShift — przez route runtimeu
+curl -X POST https://mcp-runtime-&lt;id&gt;-mcp-platform.apps.&lt;domain&gt;/reload</code></pre>
+
+  <h3>Stany runtimeu</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Status</th><th>Znaczenie</th><th>Co zrobić</th></tr>
+      <tr><td><code>running</code></td><td>Kontener działa, /health odpowiada</td><td>—</td></tr>
+      <tr><td><code>deploying</code></td><td>Operator tworzy/aktualizuje kontener</td><td>Poczekaj ~10–30s</td></tr>
+      <tr><td><code>stopped</code></td><td>Kontener zatrzymany (replicas=0)</td><td>Kliknij ▶ Start</td></tr>
+      <tr><td><code>failed</code></td><td>Błąd przy starcie lub healthcheck</td><td>Sprawdź Logi → Redeploy</td></tr>
+      <tr><td><code>error</code></td><td>Błąd operatora (np. brak obrazu)</td><td>Sprawdź logi operatora</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ─── REBUILD ───────────────────────────────────────────────────── -->
 <div class="section" id="rebuild">
   <h2>Rebuild obrazu runtime</h2>
 

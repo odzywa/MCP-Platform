@@ -99,14 +99,62 @@ oc rollout restart deployment/mcp-platform -n "$NAMESPACE"
 oc rollout restart deployment/mcp-platform-operator -n "$NAMESPACE"
 oc rollout status deployment/mcp-platform -n "$NAMESPACE" --timeout=120s
 
+ROUTE=$(oc get route mcp-platform -n "$NAMESPACE" --template='https://{{ .spec.host }}' 2>/dev/null || echo "")
+PLATFORM_URL="${ROUTE:-https://mcp-platform-${NAMESPACE}.${APPS_DOMAIN}}"
+
+# ── 6. Auto-konfiguracja OpenShift MCP (opcjonalna) ──────────────────────────
+OC_MCP_TOKEN="${OC_MCP_TOKEN:-}"
+OC_MCP_SERVER="${OC_MCP_SERVER:-}"
+
+if [ -n "$OC_MCP_TOKEN" ] && [ -n "$OC_MCP_SERVER" ]; then
+  echo "[6/6] Konfigurowanie OpenShift MCP (openshift-monitor)..."
+
+  # Czekaj aż platforma odpowie (max 60s)
+  echo "  Czekam na API platformy..."
+  for i in $(seq 1 12); do
+    if curl -sk "$PLATFORM_URL/health" | grep -q "ok"; then
+      break
+    fi
+    sleep 5
+  done
+
+  # Zaloguj się i pobierz cookie sesji
+  COOKIE_JAR="$(mktemp)"
+  HTTP_STATUS=$(curl -sk -o /dev/null -w "%{http_code}" \
+    -c "$COOKIE_JAR" \
+    -X POST "$PLATFORM_URL/login" \
+    -d "username=admin&password=admin" \
+    -L --max-redirs 3)
+
+  if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "303" ]; then
+    echo "  ⚠ Logowanie nieudane (HTTP $HTTP_STATUS) — pomiń auto-konfigurację."
+    echo "    Dodaj OC_TOKEN i OC_SERVER ręcznie w UI → openshift-monitor → Secrets."
+    rm -f "$COOKIE_JAR"
+  else
+    # Dodaj credentials
+    curl -sk -b "$COOKIE_JAR" -X POST "$PLATFORM_URL/api/runtimes/openshift-monitor/credentials" \
+      -d "kind=env&name=OC_TOKEN&env_name=OC_TOKEN&value=${OC_MCP_TOKEN}" > /dev/null
+    curl -sk -b "$COOKIE_JAR" -X POST "$PLATFORM_URL/api/runtimes/openshift-monitor/credentials" \
+      -d "kind=env&name=OC_SERVER&env_name=OC_SERVER&value=${OC_MCP_SERVER}" > /dev/null
+
+    # Wdróż
+    curl -sk -b "$COOKIE_JAR" -X POST "$PLATFORM_URL/api/runtimes/openshift-monitor/deploy" > /dev/null
+
+    rm -f "$COOKIE_JAR"
+    echo "  ✅ openshift-monitor wdrożony!"
+    echo "  Endpoint MCP pojawi się za ~30s w UI → Runtimes → openshift-monitor"
+  fi
+else
+  echo "[6/6] Pominięto auto-konfigurację OCP MCP (OC_MCP_TOKEN/OC_MCP_SERVER puste w config.env)"
+fi
+
 echo ""
 echo "╔══════════════════════════════════════════════════╗"
 echo "║  Deploy zakończony!                             ║"
 echo "╚══════════════════════════════════════════════════╝"
 echo ""
 echo "UI control plane:"
-ROUTE=$(oc get route mcp-platform -n "$NAMESPACE" --template='https://{{ .spec.host }}' 2>/dev/null || echo "  (oc get route -n $NAMESPACE)")
-echo "  $ROUTE"
+echo "  $PLATFORM_URL"
 echo ""
 echo "Status podów:"
 oc get pods -n "$NAMESPACE"
@@ -115,6 +163,7 @@ echo "Pierwsze logowanie: admin / admin  ← zmień od razu!"
 echo ""
 echo "Następne kroki:"
 echo "  1. Zaloguj się do UI"
-echo "  2. Kreator zaawansowany → stwórz pierwszy runtime"
-echo "  3. Sprawdź czy Deployment pojawił się w namespace:"
-echo "     oc get deployments -n $NAMESPACE"
+echo "  2. Runtimes → openshift-monitor → dodaj OC_TOKEN + OC_SERVER → Deploy"
+echo "     (lub wypełnij OC_MCP_TOKEN/OC_MCP_SERVER w config.env i przejedź deploy.sh ponownie)"
+echo "  3. Skopiuj endpoint MCP z UI i wklej do klienta AI (Claude Desktop / OpenCode)"
+echo "     Klucz: X-API-Key  Wartość: <token z UI → Auth → Generate token>"

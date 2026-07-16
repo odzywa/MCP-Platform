@@ -1,0 +1,1080 @@
+<title>MCP Platform — Documentation</title>
+<style>
+/* ── Tokens ──────────────────────────────────────────────────────── */
+:root {
+  --bg:       #0a1420;
+  --surface:  #0d1e30;
+  --surface2: #0f2540;
+  --border:   #1a3a5a;
+  --border2:  #24507a;
+  --text:     #e2e8f0;
+  --muted:    #7a9db8;
+  --faint:    #3a6080;
+  --accent:   #3b9fe8;
+  --accent-d: #1a6fb8;
+  --green:    #22c55e;
+  --green-bg: #0a2a14;
+  --amber:    #f59e0b;
+  --amber-bg: #2a1e08;
+  --red:      #ef4444;
+  --red-bg:   #2a0a0a;
+  --purple:   #a78bfa;
+  --code-bg:  #061018;
+  --nav-w:    240px;
+  --content-max: 820px;
+  --radius:   8px;
+  font-size: 15px;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg:       #f0f4f8;
+    --surface:  #ffffff;
+    --surface2: #e8eef5;
+    --border:   #c8d8e8;
+    --border2:  #a0b8cc;
+    --text:     #0f1e2e;
+    --muted:    #4a6a88;
+    --faint:    #8aacbc;
+    --accent:   #1a6fb8;
+    --accent-d: #0d4a88;
+    --green:    #16a34a;
+    --green-bg: #d1fae5;
+    --amber:    #b45309;
+    --amber-bg: #fef3c7;
+    --red:      #dc2626;
+    --red-bg:   #fee2e2;
+    --purple:   #7c3aed;
+    --code-bg:  #1a2535;
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#0a1420;--surface:#0d1e30;--surface2:#0f2540;--border:#1a3a5a;--border2:#24507a;
+  --text:#e2e8f0;--muted:#7a9db8;--faint:#3a6080;--accent:#3b9fe8;--accent-d:#1a6fb8;
+  --green:#22c55e;--green-bg:#0a2a14;--amber:#f59e0b;--amber-bg:#2a1e08;
+  --red:#ef4444;--red-bg:#2a0a0a;--purple:#a78bfa;--code-bg:#061018;
+}
+:root[data-theme="light"] {
+  --bg:#f0f4f8;--surface:#ffffff;--surface2:#e8eef5;--border:#c8d8e8;--border2:#a0b8cc;
+  --text:#0f1e2e;--muted:#4a6a88;--faint:#8aacbc;--accent:#1a6fb8;--accent-d:#0d4a88;
+  --green:#16a34a;--green-bg:#d1fae5;--amber:#b45309;--amber-bg:#fef3c7;
+  --red:#dc2626;--red-bg:#fee2e2;--purple:#7c3aed;--code-bg:#1a2535;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; line-height: 1.65; display: flex; min-height: 100vh; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+#sidebar { width: var(--nav-w); flex-shrink: 0; position: sticky; top: 0; height: 100vh; overflow-y: auto; border-right: 1px solid var(--border); background: var(--surface); padding: 24px 0; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+.sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 20px 20px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+.sidebar-logo .logo-mark { width: 34px; height: 34px; border-radius: 8px; background: var(--accent-d); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 900; color: #fff; letter-spacing: -0.5px; flex-shrink: 0; }
+.sidebar-logo .logo-text { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.2; }
+.sidebar-logo .logo-sub { font-size: 10px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+nav ul { list-style: none; }
+nav .nav-section { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); padding: 12px 20px 4px; }
+nav li a { display: block; padding: 5px 20px 5px 28px; font-size: 13px; color: var(--muted); border-left: 2px solid transparent; transition: color .15s, border-color .15s, background .15s; }
+nav li a:hover { color: var(--text); background: var(--surface2); text-decoration: none; }
+nav li a.active { color: var(--accent); border-left-color: var(--accent); background: var(--surface2); font-weight: 600; }
+nav li a .badge { display: inline-block; margin-left: 6px; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 999px; background: var(--amber-bg); color: var(--amber); vertical-align: middle; }
+.lang-switcher { padding: 12px 20px 0; display: flex; gap: 6px; }
+.lang-switcher a { flex: 1; padding: 5px; border: 1px solid var(--border); border-radius: 6px; background: none; color: var(--muted); font-size: 12px; cursor: pointer; transition: background .15s, color .15s; text-align: center; text-decoration: none; }
+.lang-switcher a.active { background: var(--surface2); color: var(--text); border-color: var(--border2); }
+.theme-toggle { padding: 8px 20px 0; display: flex; gap: 6px; }
+.theme-toggle button { flex: 1; padding: 5px; border: 1px solid var(--border); border-radius: 6px; background: none; color: var(--muted); font-size: 12px; cursor: pointer; transition: background .15s, color .15s; }
+.theme-toggle button.active { background: var(--surface2); color: var(--text); border-color: var(--border2); }
+main { flex: 1; min-width: 0; padding: 48px 40px 80px; max-width: calc(var(--content-max) + 80px); }
+@media (max-width: 860px) {
+  body { flex-direction: column; }
+  #sidebar { width: 100%; height: auto; position: static; border-right: none; border-bottom: 1px solid var(--border); }
+  nav ul { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 12px 12px; }
+  nav .nav-section { display: none; }
+  nav li a { padding: 4px 10px; border-left: none; border-radius: 6px; font-size: 12px; }
+  main { padding: 24px 20px 60px; }
+}
+.section { margin-bottom: 64px; scroll-margin-top: 24px; }
+h1 { font-size: 2rem; font-weight: 800; color: var(--text); text-wrap: balance; line-height: 1.2; margin-bottom: 12px; }
+h2 { font-size: 1.35rem; font-weight: 700; color: var(--text); text-wrap: balance; margin: 48px 0 16px; padding-top: 8px; border-top: 1px solid var(--border); }
+h3 { font-size: 1.05rem; font-weight: 700; color: var(--text); margin: 28px 0 10px; }
+p { margin-bottom: 14px; color: var(--text); }
+p:last-child { margin-bottom: 0; }
+ul, ol { padding-left: 20px; margin-bottom: 14px; }
+li { margin-bottom: 5px; color: var(--text); }
+strong { color: var(--text); font-weight: 700; }
+.page-header { margin-bottom: 40px; }
+.page-header .eyebrow { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; border: 1px solid var(--accent-d); border-radius: 999px; padding: 3px 10px; }
+.page-header .subtitle { font-size: 1rem; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+.page-header .meta { font-size: 12px; color: var(--faint); margin-top: 10px; }
+pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; overflow-x: auto; margin: 16px 0; font-size: 13px; line-height: 1.6; }
+pre code { font-family: "SF Mono", ui-monospace, "Cascadia Code", Consolas, monospace; color: #c8daea; }
+code { font-family: "SF Mono", ui-monospace, "Cascadia Code", Consolas, monospace; font-size: .88em; background: var(--surface2); color: var(--accent); padding: 2px 5px; border-radius: 4px; border: 1px solid var(--border); }
+pre code { background: none; border: none; padding: 0; font-size: inherit; }
+.code-label { display: flex; align-items: center; justify-content: space-between; background: var(--surface2); border: 1px solid var(--border); border-bottom: none; padding: 5px 14px; border-radius: var(--radius) var(--radius) 0 0; font-size: 11px; color: var(--muted); font-family: monospace; letter-spacing: .03em; margin-top: 16px; }
+.code-label + pre { margin-top: 0; border-radius: 0 0 var(--radius) var(--radius); }
+.callout { border-left: 3px solid; border-radius: var(--radius); padding: 12px 16px; margin: 16px 0; font-size: 14px; }
+.callout.info  { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.callout.warn  { border-color: var(--amber);  background: var(--amber-bg); }
+.callout.danger{ border-color: var(--red);    background: var(--red-bg); }
+.callout.ok    { border-color: var(--green);  background: var(--green-bg); }
+.callout strong { display: block; margin-bottom: 4px; }
+.callout.warn strong  { color: var(--amber); }
+.callout.danger strong{ color: var(--red); }
+.callout.ok strong    { color: var(--green); }
+.callout.info strong  { color: var(--accent); }
+.table-wrap { overflow-x: auto; margin: 16px 0; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th { text-align: left; padding: 8px 12px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); border-bottom: 2px solid var(--border); white-space: nowrap; }
+td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--surface2); }
+td code { font-size: 12px; }
+.badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; vertical-align: middle; }
+.badge.green  { background: var(--green-bg);  color: var(--green); }
+.badge.amber  { background: var(--amber-bg);  color: var(--amber); }
+.badge.red    { background: var(--red-bg);    color: var(--red); }
+.badge.blue   { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--accent); }
+.arch { display: flex; gap: 0; align-items: stretch; margin: 20px 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.arch-col { flex: 1; padding: 16px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+.arch-col:last-child { border-right: none; }
+.arch-col .col-label { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin-bottom: 4px; }
+.arch-box { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 12px; color: var(--muted); background: var(--surface2); line-height: 1.4; }
+.arch-box .box-name { font-weight: 700; color: var(--text); font-size: 13px; }
+.arch-arrow { text-align: center; font-size: 18px; color: var(--border2); padding: 8px 4px; align-self: center; }
+.steps { counter-reset: step; list-style: none; padding: 0; }
+.steps li { counter-increment: step; padding: 14px 14px 14px 52px; position: relative; border-left: 2px solid var(--border); margin-left: 16px; margin-bottom: 4px; }
+.steps li::before { content: counter(step); position: absolute; left: -16px; top: 14px; width: 28px; height: 28px; border-radius: 50%; background: var(--surface2); border: 2px solid var(--border2); color: var(--accent); font-weight: 800; font-size: 12px; display: flex; align-items: center; justify-content: center; }
+.steps li:last-child { border-left-color: transparent; }
+.steps li strong { display: block; margin-bottom: 4px; color: var(--text); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+@media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.card .card-title { font-weight: 700; color: var(--text); margin-bottom: 6px; font-size: 14px; }
+.card .card-body  { font-size: 13px; color: var(--muted); }
+.flow { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin: 16px 0; padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.flow-step { padding: 6px 14px; border-radius: var(--radius); font-size: 13px; font-weight: 600; border: 1px solid var(--border); }
+.flow-step.ok     { background: var(--green-bg); color: var(--green); border-color: var(--green); }
+.flow-step.warn   { background: var(--amber-bg); color: var(--amber); border-color: var(--amber); }
+.flow-step.neutral{ background: var(--surface2); color: var(--text); }
+.flow-step.accent { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--accent); border-color: var(--accent); }
+.flow-arrow { color: var(--faint); font-size: 16px; padding: 0 2px; }
+</style>
+
+<div id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-mark">MCP</div>
+    <div>
+      <div class="logo-text">MCP Platform</div>
+      <div class="logo-sub">Documentation</div>
+    </div>
+  </div>
+  <nav>
+    <div class="nav-section">Introduction</div>
+    <ul>
+      <li><a href="#overview">What is MCP Platform?</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+    </ul>
+    <div class="nav-section">Installation</div>
+    <ul>
+      <li><a href="#docker">Docker Compose</a></li>
+      <li><a href="#kubernetes">Kubernetes / OpenShift</a></li>
+      <li><a href="#ocp-registry">OCP Image Registry</a></li>
+      <li><a href="#ocp-ca">CA Certificate</a></li>
+    </ul>
+    <div class="nav-section">Security</div>
+    <ul>
+      <li><a href="#security-shell">Runtime Shell</a></li>
+      <li><a href="#security-policy">Security Policy</a></li>
+      <li><a href="#security-ssrf">SSRF / Network</a></li>
+      <li><a href="#approvals">Human-in-the-Loop <span class="badge green">NEW</span></a></li>
+      <li><a href="#mcp-auth">MCP Authentication <span class="badge green">NEW</span></a></li>
+    </ul>
+    <div class="nav-section">Configuration</div>
+    <ul>
+      <li><a href="#env-vars">Environment Variables</a></li>
+      <li><a href="#policy-ref">Policy JSON Reference</a></li>
+      <li><a href="#tool-modes">Tool Modes</a></li>
+    </ul>
+    <div class="nav-section">Operations</div>
+    <ul>
+      <li><a href="#lifecycle">Runtime Lifecycle</a></li>
+      <li><a href="#rebuild">Rebuilding Images</a></li>
+      <li><a href="#troubleshoot">Troubleshooting</a></li>
+    </ul>
+  </nav>
+  <div class="lang-switcher">
+    <a href="mcp-platform-docs.html">PL</a>
+    <a href="mcp-platform-docs-en.html" class="active">EN</a>
+  </div>
+  <div class="theme-toggle">
+    <button onclick="setTheme('light')" id="btn-light">☀️ Light</button>
+    <button onclick="setTheme('dark')"  id="btn-dark" class="active">🌙 Dark</button>
+  </div>
+</div>
+
+<main>
+
+<!-- ─── HEADER ─────────────────────────────────────────────────── -->
+<div class="page-header section" id="overview">
+  <div class="eyebrow">MCP Platform v1.3</div>
+  <h1>MCP Platform Documentation</h1>
+  <p class="subtitle">A control plane + generic runtime system for creating, deploying, and managing isolated MCP (Model Context Protocol) servers. No code to write — configure tools in the UI, the platform generates artifacts and deploys Docker containers or Kubernetes pods.</p>
+  <div class="meta">Updated: July 2026 &nbsp;·&nbsp; Docker Compose + Kubernetes/OpenShift + Human-in-the-Loop Approvals</div>
+</div>
+
+<!-- ─── ARCHITECTURE ────────────────────────────────────────────── -->
+<div class="section" id="architecture">
+  <h2>Architecture</h2>
+  <p>The platform consists of three layers: a control plane (UI + API + DB), an operator (reconciler), and runtime containers (MCP servers).</p>
+
+  <div class="arch">
+    <div class="arch-col" style="background:color-mix(in srgb,var(--accent) 5%,var(--surface))">
+      <div class="col-label">Control Plane</div>
+      <div class="arch-box"><div class="box-name">mcp-platform</div>FastAPI, port 8080/18100<br>UI + JSON API<br>SQLite WAL</div>
+      <div class="arch-box"><div class="box-name">SQLite DB</div>mcp_platform.db<br>shared read/write by both layers</div>
+    </div>
+    <div class="arch-arrow">→</div>
+    <div class="arch-col" style="background:color-mix(in srgb,var(--purple) 5%,var(--surface))">
+      <div class="col-label">Operator</div>
+      <div class="arch-box"><div class="box-name">mcp-platform-operator</div>Polls DB every 2s<br>Executes deployment_requests<br>Has docker.sock / K8s RBAC</div>
+    </div>
+    <div class="arch-arrow">→</div>
+    <div class="arch-col" style="background:color-mix(in srgb,var(--green) 5%,var(--surface))">
+      <div class="col-label">Runtime Containers</div>
+      <div class="arch-box"><div class="box-name">mcp-runtime-shell</div>Shell commands<br>/mcp · /sse · /tools/{name}</div>
+      <div class="arch-box"><div class="box-name">mcp-runtime-http-gateway</div>HTTP tool proxy<br>/openwebui/openapi.json</div>
+      <div class="arch-box"><div class="box-name">mcp-runtime-openapi</div>FastMCP.from_openapi()<br>Auto-MCP from OpenAPI spec</div>
+    </div>
+  </div>
+
+  <div class="callout info">
+    <strong>Key principle</strong>
+    The control plane <strong>never runs containers directly</strong> — it writes <code>deployment_requests</code> to SQLite. The operator picks them up and executes via the Docker SDK or Kubernetes API.
+  </div>
+
+  <h3>Runtime endpoints</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Endpoint</th><th>Protocol</th><th>Used by</th></tr>
+      <tr><td><code>/mcp</code></td><td>Streamable-HTTP (MCP 2024)</td><td>Claude Desktop, Claude Code, Cline</td></tr>
+      <tr><td><code>/sse</code></td><td>SSE / MCP 2024-10-07</td><td>Continue, older clients</td></tr>
+      <tr><td><code>/tools/{name}</code></td><td>REST POST</td><td>Direct tool invocation</td></tr>
+      <tr><td><code>/openwebui/openapi.json</code></td><td>OpenAPI 3.0</td><td>OpenWebUI Function Integration</td></tr>
+      <tr><td><code>/health</code></td><td>GET</td><td>Operator health check</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ─── DOCKER ──────────────────────────────────────────────────── -->
+<div class="section" id="docker">
+  <h2>Installation: Docker Compose</h2>
+
+  <ol class="steps">
+    <li>
+      <strong>Clone the repository</strong>
+      <pre><code>git clone https://github.com/MCP-Github/MCPPlatform
+cd MCPPlatform</code></pre>
+    </li>
+    <li>
+      <strong>Build runtime images</strong>
+      <pre><code>docker compose --profile build-only build</code></pre>
+    </li>
+    <li>
+      <strong>Start the platform</strong>
+      <pre><code>docker compose up -d mcp-platform mcp-platform-operator</code></pre>
+    </li>
+    <li>
+      <strong>Open the UI</strong>
+      <p>Available at <code>http://localhost:18100</code> (or <code>http://mcp.dom</code> if DNS is configured).</p>
+      <p>First login: <strong>admin / admin</strong> — change the password after first login.</p>
+    </li>
+  </ol>
+
+  <h3>Management commands</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Goal</th><th>Command</th></tr>
+      <tr><td>Rebuild control plane</td><td><code>docker compose build mcp-platform && docker compose up -d mcp-platform</code></td></tr>
+      <tr><td>Rebuild operator</td><td><code>docker compose build mcp-platform-operator && docker compose up -d mcp-platform-operator</code></td></tr>
+      <tr><td>Rebuild shell runtime</td><td><code>docker compose --profile build-only build mcp-runtime-shell-image</code></td></tr>
+      <tr><td>Rebuild all runtimes</td><td><code>docker compose --profile build-only build</code></td></tr>
+      <tr><td>Control plane logs</td><td><code>docker compose logs -f mcp-platform</code></td></tr>
+      <tr><td>Operator logs</td><td><code>docker compose logs -f mcp-platform-operator</code></td></tr>
+    </table>
+  </div>
+
+  <div class="callout warn">
+    <strong>After rebuilding a runtime image</strong>
+    Rebuilding an image does not redeploy existing runtimes. Go to UI → server → <strong>Rebuild Image + Deploy</strong>.
+  </div>
+</div>
+
+<!-- ─── KUBERNETES ──────────────────────────────────────────────── -->
+<div class="section" id="kubernetes">
+  <h2>Installation: Kubernetes / OpenShift</h2>
+
+  <p>The <code>MCCPLATFORMforKUBERNETES/</code> directory contains a complete K8s/OCP stack: YAML manifests, deploy.sh script, and a separate operator with <code>KubernetesDeploymentDriver</code>.</p>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title">Requirements</div>
+      <div class="card-body">OpenShift 4.x or Kubernetes 1.26+<br>LVM Storage Operator (or other StorageClass)<br>Image Registry (OCP internal route or Harbor)<br><code>oc</code> / <code>kubectl</code> + admin permissions</div>
+    </div>
+    <div class="card">
+      <div class="card-title">File structure</div>
+      <div class="card-body"><code>config.env</code> — configuration<br><code>deploy.sh</code> — deployment script<br><code>k8s/</code> — YAML manifests<br><code>operator/</code> — K8s operator</div>
+    </div>
+  </div>
+
+  <h3>1. Fill in config.env</h3>
+  <div class="code-label">MCCPLATFORMforKUBERNETES/config.env</div>
+  <pre><code># External route for pushing images (podman push)
+REGISTRY=default-route-openshift-image-registry.apps.your-cluster.dom/mcp-platform
+
+# Internal svc — used by pods to pull images (imagePullPolicy: Always)
+PULL_REGISTRY=image-registry.openshift-image-registry.svc:5000/mcp-platform
+
+# OCP apps domain
+APPS_DOMAIN=apps.your-cluster.dom
+
+# Kubernetes namespace
+NAMESPACE=mcp-platform
+
+# StorageClass for PVC (lvms-storage for LVM Storage Operator)
+STORAGE_CLASS=lvms-storage</code></pre>
+
+  <div class="callout info">
+    <strong>Two registries</strong>
+    <code>REGISTRY</code> is the external route — used by <code>podman push</code>. <code>PULL_REGISTRY</code> is the internal svc — used by pods in the manifest. Never mix their roles.
+  </div>
+
+  <h3>2. Run deploy.sh</h3>
+  <pre><code>cd MCCPLATFORMforKUBERNETES
+chmod +x deploy.sh
+./deploy.sh</code></pre>
+
+  <p>The script automatically:</p>
+  <ul>
+    <li>Logs in to the OCP registry via <code>oc registry login</code></li>
+    <li>Builds images: <code>mcp-platform-control-plane</code>, <code>mcp-platform-operator-k8s</code>, <code>mcp-runtime-shell</code>, <code>mcp-runtime-http-gateway</code>, <code>mcp-runtime-openapi</code></li>
+    <li>Pushes them via <code>podman push --tls-verify=false</code> (TLS terminated by Route)</li>
+    <li>Applies YAML manifests via <code>oc apply -k k8s/</code></li>
+  </ul>
+
+  <h3>3. Verify</h3>
+  <pre><code>oc -n mcp-platform get pods
+oc -n mcp-platform get routes</code></pre>
+  <p>UI available at <code>https://mcp-platform-mcp-platform.&lt;APPS_DOMAIN&gt;</code>.</p>
+
+  <h3>4. OpenShift MCP — auto-setup (optional)</h3>
+
+  <p>The platform automatically seeds the <strong>openshift-monitor</strong> runtime in <code>draft</code> status on startup. To deploy it together with <code>deploy.sh</code>, fill in two fields in <code>config.env</code> <strong>before</strong> running the script:</p>
+
+  <div class="callout info">
+    <strong>Use a dedicated Service Account</strong>
+    Don't use an admin token — create a separate SA with a minimal permission scope.
+  </div>
+
+  <div class="code-label">Step 1 — SA + token (once)</div>
+  <pre><code>oc create sa mcp-admin -n mcp-platform
+oc adm policy add-cluster-role-to-user cluster-admin -z mcp-admin -n mcp-platform
+
+# Token valid for 1 year:
+OC_MCP_TOKEN=$(oc create token mcp-admin -n mcp-platform --duration=8760h)
+OC_MCP_SERVER=$(oc whoami --show-server)
+
+echo "OC_MCP_TOKEN=$OC_MCP_TOKEN" >> config.env
+echo "OC_MCP_SERVER=$OC_MCP_SERVER" >> config.env</code></pre>
+
+  <div class="code-label">Step 2 — deploy</div>
+  <pre><code>./deploy.sh
+# Step 6 automatically: logs in to platform API, sets credentials, deploys openshift-monitor</code></pre>
+
+  <div class="callout ok">
+    <strong>Result</strong>
+    The <code>openshift-monitor</code> runtime is running ~30s after deploy.sh completes. UI → openshift-monitor → Auth → Generate token → paste as <code>X-API-Key</code> in your AI client.
+  </div>
+
+  <h3>Manual setup (without config.env)</h3>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>Step</th><th>Action</th></tr>
+      <tr><td>1</td><td>UI → Runtimes → <strong>openshift-monitor</strong></td></tr>
+      <tr><td>2</td><td>Secrets → + Add → <code>OC_TOKEN</code> = SA token, <code>OC_SERVER</code> = API URL</td></tr>
+      <tr><td>3</td><td>Click <strong>▶ Deploy</strong></td></tr>
+      <tr><td>4</td><td>Auth → Generate token → copy to AI client as <code>X-API-Key</code></td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ─── OCP REGISTRY ────────────────────────────────────────────── -->
+<div class="section" id="ocp-registry">
+  <h2>OpenShift Image Registry</h2>
+
+  <p>By default OpenShift does not expose an external route to the image registry. To enable it:</p>
+
+  <ol class="steps">
+    <li>
+      <strong>Create PVC for the registry</strong>
+      <pre><code>oc -n openshift-image-registry patch configs.imageregistry.operator.openshift.io/cluster \
+  --type merge -p '{"spec":{"storage":{"pvc":{"claim":""}}}}'</code></pre>
+    </li>
+    <li>
+      <strong>Enable external route</strong>
+      <pre><code>oc -n openshift-image-registry patch configs.imageregistry.operator.openshift.io/cluster \
+  --type merge -p '{"spec":{"defaultRoute":true}}'</code></pre>
+    </li>
+    <li>
+      <strong>Switch rollout strategy to Recreate (required for RWO PVC)</strong>
+      <pre><code>oc -n openshift-image-registry patch configs.imageregistry.operator.openshift.io/cluster \
+  --type merge -p '{"spec":{"rolloutStrategy":"Recreate"}}'</code></pre>
+    </li>
+    <li>
+      <strong>Log in to the registry</strong>
+      <pre><code>oc registry login --skip-check</code></pre>
+      <div class="callout warn" style="margin-top:8px">
+        <strong>Note</strong>Do not use <code>docker login -p $(oc whoami -t)</code> — the token format is longer than Docker accepts. Use <code>oc registry login</code> instead.
+      </div>
+    </li>
+  </ol>
+
+  <h3>LVM Storage Operator (SNO)</h3>
+  <p>For Single Node OpenShift clusters with LVM Storage:</p>
+
+  <div class="code-label">LVMCluster — important note on VG naming</div>
+  <pre><code>apiVersion: lvm.topolvm.io/v1alpha1
+kind: LVMCluster
+metadata:
+  name: mcp-lvmcluster
+  namespace: openshift-storage
+spec:
+  storage:
+    deviceClasses:
+      - name: storage          # ← must NOT match the device name (/dev/vdc → name: storage, NOT: vdc)
+        thinPoolConfig:
+          name: thin-pool-1
+          sizePercent: 90
+          overprovisionFactor: 10
+        deviceSelector:
+          paths:
+            - /dev/vdc</code></pre>
+
+  <div class="callout warn">
+    <strong>If VG is locked</strong>
+    After cluster restart the vg-manager may be locked. Remove the lock file: <code>sudo rm -f /var/lock/vgmanager/vgmanager.lock</code> on the node, then delete the vg-manager pod.
+  </div>
+</div>
+
+<!-- ─── CA CERT ──────────────────────────────────────────────────── -->
+<div class="section" id="ocp-ca">
+  <h2>OpenShift CA Certificate</h2>
+
+  <p>OCP uses a self-signed CA. Download and install it on your system — required so that <code>curl</code>, <code>podman</code>, and other tools trust Route TLS.</p>
+
+  <ol class="steps">
+    <li>
+      <strong>Download the CA certificate</strong>
+      <pre><code>oc extract configmap/kube-root-ca.crt -n openshift-config --to=- > ocp-ca.crt</code></pre>
+    </li>
+    <li>
+      <strong>Install system-wide (RHEL/Fedora/CentOS)</strong>
+      <pre><code>sudo cp ocp-ca.crt /etc/pki/ca-trust/source/anchors/
+sudo update-ca-trust</code></pre>
+    </li>
+    <li>
+      <strong>Install system-wide (Debian/Ubuntu)</strong>
+      <pre><code>sudo cp ocp-ca.crt /usr/local/share/ca-certificates/ocp-ca.crt
+sudo update-ca-certificates</code></pre>
+    </li>
+  </ol>
+
+  <div class="callout ok">
+    <strong>Verify</strong>
+    <code>curl https://mcp-platform-mcp-platform.apps.your-cluster.dom/health</code> should return <code>{"status":"ok"}</code> without a TLS error.
+  </div>
+</div>
+
+<!-- ─── SECURITY SHELL ───────────────────────────────────────────── -->
+<div class="section" id="security-shell">
+  <h2>Security: Shell Runtime</h2>
+
+  <p>The shell runtime executes system commands as configured in tool definitions. The implemented model eliminates classic command injection attack vectors.</p>
+
+  <h3>No shell=True</h3>
+  <div class="callout ok">
+    <strong>shell=True removed</strong>
+    All subprocesses run via <code>subprocess.run(shell=False)</code> or <code>subprocess.Popen(shell=False)</code>. Metacharacters <code>|</code>, <code>;</code>, <code>&amp;&amp;</code> in user input are plain argv tokens — not shell operators.
+  </div>
+
+  <h3>How pipelines work</h3>
+  <p>Pipelines are modelled <strong>explicitly</strong> at the tool template level — the <code>|</code> separator must appear as a separate token in the command definition (not in user data):</p>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title" style="color:var(--green)">✅ Safe pipeline</div>
+      <div class="card-body">
+        <pre style="margin:8px 0 0"><code>{"command": ["printf","%s","${yaml}","|","oc","apply","-f","-"]}</code></pre>
+        <p style="font-size:12px;margin-top:8px;color:var(--muted)"><code>|</code> comes from the template → Popen chain</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title" style="color:var(--green)">✅ Inert token from user</div>
+      <div class="card-body">
+        <pre style="margin:8px 0 0"><code>// user passes: "foo | rm -rf /"
+${*args} → argv: ["foo","|","rm","-rf","/"]
+// "|" is a string argument, not an operator</code></pre>
+      </div>
+    </div>
+  </div>
+
+  <h3>Variable expansion</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Syntax</th><th>Behaviour</th><th>Injection</th></tr>
+      <tr><td><code>${var}</code></td><td>ONE argv element (spaces do not split)</td><td><span class="badge green">blocked</span></td></tr>
+      <tr><td><code>${*var}</code></td><td><code>shlex.split()</code> → extend argv (no rejoin)</td><td><span class="badge green">inert</span></td></tr>
+      <tr><td><code>|</code> in template</td><td>Pipeline separator → Popen chain</td><td><span class="badge blue">by design</span></td></tr>
+      <tr><td><code>|</code> from user</td><td>Plain token in argv</td><td><span class="badge green">blocked</span></td></tr>
+    </table>
+  </div>
+
+  <h3>Runtime container isolation</h3>
+  <div class="code-label">Default hardening (Docker)</div>
+  <pre><code>read_only=True
+tmpfs={"/tmp": "rw,noexec,nosuid,size=64m"}
+mem_limit="512m"
+nano_cpus=1_000_000_000        # 1 vCPU
+cap_drop=["ALL"]
+security_opt=["no-new-privileges:true"]
+user="1000:1000"</code></pre>
+
+  <div class="callout warn">
+    <strong>OpenShift SCC</strong>
+    On OCP do not set <code>runAsUser: 1000</code> in the pod spec — OpenShift assigns a UID from the namespace range (e.g. 1000780000+). The manifests in <code>MCCPLATFORMforKUBERNETES/k8s/</code> use the correct config (<code>runAsNonRoot: true</code> without a specific UID).
+  </div>
+</div>
+
+<!-- ─── SECURITY POLICY ─────────────────────────────────────────── -->
+<div class="section" id="security-policy">
+  <h2>Security: Tool Policy</h2>
+
+  <p>Each runtime has a <code>policy.json</code> file controlling what is allowed to execute. Set the policy in UI → server → Security (Policy tab).</p>
+
+  <div class="code-label">Example policy.json — OpenShift read-only</div>
+  <pre><code>{
+  "allowed_binaries": ["oc", "kubectl", "jq"],
+  "blocked_commands": ["delete", "apply", "patch", "exec"],
+  "require_read_only": true,
+  "block_write_tools": true,
+  "block_destructive_tools": true,
+  "timeout_seconds": 30,
+  "max_response_bytes": 5242880,
+  "require_approval_for": ""
+}</code></pre>
+
+  <div class="code-label">Example policy.json — OpenShift with approvals</div>
+  <pre><code>{
+  "allowed_binaries": ["oc", "kubectl", "jq", "printf"],
+  "blocked_commands": [],
+  "require_read_only": false,
+  "block_write_tools": false,
+  "require_approval_for": "auto",
+  "require_approval_for_prefixes": ["oc delete", "oc apply", "kubectl delete"],
+  "approval_timeout_seconds": 300
+}</code></pre>
+
+  <h3>Allowed binaries allowlist</h3>
+  <p>The <code>allowed_binaries</code> field is checked for <strong>every pipeline stage independently</strong>. If the list is set, a binary not on the list is blocked even if the first stage passed validation.</p>
+</div>
+
+<!-- ─── SSRF ──────────────────────────────────────────────────────── -->
+<div class="section" id="security-ssrf">
+  <h2>Security: SSRF and Network</h2>
+
+  <h3>SSRF protection</h3>
+  <p>The control plane validates every external URL before sending an HTTP request. The <code>_is_safe_fetch_url()</code> function:</p>
+  <ul>
+    <li>Blocks schemes other than <code>http</code>/<code>https</code></li>
+    <li>Blocks known local names: <code>localhost</code>, <code>169.254.169.254</code>, <code>metadata.google.internal</code></li>
+    <li>Blocks private IP addresses (RFC 1918, loopback, link-local)</li>
+    <li>For domain names: <strong>resolves DNS</strong> via <code>socket.getaddrinfo()</code> and checks every returned IP — protects against DNS rebinding</li>
+  </ul>
+
+  <div class="callout warn">
+    <strong>Applies to</strong>
+    Tool package imports from URL, external MCP server registration, MCP endpoint probing.
+  </div>
+
+  <h3>Runtime network isolation</h3>
+  <p>Runtime containers run in the Docker <code>ai-net</code> network (isolated from the host). The control plane and operator communicate over this network. External ports (19000–19800) are optionally exposed via <code>MCP_RUNTIME_PUBLIC_PORT_BASE</code>.</p>
+
+  <h3>Cookies and sessions</h3>
+  <p>User session stored in the <code>mcp_session</code> cookie:</p>
+  <ul>
+    <li><code>httponly=True</code> — not accessible from JavaScript</li>
+    <li><code>samesite="lax"</code> — CSRF protection for cross-site navigation</li>
+    <li><code>secure=True</code> — enable via <code>MCP_HTTPS_ONLY=1</code> when platform is behind HTTPS termination (e.g. OpenShift Route)</li>
+  </ul>
+</div>
+
+<!-- ─── APPROVALS ────────────────────────────────────────────────── -->
+<div class="section" id="approvals">
+  <h2>Human-in-the-Loop Approval System <span class="badge green">NEW</span></h2>
+
+  <p>Tools with <code>write</code> or <code>destructive</code> mode can require explicit user confirmation before execution. Approval happens <strong>directly in the AI chat</strong> — no separate web panel or extra UI actions needed.</p>
+
+  <h3>How it works</h3>
+
+  <div class="flow">
+    <div class="flow-step accent">AI calls tool</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step neutral">Runtime checks policy</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step warn">⚠️ approval_required</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step neutral">AI asks in chat</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step neutral">User: "yes"</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step ok">✅ AI calls again → execute</div>
+  </div>
+
+  <p>The runtime returns a message to the AI with the command description and instructions. The AI asks the user in chat. After confirmation, the AI calls the same tool again — the runtime automatically executes the command.</p>
+
+  <h3>Two confirmation methods</h3>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>Method</th><th>How it works</th><th>Compatibility</th></tr>
+      <tr>
+        <td><strong>Auto-confirm</strong> on repeated call</td>
+        <td>The first call registers a pending approval. The second identical call (same tool + same args) within the <code>approval_timeout_seconds</code> window is automatically confirmed — no extra parameters needed.</td>
+        <td>All AI models</td>
+      </tr>
+      <tr>
+        <td><strong><code>__confirm</code></strong> parameter</td>
+        <td>AI adds <code>__confirm="yes"</code> (or <code>"true"</code>, <code>"1"</code>, <code>"ok"</code>, etc.) to the call parameters. The parameter is defined in every tool's input schema.</td>
+        <td>Models that can add a new parameter to an existing call</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="callout ok">
+    <strong>Why auto-confirm works with every model</strong>
+    Some models (e.g. local models like Qwen, Llama) cannot add the <code>__confirm</code> parameter to a repeated tool call. Auto-confirm solves this — the AI simply calls the same tool with the same arguments, which is the natural behaviour after user confirmation.
+  </div>
+
+  <h3>Configuration</h3>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th><code>require_approval_for</code> value</th><th>Behaviour</th></tr>
+      <tr><td><em>not set</em> or <code>""</code></td><td>No approvals — default</td></tr>
+      <tr><td><code>"auto"</code></td><td>Auto-detect: mode=write/destructive OR tool name contains action keyword (<code>delete</code>, <code>create</code>, <code>apply</code>, <code>patch</code>, <code>scale</code>…)</td></tr>
+      <tr><td><code>["destructive"]</code></td><td>Only mode=destructive tools (delete)</td></tr>
+      <tr><td><code>["write", "destructive"]</code></td><td>Both write (create/apply) and destructive (delete) tools</td></tr>
+    </table>
+  </div>
+
+  <div class="code-label">Recommended configuration — auto with command prefixes</div>
+  <pre><code>{
+  "require_approval_for": "auto",
+  "require_approval_for_prefixes": ["oc delete", "oc apply", "kubectl delete"],
+  "approval_timeout_seconds": 300
+}</code></pre>
+
+  <div class="callout warn">
+    <strong>Do not mix with blocked_command_prefixes</strong>
+    If you want approval for a prefix — use <code>require_approval_for_prefixes</code>. Do not add the same prefixes to <code>blocked_command_prefixes</code>. After user confirmation (<code>__confirm="yes"</code> or auto-confirm), the runtime skips the blocked prefix check — but <code>allowed_binaries</code> is still enforced.
+  </div>
+
+  <h3>Auto-detection keywords (mode "auto")</h3>
+  <p>Approval required when tool name contains:</p>
+  <div style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0">
+    <code>delete</code><code>remove</code><code>destroy</code><code>drop</code><code>purge</code><code>wipe</code><code>truncate</code><code>erase</code><code>clean</code>
+    <code>create</code><code>apply</code><code>deploy</code><code>install</code><code>patch</code><code>scale</code><code>expose</code><code>rollout</code><code>add</code><code>set</code><code>update</code><code>replace</code><code>restart</code>
+  </div>
+</div>
+
+<!-- ─── MCP AUTH ──────────────────────────────────────────────────── -->
+<div class="section" id="mcp-auth">
+  <h2>MCP Authentication <span class="badge green">NEW</span></h2>
+
+  <p>Each MCP server can be secured with a Bearer token that must be provided by the AI client (Claude Desktop, Cline, Continue, etc.). Without a token the server remains open — this feature is optional and per-runtime.</p>
+
+  <h3>How it works</h3>
+
+  <div class="flow">
+    <div class="flow-step neutral">AI client</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step warn"><code>Authorization: Bearer &lt;token&gt;</code></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step neutral">Runtime middleware</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step ok">✅ Authorized → tool</div>
+  </div>
+  <p style="margin-top:8px">Missing or wrong token → <code>401 Unauthorized</code> with <code>WWW-Authenticate: Bearer</code> header.</p>
+
+  <h3>Enabling a token (UI)</h3>
+  <ol>
+    <li>Go to the runtime detail page (<strong>Runtimes → name</strong>)</li>
+    <li>Switch to the <strong>🔐 Auth</strong> tab</li>
+    <li>Click <strong>+ Generate token</strong></li>
+    <li>Copy the token and paste it into your AI client configuration</li>
+  </ol>
+  <p>Token is generated via <code>secrets.token_urlsafe(32)</code> — 256 bits of entropy. Rotation: click <strong>↻ Regenerate token</strong> — the old token stops working immediately.</p>
+
+  <div class="callout ok">
+    <strong>Zero downtime</strong>
+    Changing the token does not require a container restart. The token is written to <code>runtime-config.json</code> and loaded via <code>/reload</code> automatically after generation.
+  </div>
+
+  <h3>Supported header formats</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Header</th><th>Format</th><th>Description</th></tr>
+      <tr><td><code>Authorization</code></td><td><code>Bearer &lt;token&gt;</code></td><td>Standard OAuth2 / RFC 6750 — recommended</td></tr>
+      <tr><td><code>X-API-Key</code></td><td><code>&lt;token&gt;</code></td><td>Simpler format — token only, no <code>Bearer</code> prefix</td></tr>
+    </table>
+  </div>
+
+  <div class="callout warn">
+    <strong>Environment variables do NOT replace the header</strong>
+    Some clients (e.g. OpenCode) have an "Environment variables" section in the MCP configuration. For remote servers (transport <code>remote-SSE</code> or <code>streamable-HTTP</code>), those variables <strong>are not sent to the server</strong> — they only apply to local processes (<code>stdio</code>). The token must always go in a request header.
+  </div>
+
+  <h3>Client configuration</h3>
+
+  <div class="code-label">Claude Desktop (~/.claude.json)</div>
+  <pre><code>{
+  "mcpServers": {
+    "my-server": {
+      "type": "http",
+      "url": "http://localhost:19001/mcp",
+      "headers": {
+        "Authorization": "Bearer &lt;YOUR_TOKEN&gt;"
+      }
+    }
+  }
+}</code></pre>
+
+  <div class="code-label">OpenCode — Request Headers (simpler variant with X-API-Key)</div>
+  <pre><code>Transport:   remote - SSE
+Server URL:  https://&lt;runtime-route&gt;/sse
+
+Request Headers:
+  Key:   X-API-Key
+  Value: &lt;YOUR_TOKEN&gt;
+
+# Do NOT use the "Environment variables" section — they don't reach a remote server.
+# Leave OAuth unchecked.</code></pre>
+
+  <div class="code-label">Cline / Continue (settings.json)</div>
+  <pre><code>{
+  "mcp.servers": [{
+    "name": "my-server",
+    "transport": "streamable-http",
+    "url": "http://localhost:19001/mcp",
+    "headers": {
+      "Authorization": "Bearer &lt;YOUR_TOKEN&gt;"
+    }
+  }]
+}</code></pre>
+
+  <div class="code-label">curl — connection test</div>
+  <pre><code>curl -H "Authorization: Bearer &lt;YOUR_TOKEN&gt;" \
+     http://localhost:19001/health
+
+# or with X-API-Key:
+curl -H "X-API-Key: &lt;YOUR_TOKEN&gt;" \
+     http://localhost:19001/health</code></pre>
+
+  <h3>Paths excluded from auth</h3>
+  <p>The following endpoints are always public (no token required):</p>
+  <ul>
+    <li><code>/health</code> — container health check by operator</li>
+    <li><code>/reload</code> — config reload by operator (runtime-shell and http-gateway only)</li>
+  </ul>
+
+  <h3>Token comparison security</h3>
+  <p>Comparison uses <code>secrets.compare_digest()</code> — resistant to timing attacks. The token is never logged in any file or database other than <code>runtimes.mcp_auth_token</code> (plaintext — do not use in production without database encryption).</p>
+
+  <div class="callout warn">
+    <strong>Warning: plaintext in SQLite</strong>
+    The <code>runtimes.mcp_auth_token</code> column stores the token in plain text. In production environments, database encryption or an external vault is recommended. This is a known limitation documented in the architecture notes.
+  </div>
+
+  <h3>API — token management</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Endpoint</th><th>Description</th></tr>
+      <tr><td><code>POST /api/runtimes/{id}/generate-mcp-token</code></td><td>Generates or rotates token; saves config; calls <code>/reload</code></td></tr>
+      <tr><td><code>POST /api/runtimes/{id}/revoke-mcp-token</code></td><td>Removes token; server returns to open mode</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ─── ENV VARS ────────────────────────────────────────────────── -->
+<div class="section" id="env-vars">
+  <h2>Environment Variables</h2>
+
+  <h3>Control plane and operator</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Variable</th><th>Default</th><th>Description</th></tr>
+      <tr><td><code>MCP_PLATFORM_DB</code></td><td><code>/data/mcp_platform.db</code></td><td>Path to SQLite database</td></tr>
+      <tr><td><code>MCP_PLATFORM_CONFIG_ROOT</code></td><td><code>/data/configs</code></td><td>Runtime artifact directory (inside container)</td></tr>
+      <tr><td><code>MCP_PLATFORM_CONFIG_HOST_ROOT</code></td><td><code>/data/configs</code></td><td>Same path on the Docker host (volume mount)</td></tr>
+      <tr><td><code>MCP_RUNTIME_NETWORK</code></td><td><code>ai-net</code></td><td>Docker network for runtime containers</td></tr>
+      <tr><td><code>MCP_RUNTIME_PUBLIC_BASE_URL</code></td><td>—</td><td>Public base URL for runtime endpoints</td></tr>
+      <tr><td><code>MCP_RUNTIME_PUBLIC_PORT_BASE</code></td><td><code>19000</code></td><td>Base port for runtimes (range: +900)</td></tr>
+      <tr><td><code>MCP_HTTPS_ONLY</code></td><td><code>0</code></td><td>Set <code>1</code> when behind HTTPS termination → cookie <code>Secure</code></td></tr>
+    </table>
+  </div>
+
+  <h3>Kubernetes / OpenShift (operator)</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Variable</th><th>Description</th></tr>
+      <tr><td><code>MCP_RUNTIME_IMAGE_REGISTRY_PREFIX</code></td><td>Registry prefix for runtime images on K8s (e.g. <code>image-registry.openshift-image-registry.svc:5000/mcp-platform</code>). Images without a full registry (no <code>.</code> or <code>:</code> in the first segment) are qualified automatically.</td></tr>
+      <tr><td><code>KUBECONFIG</code> / in-cluster</td><td>K8s operator uses in-cluster config (ServiceAccount + RBAC) or KUBECONFIG from env</td></tr>
+    </table>
+  </div>
+
+  <h3>Runtime containers (from runtime-env.json)</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Variable</th><th>Description</th></tr>
+      <tr><td><code>RUNTIME_CONFIG_DIR</code></td><td>Configuration directory (<code>/config</code>)</td></tr>
+      <tr><td><code>MCP_PLATFORM_CALLBACK_URL</code></td><td>Control plane URL for call logging and approval callbacks</td></tr>
+      <tr><td><code>MCP_RUNTIME_ID</code></td><td>Runtime server ID (for callbacks)</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ─── POLICY REF ───────────────────────────────────────────────── -->
+<div class="section" id="policy-ref">
+  <h2>Policy JSON Reference</h2>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+      <tr><td><code>allowed_binaries</code></td><td><code>string[]</code></td><td>Allowlist of permitted binaries. If set, all others are blocked. Checked for every pipeline stage.</td></tr>
+      <tr><td><code>blocked_commands</code></td><td><code>string[]</code></td><td>Tokens that must not appear as the binary NOR as arguments.</td></tr>
+      <tr><td><code>require_read_only</code></td><td><code>bool</code></td><td>Only tools with mode=read-only will pass.</td></tr>
+      <tr><td><code>block_write_tools</code></td><td><code>bool</code></td><td>Block mode=write tools.</td></tr>
+      <tr><td><code>block_destructive_tools</code></td><td><code>bool</code></td><td>Block mode=destructive tools.</td></tr>
+      <tr><td><code>timeout_seconds</code></td><td><code>int</code></td><td>Maximum command execution time (default: 20).</td></tr>
+      <tr><td><code>max_response_bytes</code></td><td><code>int</code></td><td>stdout size limit (default: 1 MB, max: 10 MB).</td></tr>
+      <tr><td><code>max_payload_bytes</code></td><td><code>int</code></td><td>Request argument size limit (default: 1 MB).</td></tr>
+      <tr><td><code>require_approval_for</code></td><td><code>string[] | "auto"</code></td><td>Modes requiring approval: <code>""</code> (none), <code>"auto"</code>, <code>["write","destructive"]</code>.</td></tr>
+      <tr><td><code>require_approval_for_prefixes</code></td><td><code>string[]</code></td><td>Command prefixes requiring approval regardless of mode, e.g. <code>["oc delete","oc apply"]</code>. <strong>Do not combine with <code>blocked_command_prefixes</code>.</strong></td></tr>
+      <tr><td><code>approval_timeout_seconds</code></td><td><code>int</code></td><td>Auto-confirm window on repeated call (default: 300). A second identical call within this window is automatically approved.</td></tr>
+      <tr><td><code>allowed_command_prefixes</code></td><td><code>string[]</code></td><td>Allowlist — only commands starting with these prefixes are permitted. If empty, all pass.</td></tr>
+      <tr><td><code>blocked_command_prefixes</code></td><td><code>string[]</code></td><td>Block commands with these prefixes. Skipped when <code>__confirm</code> or auto-confirm from window.</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ─── TOOL MODES ───────────────────────────────────────────────── -->
+<div class="section" id="tool-modes">
+  <h2>Tool Modes</h2>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>Mode</th><th>Use</th><th>Auto approval</th><th>Examples</th></tr>
+      <tr>
+        <td><span class="badge blue">read-only</span></td>
+        <td>Read-only, no system changes</td>
+        <td><span class="badge green">not required</span></td>
+        <td><code>oc get</code>, <code>oc describe</code>, <code>oc logs</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge amber">write</span></td>
+        <td>Creates or modifies resources</td>
+        <td><span class="badge amber">auto: yes</span></td>
+        <td><code>oc create</code>, <code>oc apply</code>, <code>oc patch</code>, <code>oc scale</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge red">destructive</span></td>
+        <td>Deletes resources — irreversible</td>
+        <td><span class="badge red">always: yes</span></td>
+        <td><code>oc delete</code></td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="callout info">
+    <strong>Auto mode</strong>
+    In <code>"require_approval_for": "auto"</code> mode, detection is two-stage: first the tool's <code>mode</code> is checked, then action keywords in the name. If an admin incorrectly marks a tool as <code>read-only</code> but the name contains <code>delete</code> — approval will still be required.
+  </div>
+</div>
+
+<!-- ─── LIFECYCLE ─────────────────────────────────────────────────── -->
+<div class="section" id="lifecycle">
+  <h2>Runtime Lifecycle — Deploy, Configure, Reload</h2>
+
+  <p>Every MCP server goes through several stages. Understanding what requires a <strong>Reload</strong> vs a <strong>Redeploy</strong> avoids unnecessary restarts.</p>
+
+  <h3>First deployment</h3>
+  <ol class="steps">
+    <li><strong>Create runtime</strong> — UI → Quick Start (or Advanced Creator) → select class (e.g. <code>shell-readwrite</code>) → Create server.</li>
+    <li><strong>Add tools</strong> — Tools tab → + Add tool → fill in name, command, mode, argument schema.</li>
+    <li><strong>Set policy</strong> — Policy tab → set <code>allowed_binaries</code>, <code>require_approval_for</code>, etc. → Save.</li>
+    <li><strong>Add secrets / env vars</strong> — Secrets tab → + Add (values injected as env vars into the container).</li>
+    <li><strong>Deploy</strong> — click <strong>▶ Deploy</strong> (or the operator auto-detects the new record). Status will change to <code>running</code>.</li>
+    <li><strong>Connect AI client</strong> — copy the MCP endpoint from the page header (e.g. <code>http://localhost:19001/mcp</code>) into Claude Desktop / Continue / Open WebUI config.</li>
+  </ol>
+
+  <h3>What only needs a Reload (no container restart)</h3>
+
+  <p><strong>Reload</strong> (<code>POST /reload</code> on the runtime) reloads config files from disk without killing the process. It is triggered automatically by the control plane after saving changes.</p>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>Change</th><th>How to apply</th><th>Auto reload?</th></tr>
+      <tr><td>Edit tool (name, command, schema, mode)</td><td>UI → Tools → Edit → Save</td><td>✅ Yes — control plane calls <code>/reload</code></td></tr>
+      <tr><td>Change policy (allowed_binaries, approval, timeouts)</td><td>UI → Policy → Save shell policy</td><td>✅ Yes</td></tr>
+      <tr><td>Change auth token</td><td>UI → Auth → Generate / Regenerate token</td><td>✅ Yes</td></tr>
+      <tr><td>Import tool package</td><td>UI → Import JSON</td><td>✅ Yes</td></tr>
+    </table>
+  </div>
+
+  <div class="callout ok">
+    <strong>Reload does not interrupt running calls</strong>
+    The runtime process keeps running — only config files are reloaded. MCP clients do not lose their connection.
+  </div>
+
+  <h3>What requires a Redeploy (container restart)</h3>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>Change</th><th>How to apply</th></tr>
+      <tr><td>Adding / removing secrets (env vars)</td><td>UI → Secrets → save → click <strong>🔄 Redeploy</strong></td></tr>
+      <tr><td>Changing runtime class (different Docker image)</td><td>UI → Redeploy</td></tr>
+      <tr><td>Memory / CPU limit change</td><td>UI → Redeploy</td></tr>
+      <tr><td>New version of runtime-shell after <code>./deploy.sh</code></td><td>UI → <strong>Rebuild Image + Deploy</strong> (on K8s: triggers rollout restart)</td></tr>
+    </table>
+  </div>
+
+  <div class="callout warn">
+    <strong>Secrets require Redeploy</strong>
+    Environment variables are injected into the container at start time. Changing a secret value is <strong>not visible</strong> to a running container until a Redeploy is performed.
+  </div>
+
+  <h3>How Reload works technically</h3>
+  <p>The control plane writes artifacts to <code>./data/configs/&lt;runtime-id&gt;/</code> (Docker) or a ConfigMap (K8s), then calls <code>POST /reload</code> on the runtime endpoint. The runtime reloads:</p>
+  <ul>
+    <li><code>tools.json</code> — tool definitions with commands</li>
+    <li><code>policy.json</code> — security policy</li>
+    <li><code>runtime-config.json</code> — metadata + auth token</li>
+    <li><code>adapter-config.json</code> — adapter configuration</li>
+  </ul>
+  <p><code>runtime-env.json</code> (env vars from secrets) is <strong>not reloaded</strong> — requires a process restart.</p>
+
+  <h3>Manual reload (if auto reload failed)</h3>
+  <pre><code># Docker — directly on the container
+curl -X POST http://localhost:19001/reload
+
+# OpenShift — via the runtime route
+curl -X POST https://mcp-runtime-&lt;id&gt;-mcp-platform.apps.&lt;domain&gt;/reload</code></pre>
+
+  <h3>Runtime states</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Status</th><th>Meaning</th><th>Action</th></tr>
+      <tr><td><code>running</code></td><td>Container is up, /health responds</td><td>—</td></tr>
+      <tr><td><code>deploying</code></td><td>Operator is creating/updating the container</td><td>Wait ~10–30s</td></tr>
+      <tr><td><code>stopped</code></td><td>Container stopped (replicas=0)</td><td>Click ▶ Start</td></tr>
+      <tr><td><code>failed</code></td><td>Error at startup or healthcheck</td><td>Check Logs → Redeploy</td></tr>
+      <tr><td><code>error</code></td><td>Operator error (e.g. missing image)</td><td>Check operator logs</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ─── REBUILD ───────────────────────────────────────────────────── -->
+<div class="section" id="rebuild">
+  <h2>Rebuilding Runtime Images</h2>
+
+  <h3>Docker Compose</h3>
+  <ol class="steps">
+    <li><strong>Rebuild image</strong><pre><code>docker compose --profile build-only build mcp-runtime-shell-image</code></pre></li>
+    <li><strong>In UI</strong> — Runtimes → select server → <strong>Rebuild Image + Deploy</strong></li>
+  </ol>
+
+  <h3>Kubernetes / OpenShift</h3>
+  <p>There is no BuildConfig on K8s — images are built by <code>deploy.sh</code> externally. The <em>Rebuild Image + Deploy</em> action skips building and only does a <code>rollout restart</code> with <code>imagePullPolicy: Always</code>.</p>
+
+  <ol class="steps">
+    <li><strong>Rebuild and push image</strong><pre><code>cd MCCPLATFORMforKUBERNETES
+./deploy.sh</code></pre>
+    <em>or manually:</em>
+    <pre><code>docker build -t $REGISTRY/mcp-runtime-shell:latest ../runtime-shell
+podman push --tls-verify=false $REGISTRY/mcp-runtime-shell:latest</code></pre>
+    </li>
+    <li><strong>In UI</strong> — Runtimes → server → <strong>Rebuild Image + Deploy</strong> (triggers <code>rollout restart</code> → pod pulls the new image)</li>
+  </ol>
+</div>
+
+<!-- ─── TROUBLESHOOT ─────────────────────────────────────────────── -->
+<div class="section" id="troubleshoot">
+  <h2>Troubleshooting</h2>
+
+  <h3>General</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Problem</th><th>Solution</th></tr>
+      <tr><td>Runtime pod in <code>ImagePullBackOff</code> state</td><td>Check that <code>MCP_RUNTIME_IMAGE_REGISTRY_PREFIX</code> points to the internal svc (not the external route). Pods cannot use the external route to pull images.</td></tr>
+      <tr><td><code>403 Forbidden</code> on <em>Rebuild Image + Deploy</em> on K8s</td><td>There is no BuildConfig on K8s — the action correctly skips the build and only does a redeploy. If 403, check operator ServiceAccount permissions.</td></tr>
+      <tr><td>Runtime in state <code>failed: SCC forbidden runAsUser</code></td><td>Remove <code>runAsUser: 1000</code> and <code>fsGroup: 1000</code> from pod securityContext. Keep only <code>runAsNonRoot: true</code>.</td></tr>
+      <tr><td><code>oc: command not found</code> in deploy.sh</td><td>Download <code>oc</code> to the directory: <code>wget https://...tar.gz &amp;&amp; tar xvf oc.tar</code>. deploy.sh automatically adds <code>$PWD</code> to PATH.</td></tr>
+      <tr><td>LVMCluster stuck <code>Progressing</code></td><td>After cluster restart: <code>sudo rm -f /var/lock/vgmanager/vgmanager.lock</code> on the node, then delete the vg-manager pod.</td></tr>
+      <tr><td>LVMCluster <code>Failed: already exists in filesystem</code></td><td>(a) VG name collides with device name — change name to something other than <code>vdc</code>. (b) Old PV signatures on disk — <code>pvremove -ff /dev/vdc</code>.</td></tr>
+      <tr><td><code>docker push</code> TLS error to OCP registry</td><td>Use <code>podman push --tls-verify=false</code> instead of docker push. Docker requires a restart after adding insecure-registries.</td></tr>
+      <tr><td>Approval not working — AI calls again but still blocked</td><td>Check that it is the exact same tool with the exact same arguments. Auto-confirm only works when the hash (tool_name + args) is identical. Restarting the pod clears all pending approvals.</td></tr>
+      <tr><td>Approval window too short</td><td>Set <code>approval_timeout_seconds</code> in policy JSON (default 300s). Pending approvals are cleared on pod restart.</td></tr>
+      <tr><td>Test tab returns 500 Internal Server Error</td><td>The tool requires a mandatory parameter (e.g. <code>args</code>). Fill in the Arguments JSON field in the test form before clicking Run Tool.</td></tr>
+    </table>
+  </div>
+
+  <h3>Logs</h3>
+  <pre><code># Control plane
+docker compose logs -f mcp-platform
+
+# Operator
+docker compose logs -f mcp-platform-operator
+
+# Runtime (K8s)
+oc logs -n mcp-platform -l app=mcp-runtime-&lt;id&gt; -f</code></pre>
+
+  <div class="callout ok">
+    <strong>UI audit log</strong>
+    All operations (deploy, stop, reload, approvals) are recorded in the <strong>Audit</strong> tab. Container logs are available in the <strong>Logs</strong> tab.
+  </div>
+</div>
+
+</main>
+
+<script>
+function setTheme(t) {
+  document.documentElement.dataset.theme = t;
+  localStorage.setItem('mcp-docs-theme', t);
+  document.getElementById('btn-light').classList.toggle('active', t === 'light');
+  document.getElementById('btn-dark').classList.toggle('active', t === 'dark');
+}
+(function(){
+  const saved = localStorage.getItem('mcp-docs-theme')
+    || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  setTheme(saved);
+})();
+const sections = document.querySelectorAll('.section');
+const links = document.querySelectorAll('nav li a');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      const id = e.target.id;
+      links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + id));
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => observer.observe(s));
+</script>

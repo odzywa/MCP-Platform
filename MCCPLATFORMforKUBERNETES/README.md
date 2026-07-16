@@ -278,16 +278,58 @@ On Kubernetes the token works identically to Docker — it is stored in `runtime
 
 ## OpenShift Monitor Runtime
 
-The platform ships with a pre-configured `openshift-monitor` runtime — a full set of OpenShift tools for cluster management. On first startup, the control plane seeds it automatically with correct command definitions.
+The platform ships with a pre-configured `openshift-monitor` runtime — a full set of OpenShift tools for cluster management. On first startup, the control plane seeds it automatically in `draft` status. You only need to add credentials and click Deploy.
 
-### Required Runtime Credentials
+### Option A — Auto-deploy via config.env (recommended)
 
-Add these in UI → Runtime → Credentials:
+Fill in two optional fields in `config.env` **before** running `deploy.sh`:
+
+```bash
+# Create a dedicated Service Account with cluster-admin
+oc create sa mcp-admin -n mcp-platform
+oc adm policy add-cluster-role-to-user cluster-admin -z mcp-admin -n mcp-platform
+
+# Generate a long-lived token (8760h = 1 year)
+OC_MCP_TOKEN=$(oc create token mcp-admin -n mcp-platform --duration=8760h)
+OC_MCP_SERVER=$(oc whoami --show-server)
+
+# Paste into config.env:
+echo "OC_MCP_TOKEN=$OC_MCP_TOKEN" >> config.env
+echo "OC_MCP_SERVER=$OC_MCP_SERVER" >> config.env
+```
+
+Then run `./deploy.sh` — step 6 will automatically:
+1. Wait for the platform API to be ready
+2. Log in with default admin credentials
+3. Set `OC_TOKEN` and `OC_SERVER` as Runtime Credentials on `openshift-monitor`
+4. Trigger deployment
+
+The runtime will be live at its MCP endpoint within ~30 seconds.
+
+> **Note:** `config.env` is in `.gitignore` — credentials are never committed to git.
+
+### Option B — Manual setup via UI
+
+Add these in UI → Runtimes → openshift-monitor → Secrets:
 
 | Name | Value |
 |---|---|
 | `OC_TOKEN` | Service account token: `oc create token <sa> -n <ns>` |
 | `OC_SERVER` | API server URL: `https://api.cluster.dom:6443` |
+
+Then click **▶ Deploy**.
+
+### Connect an AI client
+
+After the runtime is running, generate an MCP auth token in UI → openshift-monitor → Auth → Generate token, then configure your client:
+
+```
+# OpenCode (request headers):
+X-API-Key: <token>
+
+# Claude Desktop / Cline (headers in mcpServers config):
+Authorization: Bearer <token>
+```
 
 ### Included Tools
 
