@@ -14,7 +14,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
-from jsonschema import validate
+from jsonschema import validate, ValidationError as JsonSchemaValidationError
 from pydantic import BaseModel, create_model, field_validator
 
 
@@ -609,7 +609,10 @@ async def execute_tool(tool_name: str, arguments: dict[str, Any],
         if isinstance(v, list):
             arguments[k] = " ".join(str(x) for x in v)
 
-    validate(arguments, tool.get("input_schema") or {})
+    try:
+        validate(arguments, tool.get("input_schema") or {})
+    except JsonSchemaValidationError as exc:
+        return {"ok": False, "error": f"validation error: {exc.message}", "validation_blocked": True}
     pydantic_error = validate_with_pydantic(tool_name, arguments, tool.get("input_schema") or {}, policy)
     if pydantic_error:
         return {"ok": False, "error": pydantic_error, "validation_blocked": True}

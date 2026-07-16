@@ -712,9 +712,9 @@ user="1000:1000"</code></pre>
 
 <!-- ─── APPROVALS ────────────────────────────────────────────────── -->
 <div class="section" id="approvals">
-  <h2>System zatwierdzeń <span class="badge green">NOWE</span></h2>
+  <h2>System zatwierdzeń (Human-in-the-Loop) <span class="badge green">NOWE</span></h2>
 
-  <p>Narzędzia z trybem <code>write</code> lub <code>destructive</code> mogą wymagać ręcznego zatwierdzenia przez administratora zanim zostaną wykonane. AI czeka na decyzję — do 5 minut domyślnie.</p>
+  <p>Narzędzia z trybem <code>write</code> lub <code>destructive</code> mogą wymagać potwierdzenia użytkownika przed wykonaniem. Zatwierdzenie odbywa się <strong>bezpośrednio w chacie AI</strong> — nie potrzeba osobnego panelu ani dodatkowych akcji w UI.</p>
 
   <h3>Jak to działa</h3>
 
@@ -723,56 +723,66 @@ user="1000:1000"</code></pre>
     <div class="flow-arrow">→</div>
     <div class="flow-step neutral">Runtime sprawdza policy</div>
     <div class="flow-arrow">→</div>
-    <div class="flow-step warn">⏳ Żądanie zatwierdzenia</div>
+    <div class="flow-step warn">⚠️ approval_required</div>
     <div class="flow-arrow">→</div>
-    <div class="flow-step neutral">Admin: /approvals</div>
+    <div class="flow-step neutral">AI pyta w chacie</div>
     <div class="flow-arrow">→</div>
-    <div class="flow-step ok">✅ Zatwierdzone → execute</div>
+    <div class="flow-step neutral">Użytkownik: "tak"</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step ok">✅ AI wywołuje ponownie → execute</div>
   </div>
 
-  <p>Równoległa ścieżka odrzucenia: admin klika Odrzuć → <span class="badge red">❌ Odrzucono</span> → AI otrzymuje błąd z powodem.</p>
+  <p>Runtime zwraca do AI komunikat z opisem komendy i instrukcją. AI pyta użytkownika w chacie. Po potwierdzeniu AI wywołuje to samo narzędzie ponownie — runtime automatycznie wykonuje komendę.</p>
+
+  <h3>Dwa sposoby potwierdzenia</h3>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>Sposób</th><th>Jak działa</th><th>Kompatybilność</th></tr>
+      <tr>
+        <td><strong>Auto-confirm</strong> przy ponownym wywołaniu</td>
+        <td>Pierwsze wywołanie rejestruje pending. Drugie identyczne wywołanie (ten sam tool + te same args) w oknie <code>approval_timeout_seconds</code> jest automatycznie zatwierdzone — bez żadnych dodatkowych parametrów.</td>
+        <td>Wszystkie modele AI</td>
+      </tr>
+      <tr>
+        <td><strong><code>__confirm</code></strong> parametr</td>
+        <td>AI dodaje <code>__confirm="yes"</code> (lub <code>"tak"</code>, <code>"true"</code>, <code>"1"</code>, <code>"ok"</code> itd.) do parametrów wywołania. Parametr jest zdefiniowany w schemacie każdego narzędzia.</td>
+        <td>Modele które potrafią dodać nowy parametr do istniejącego wywołania</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="callout ok">
+    <strong>Dlaczego auto-confirm działa z każdym modelem?</strong>
+    Niektóre modele (np. lokalne jak Qwen, Llama) nie potrafią dodać parametru <code>__confirm</code> do ponownego wywołania narzędzia. Auto-confirm rozwiązuje ten problem — AI po prostu wywołuje to samo narzędzie z tymi samymi argumentami, co jest naturalnym zachowaniem po potwierdzeniu przez użytkownika.
+  </div>
 
   <h3>Konfiguracja</h3>
 
   <div class="table-wrap">
     <table>
       <tr><th>Wartość <code>require_approval_for</code></th><th>Zachowanie</th></tr>
-      <tr><td><em>nie ustawione</em> lub <code>[]</code></td><td>Brak zatwierdzeń — domyślne, wstecznie zgodne</td></tr>
+      <tr><td><em>nie ustawione</em> lub <code>""</code></td><td>Brak zatwierdzeń — domyślne</td></tr>
       <tr><td><code>"auto"</code></td><td>Auto-detekcja: mode=write/destructive LUB nazwa narzędzia zawiera słowo kluczowe (<code>delete</code>, <code>create</code>, <code>apply</code>, <code>patch</code>, <code>scale</code>…)</td></tr>
       <tr><td><code>["destructive"]</code></td><td>Tylko narzędzia z mode=destructive (delete)</td></tr>
       <tr><td><code>["write", "destructive"]</code></td><td>Narzędzia write (create/apply) i destructive (delete)</td></tr>
     </table>
   </div>
 
-  <div class="code-label">Minimalna konfiguracja — tylko delety wymagają zatwierdzenia</div>
+  <div class="code-label">Zalecana konfiguracja — auto z prefiksami komend</div>
   <pre><code>{
-  "require_approval_for": ["destructive"],
+  "require_approval_for": "auto",
+  "require_approval_for_prefixes": ["oc delete", "oc apply", "kubectl delete"],
   "approval_timeout_seconds": 300
 }</code></pre>
 
-  <div class="code-label">Zero-config — auto-detekcja z nazwy i trybu narzędzia</div>
-  <pre><code>{
-  "require_approval_for": "auto",
-  "approval_timeout_seconds": 600
-}</code></pre>
-
-  <h3>Strona zatwierdzeń</h3>
-  <p>Dostępna pod <code>/approvals</code> (zakładka <strong>Zatwierdzenia</strong> w nawigacji). Widoczna dla ról <code>read_write</code> i <code>admin</code>.</p>
-  <p>Na stronie widać:</p>
-  <ul>
-    <li>Oczekujące zatwierdzenia z pełnymi argumentami, trybem narzędzia, IP klienta, modelem AI</li>
-    <li>Przyciski <strong>Zatwierdź</strong> i <strong>Odrzuć</strong> (z opcjonalnym powodem odrzucenia)</li>
-    <li>Auto-refresh co 10 sekund gdy są oczekujące zatwierdzenia</li>
-    <li>Historia ostatnich 50 decyzji</li>
-  </ul>
-
   <div class="callout warn">
-    <strong>Timeout</strong>
-    Jeśli admin nie zareaguje w <code>approval_timeout_seconds</code> (domyślnie 300s = 5 minut), żądanie zostaje automatycznie odrzucone. AI dostaje błąd: <em>"approval timeout after 300s"</em>.
+    <strong>Nie mieszaj z blocked_command_prefixes</strong>
+    Jeśli chcesz wymagać zatwierdzenia dla danego prefiksu — użyj <code>require_approval_for_prefixes</code>. Nie dodawaj tych samych prefiksów do <code>blocked_command_prefixes</code>, bo zatwierdzenie nie pomoże — po potwierdzeniu runtime pomija blokadę prefiksów, ale nadal musisz mieć komendę na liście dozwolonych binariów (<code>allowed_binaries</code>).
   </div>
 
-  <h3>Słowa kluczowe auto-detekcji</h3>
-  <p>W trybie <code>"auto"</code> wymagają zatwierdzenia narzędzia których nazwa zawiera:</p>
+  <h3>Słowa kluczowe auto-detekcji (tryb "auto")</h3>
+  <p>Zatwierdzenie wymagane gdy nazwa narzędzia zawiera:</p>
   <div style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0">
     <code>delete</code><code>remove</code><code>destroy</code><code>drop</code><code>purge</code><code>wipe</code><code>truncate</code><code>erase</code><code>clean</code>
     <code>create</code><code>apply</code><code>deploy</code><code>install</code><code>patch</code><code>scale</code><code>expose</code><code>rollout</code><code>add</code><code>set</code><code>update</code><code>replace</code><code>restart</code>
@@ -1012,7 +1022,8 @@ podman push --tls-verify=false $REGISTRY/mcp-runtime-shell:latest</code></pre>
       <tr><td>LVMCluster stuck <code>Progressing</code></td><td>Po restarcie klastra: <code>sudo rm -f /var/lock/vgmanager/vgmanager.lock</code> na węźle, usuń pod vg-managera.</td></tr>
       <tr><td>LVMCluster <code>Failed: already exists in filesystem</code></td><td>(a) Nazwa VG pokrywa się z nazwą urządzenia — zmień name na inne niż <code>vdc</code>. (b) Stare sygnatury PV na dysku — <code>pvremove -ff /dev/vdc</code>.</td></tr>
       <tr><td><code>docker push</code> błąd TLS do rejestru OCP</td><td>Użyj <code>podman push --tls-verify=false</code> zamiast docker push. Docker wymaga restartu po dodaniu insecure-registries.</td></tr>
-      <tr><td>Zatwierdzenie timeout po 300s</td><td>Zwiększ <code>approval_timeout_seconds</code> w policy JSON lub bądź aktywny na stronie <code>/approvals</code>.</td></tr>
+      <tr><td>Zatwierdzenie nie działa — AI wywołuje ponownie ale nadal blokowane</td><td>Sprawdź czy to to samo narzędzie z tymi samymi argumentami. Auto-confirm działa tylko gdy hash (tool_name + args) jest identyczny. Restartowanie poda kasuje pending approvals.</td></tr>
+      <tr><td>Zwiększ okno zatwierdzenia</td><td>Ustaw <code>approval_timeout_seconds</code> w policy JSON (domyślnie 300s). Po restarcie poda pending approvals są kasowane.</td></tr>
     </table>
   </div>
 
