@@ -7,8 +7,18 @@ from . import store
 AUTH_COOKIE = "mcp_session"
 SESSION_TTL_H = 24
 
+# Token serwisowy dla wywołań maszynowych (platform-manager, skrypty, CI).
+# Pusty = mechanizm wyłączony, zostaje samo uwierzytelnianie cookie.
+API_TOKEN_HEADER = "X-API-Key"
+
 # Public paths that never require login
-_PUBLIC = re.compile(r"^/(login|register)(/?|\?.*)$|^/api/runtimes/[^/]+/openwebui-tool\.py$|^/api/tool-call$|^/api/runtime-callback|^/api/auto-create$|^/api/platform-docs$|^/api/runtimes/?$|^/api/runtimes/[^/]+/?$|^/api/tool-packages/?$|^/api/lang\.js$|^/api/approval-request$|^/api/approval-status/[^/]+$")
+# Uwaga: /api/auto-create, /api/runtimes i /api/runtimes/<id> BYŁY tu publiczne.
+# Pierwsze pozwalało bez logowania utworzyć i wdrożyć runtime z dowolną komendą
+# shell, drugie i trzecie zwracały mcp_auth_token każdego serwera. Wywołania
+# maszynowe (platform-manager) uwierzytelniają się teraz nagłówkiem X-API-Key —
+# patrz MCP_PLATFORM_API_TOKEN w AuthMiddleware.
+# Endpointy callbackowe runtime'ów zostają publiczne — kontenery nie mają cookie.
+_PUBLIC = re.compile(r"^/(login|register)(/?|\?.*)$|^/api/runtimes/[^/]+/openwebui-tool\.py$|^/api/tool-call$|^/api/runtime-callback|^/api/platform-docs$|^/api/tool-packages/?$|^/api/lang\.js$|^/api/approval-request$|^/api/approval-status/[^/]+$")
 # Paths that are read-only (any logged-in user can GET them)
 _READONLY_GET = re.compile(
     r"^/(|runtimes.*|audit.*|logs.*|security.*|docs.*|external-mcp.*"

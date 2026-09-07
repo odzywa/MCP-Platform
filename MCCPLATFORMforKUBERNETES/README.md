@@ -61,10 +61,10 @@ Each MCP runtime server = a separate `Deployment` in the `mcp-platform` namespac
 oc get pods -n mcp-platform
 
 # Control-plane logs
-oc logs -n mcp-platform deployment/mcp-platform -f
+oc logs -n mcp-platform deployment/mcp-platform -c control-plane -f
 
-# Operator logs
-oc logs -n mcp-platform deployment/mcp-platform-operator -f
+# Operator logs (operator to drugi kontener w podzie mcp-platform)
+oc logs -n mcp-platform deployment/mcp-platform -c operator -f
 
 # Check if operator creates runtime pods
 oc get deployments -n mcp-platform

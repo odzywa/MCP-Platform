@@ -1,5 +1,9 @@
 ---
-# Zezwól na ruch przychodzący z routera OpenShift do control-plane
+# Ingress do UI dopuszczony tylko z namespace'u routera OpenShift.
+# Trzy warianty selektora, bo etykieta różni się między wersjami OCP —
+# pozycje w `from` są sumowane (OR), więc wystarczy, że trafi jedna.
+# Gdyby po deployu UI przestało być dostępne z zewnątrz, sprawdź:
+#   oc get ns openshift-ingress --show-labels
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -9,12 +13,25 @@ spec:
   podSelector:
     matchLabels:
       app: mcp-platform
+  policyTypes:
+    - Ingress
   ingress:
-    - ports:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              policy-group.network.openshift.io/ingress: ""
+        - namespaceSelector:
+            matchLabels:
+              network.openshift.io/policy-group: ingress
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-ingress
+      ports:
         - protocol: TCP
           port: 8080
 ---
-# Zezwól na ruch z routera OpenShift do wszystkich podów runtime
+# Runtime'y: z routera (zewnętrzny endpoint MCP) i z control-plane
+# (test tool, /reload, health check po sieci wewnętrznej).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -24,12 +41,27 @@ spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/managed-by: mcp-platform
+  policyTypes:
+    - Ingress
   ingress:
-    - ports:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              policy-group.network.openshift.io/ingress: ""
+        - namespaceSelector:
+            matchLabels:
+              network.openshift.io/policy-group: ingress
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-ingress
+        - podSelector:
+            matchLabels:
+              app: mcp-platform
+      ports:
         - protocol: TCP
           port: 8080
 ---
-# Zezwól runtime podom na callback do control-plane (logowanie tool calls)
+# Callback runtime'ów do control-plane: logowanie tool calls i approval requests.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -39,6 +71,8 @@ spec:
   podSelector:
     matchLabels:
       app: mcp-platform
+  policyTypes:
+    - Ingress
   ingress:
     - from:
         - podSelector:
@@ -47,3 +81,10 @@ spec:
       ports:
         - protocol: TCP
           port: 8080
+---
+# Świadomie BRAK polityk egress.
+# Runtime'y wołają z definicji dowolne cele: adapter http_request uderza
+# w backendy podane przez użytkownika, a runtime-shell (openshift-monitor)
+# rozmawia z API serwerem klastra. Default-deny na egressie zabiłby platformę.
+# Jeśli w Twoim środowisku egress ma być ograniczony, zrób to per-runtime
+# na podstawie labela mcp-platform/runtime-id, nie globalnie.

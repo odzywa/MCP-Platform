@@ -8,6 +8,13 @@ cd "$(dirname "$0")"
 
 source config.env
 
+for _var in REGISTRY PULL_REGISTRY APPS_DOMAIN NAMESPACE; do
+  if [ -z "${!_var:-}" ]; then
+    echo "BŁĄD: $_var nie jest ustawione w config.env" >&2
+    exit 1
+  fi
+done
+
 # Użyj lokalnego oc jeśli nie ma w PATH
 if ! command -v oc &>/dev/null && [ -f "./oc" ]; then
   export PATH="$PWD:$PATH"
@@ -26,19 +33,33 @@ echo ""
 PARENT_DIR="$(cd .. && pwd)"
 
 # ── 1. Buduj obrazy ────────────────────────────────────────────────────────────
-echo "[1/5] Budowanie obrazów..."
+echo "[1/6] Budowanie obrazów..."
 
 # Operator k8s (z tego projektu)
 docker build -t mcp-platform-operator-k8s:latest ./operator/
 
-# Control plane i runtime images (z głównego projektu)
-(cd "$PARENT_DIR" && docker compose build mcp-platform 2>/dev/null) || \
-  echo "  UWAGA: control-plane build failed — użyj istniejącego obrazu"
-(cd "$PARENT_DIR" && docker compose --profile build-only build 2>/dev/null) || \
-  echo "  UWAGA: runtime images build failed — użyj istniejących obrazów"
+# Control plane i runtime images (z głównego projektu).
+# Błąd builda nie przerywa deployu — wypchniemy obraz zbudowany wcześniej —
+# ale komunikat musi być widoczny, więc bez 2>/dev/null.
+(cd "$PARENT_DIR" && docker compose build mcp-platform) || \
+  echo "  UWAGA: control-plane build failed — próbuję użyć istniejącego obrazu"
+(cd "$PARENT_DIR" && docker compose --profile build-only build) || \
+  echo "  UWAGA: runtime images build failed — próbuję użyć istniejących obrazów"
+
+# ...ale pchać można tylko to, co faktycznie istnieje.
+require_image() {
+  docker image inspect "$1" >/dev/null 2>&1 || {
+    echo "BŁĄD: brak obrazu $1 w lokalnym demonie Docker — zbuduj go przed deployem" >&2
+    exit 1
+  }
+}
+for _img in mcp-platform-control-plane mcp-platform-operator-k8s \
+            mcp-runtime-http-gateway mcp-runtime-shell mcp-runtime-openapi; do
+  require_image "$_img:latest"
+done
 
 # ── 2. Push obrazów do rejestru ───────────────────────────────────────────────
-echo "[2/5] Push obrazów do rejestru..."
+echo "[2/6] Push obrazów do rejestru..."
 
 # Logowanie do rejestru OpenShift przez podman (--tls-verify=false omija problemy z CA)
 if [[ "$REGISTRY" == *"openshift-image-registry"* ]]; then
@@ -53,9 +74,10 @@ fi
 push() {
   local src="$1" dst="$REGISTRY/$2"
   echo "  $src → $dst"
-  # Skopiuj z docker daemon do podman, potem wypchnij
-  podman pull --tls-verify=false "docker-daemon:${src}" 2>/dev/null || true
-  podman tag "$src" "$dst" 2>/dev/null || true
+  # Skopiuj z docker daemon do podman, potem wypchnij.
+  # Każdy krok musi się udać — inaczej wypchnęlibyśmy stary obraz spod tego samego tagu.
+  podman pull --tls-verify=false "docker-daemon:${src}"
+  podman tag "$src" "$dst"
   podman push --tls-verify=false "$dst"
 }
 
@@ -66,7 +88,7 @@ push "mcp-runtime-shell:latest"           "mcp-runtime-shell:latest"
 push "mcp-runtime-openapi:latest"         "mcp-runtime-openapi:latest"
 
 # ── 3. Podstaw wartości w manifestach ─────────────────────────────────────────
-echo "[3/5] Przygotowywanie manifestów..."
+echo "[3/6] Przygotowywanie manifestów..."
 
 WORK_DIR="$(mktemp -d)"
 cp k8s/*.yaml "$WORK_DIR/"
@@ -83,21 +105,32 @@ for f in "$WORK_DIR"/*.yaml; do
 done
 
 # ── 4. Aplikuj manifesty ──────────────────────────────────────────────────────
-echo "[4/5] Aplikowanie manifestów..."
+echo "[4/6] Aplikowanie manifestów..."
 
 oc apply -f "$WORK_DIR/01-namespace-storage.yaml"
 oc apply -f "$WORK_DIR/02-rbac.yaml"
-oc apply -f "$WORK_DIR/03-control-plane.yaml"
+
+# Presety Tool Package z ../templates/ — obraz control-plane ich nie zawiera
+oc create configmap mcp-platform-templates -n "$NAMESPACE" \
+  --from-file="$PARENT_DIR/templates/openshift-mcp/" \
+  --dry-run=client -o yaml | oc apply -f -
+
+# 04 przed 03: dostarcza ConfigMapę mcp-operator-env, którą pod control-plane
+# wciąga przez envFrom w kontenerze operatora
 oc apply -f "$WORK_DIR/04-operator.yaml"
+oc apply -f "$WORK_DIR/03-control-plane.yaml"
 oc apply -f "$WORK_DIR/05-networkpolicy.yaml"
+
+# Migracja ze starego układu: operator miał własny Deployment, teraz jest
+# drugim kontenerem w podzie mcp-platform. Usuń osierocony Deployment.
+oc delete deployment mcp-platform-operator -n "$NAMESPACE" --ignore-not-found
 
 rm -rf "$WORK_DIR"
 
 # ── 5. Wymusz rollout (nowy obraz pod tym samym tagiem) i czekaj ─────────────
-echo "[5/5] Czekam na gotowość control-plane..."
+echo "[5/6] Czekam na gotowość control-plane..."
 oc rollout restart deployment/mcp-platform -n "$NAMESPACE"
-oc rollout restart deployment/mcp-platform-operator -n "$NAMESPACE"
-oc rollout status deployment/mcp-platform -n "$NAMESPACE" --timeout=120s
+oc rollout status deployment/mcp-platform -n "$NAMESPACE" --timeout=180s
 
 ROUTE=$(oc get route mcp-platform -n "$NAMESPACE" --template='https://{{ .spec.host }}' 2>/dev/null || echo "")
 PLATFORM_URL="${ROUTE:-https://mcp-platform-${NAMESPACE}.${APPS_DOMAIN}}"

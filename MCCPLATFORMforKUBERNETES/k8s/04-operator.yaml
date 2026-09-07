@@ -1,3 +1,8 @@
+# Operator nie ma już własnego Deploymentu — działa jako drugi kontener
+# w podzie mcp-platform (patrz 03-control-plane.yaml). Powód: control-plane
+# i operator dzielą jeden PVC ReadWriteOnce z bazą SQLite, a wymuszanie tego
+# przez podAffinity potrafiło zakleszczyć scheduling obu Deploymentów.
+# Ten plik dostarcza już tylko konfigurację kontenera operatora.
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -14,70 +19,3 @@ data:
   # Format: https://mcp-runtime-<id>.__NAMESPACE__.__APPS_DOMAIN__/mcp
   MCP_RUNTIME_PUBLIC_BASE_URL: https://mcp-platform.__APPS_DOMAIN__
   HOME: /tmp
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: mcp-platform-operator
-  namespace: __NAMESPACE__
-  labels:
-    app: mcp-platform-operator
-spec:
-  replicas: 1
-  strategy:
-    type: Recreate
-  selector:
-    matchLabels:
-      app: mcp-platform-operator
-  template:
-    metadata:
-      labels:
-        app: mcp-platform-operator
-    spec:
-      serviceAccountName: mcp-operator
-      securityContext:
-        runAsNonRoot: true
-        seccompProfile:
-          type: RuntimeDefault
-      # Operator i control-plane muszą być na tym samym nodzie bo dzielą RWO PVC
-      affinity:
-        podAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchLabels:
-                  app: mcp-platform
-              topologyKey: kubernetes.io/hostname
-      containers:
-        - name: operator
-          image: __PULL_REGISTRY__/mcp-platform-operator-k8s:latest
-          imagePullPolicy: Always
-          envFrom:
-            - configMapRef:
-                name: mcp-platform-env
-            - configMapRef:
-                name: mcp-operator-env
-          securityContext:
-            readOnlyRootFilesystem: true
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
-          resources:
-            requests:
-              cpu: 50m
-              memory: 128Mi
-            limits:
-              cpu: 500m
-              memory: 256Mi
-          volumeMounts:
-            - name: data
-              mountPath: /data
-            - name: tmp
-              mountPath: /tmp
-      volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: mcp-platform-data
-        - name: tmp
-          emptyDir:
-            medium: Memory
-            sizeLimit: 32Mi

@@ -50,6 +50,15 @@ def host_config_path(config_path: str) -> str:
     return config_path
 
 
+def _runtime_auth_token(server_id: str) -> str:
+    """Token MCP serwera z wygenerowanego runtime-config.json ('' gdy brak)."""
+    cfg = Path(CONFIG_CONTAINER_ROOT) / server_id / "runtime-config.json"
+    try:
+        return str(json.loads(cfg.read_text(encoding="utf-8")).get("auth_token") or "")
+    except Exception:
+        return ""
+
+
 class DockerDeploymentDriver:
     """Docker-backed deployment driver implementing full MCP runtime lifecycle."""
 
@@ -243,6 +252,10 @@ class DockerDeploymentDriver:
         reload_url = f"http://{name}:8080/reload"
         req = _UrlRequest(reload_url, data=b"{}", method="POST")
         req.add_header("Content-Type", "application/json")
+        # /reload nie jest już publiczne w runtime — dołóż token serwera, jeśli ma ustawiony.
+        token = _runtime_auth_token(server_id)
+        if token:
+            req.add_header("X-API-Key", token)
         try:
             with urlopen(req, timeout=10) as resp:
                 return json.loads(resp.read()) if resp.status == 200 else {"ok": True}

@@ -26,6 +26,7 @@ from .adapters_config import adapter_contracts
 from .config import (
     _ADMIN_ONLY,
     _FAVICON_TAG,
+    API_TOKEN_HEADER,
     _PUBLIC,
     _READONLY_GET,
     AUTH_COOKIE,
@@ -102,6 +103,26 @@ def _access_denied_html(user: dict, msg: str) -> str:
     )
 
 
+# Token serwisowy: pozwala runtime'om i skryptom wołać /api/ bez cookie.
+# Ustawiany przez MCP_PLATFORM_API_TOKEN; pusty = mechanizm wyłączony.
+_API_TOKEN = os.getenv("MCP_PLATFORM_API_TOKEN", "").strip()
+_API_TOKEN_ROLE = os.getenv("MCP_PLATFORM_API_ROLE", "read_write").strip() or "read_write"
+
+
+def _api_token_user(request: Request) -> dict[str, Any] | None:
+    """Uwierzytelnienie nagłówkiem X-API-Key — tylko dla ścieżek /api/."""
+    if not _API_TOKEN or not request.url.path.startswith("/api/"):
+        return None
+    presented = request.headers.get(API_TOKEN_HEADER, "")
+    if not presented:
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            presented = auth[7:]
+    if not presented or not _secrets_mod.compare_digest(presented, _API_TOKEN):
+        return None
+    return {"id": 0, "username": "api-token", "role": _API_TOKEN_ROLE}
+
+
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Any) -> Any:
         path = request.url.path
@@ -113,7 +134,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         token = request.cookies.get(AUTH_COOKIE, "")
-        user = _get_session(token)
+        user = _get_session(token) or _api_token_user(request)
 
         if not user:
             if path.startswith("/api/"):
@@ -626,7 +647,10 @@ def builtin_tool_packages() -> list[dict[str, Any]]:
         ],
     }
     _pm_action_schema = lambda desc: {"type": "object", "properties": {"runtime_id": {"type": "string", "description": desc}}, "required": ["runtime_id"]}
-    _pm_action_cmd = lambda action: ["curl", "-s", "-X", "POST", "-H", "Content-Type: application/json", "${PLATFORM_URL}/api/runtimes/${runtime_id}/action", "-d", f'{{"action":"{action}"}}'  ]
+    # X-API-Key: endpointy /api/ nie są już publiczne. Wymaga poświadczenia
+    # PLATFORM_TOKEN w Runtime Credentials, równego MCP_PLATFORM_API_TOKEN.
+    _pm_auth_header = ["-H", "X-API-Key: ${PLATFORM_TOKEN}"]
+    _pm_action_cmd = lambda action: ["curl", "-s", "-X", "POST", "-H", "Content-Type: application/json", *_pm_auth_header, "${PLATFORM_URL}/api/runtimes/${runtime_id}/action", "-d", f'{{"action":"{action}"}}'  ]
     platform_manager_package = {
         "id": "platform-manager",
         "name": "MCP Platform Manager",
@@ -634,7 +658,8 @@ def builtin_tool_packages() -> list[dict[str, Any]]:
             "Meta-MCP: lokalny LLM (Qwen, Llama, Mistral…) może samodzielnie tworzyć, konfigurować i zarządzać "
             "serwerami MCP na platformie bez interwencji człowieka. "
             "Wywołaj get_instructions → list_packages → create_mcp_server → deploy_server. "
-            "Wymaga zmiennej PLATFORM_URL w Runtime Credentials."
+            "Wymaga zmiennych PLATFORM_URL i PLATFORM_TOKEN w Runtime Credentials "
+            "(PLATFORM_TOKEN musi być równy MCP_PLATFORM_API_TOKEN control-plane)."
         ),
         "category": "other",
         "risk_level": "high",
@@ -659,19 +684,19 @@ def builtin_tool_packages() -> list[dict[str, Any]]:
              "config": {"command": ["curl", "-s", "${PLATFORM_URL}/api/tool-packages"], "timeout_seconds": 10},
              "input_schema": {"type": "object", "properties": {}}},
             {"name": "list_servers", "description": "Lista serwerów MCP — id, nazwy, statusy, endpointy MCP.", "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "other",
-             "config": {"command": ["curl", "-s", "${PLATFORM_URL}/api/runtimes"], "timeout_seconds": 10},
+             "config": {"command": ["curl", "-s", *_pm_auth_header, "${PLATFORM_URL}/api/runtimes"], "timeout_seconds": 10},
              "input_schema": {"type": "object", "properties": {}}},
             {"name": "server_details", "description": "Szczegóły serwera MCP — tools, policy, status, endpoint.", "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "other",
-             "config": {"command": ["curl", "-s", "${PLATFORM_URL}/api/runtimes/${runtime_id}"], "timeout_seconds": 10},
+             "config": {"command": ["curl", "-s", *_pm_auth_header, "${PLATFORM_URL}/api/runtimes/${runtime_id}"], "timeout_seconds": 10},
              "input_schema": _pm_action_schema("ID serwera (z list_servers)")},
             {"name": "server_status", "description": "Status serwera MCP — running/stopped/failed/deploying oraz endpoint URL.", "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "other",
-             "config": {"command": ["curl", "-s", "${PLATFORM_URL}/api/runtimes/${runtime_id}/status"], "timeout_seconds": 10},
+             "config": {"command": ["curl", "-s", *_pm_auth_header, "${PLATFORM_URL}/api/runtimes/${runtime_id}/status"], "timeout_seconds": 10},
              "input_schema": _pm_action_schema("ID serwera")},
             {"name": "server_logs", "description": "Ostatnie logi kontenera serwera MCP — przydatne do diagnostyki błędów startowych.", "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "other",
-             "config": {"command": ["curl", "-s", "${PLATFORM_URL}/api/runtimes/${runtime_id}/logs"], "timeout_seconds": 15},
+             "config": {"command": ["curl", "-s", *_pm_auth_header, "${PLATFORM_URL}/api/runtimes/${runtime_id}/logs"], "timeout_seconds": 15},
              "input_schema": _pm_action_schema("ID serwera")},
             {"name": "create_mcp_server", "description": "Tworzy nowy serwer MCP z paczki JSON. NAJPIERW wywołaj get_instructions i list_packages.", "execution_type": "shell", "enabled": True, "risk_level": "high", "mode": "write", "category": "other",
-             "config": {"command": ["curl", "-s", "-X", "POST", "-H", "Content-Type: application/json", "${PLATFORM_URL}/api/auto-create", "-d", "${payload}"], "timeout_seconds": 30},
+             "config": {"command": ["curl", "-s", "-X", "POST", "-H", "Content-Type: application/json", *_pm_auth_header, "${PLATFORM_URL}/api/auto-create", "-d", "${payload}"], "timeout_seconds": 30},
              "input_schema": {"type": "object", "properties": {"payload": {"type": "string", "description": 'JSON string: {"package": {...}, "name": "moj-serwer", "credentials": {"KEY": "val"}, "deploy": true}'}}, "required": ["payload"]}},
             {"name": "deploy_server", "description": "Deployuje (uruchamia) serwer MCP. Użyj po create_mcp_server lub gdy serwer jest w statusie stopped/draft.", "execution_type": "shell", "enabled": True, "risk_level": "medium", "mode": "write", "category": "other",
              "config": {"command": _pm_action_cmd("deploy"), "timeout_seconds": 15},
@@ -689,7 +714,12 @@ def builtin_tool_packages() -> list[dict[str, Any]]:
     }
     # Load extra templates from templates/ directory
     _extra_packages = []
-    _templates_dir = Path(__file__).resolve().parent.parent.parent / "templates"
+    # W kontenerze obraz nie zawiera katalogu templates/ (build context to control-plane/),
+    # więc jest montowany: bind mount w compose, ConfigMap na K8s.
+    _templates_dir = Path(
+        os.getenv("MCP_PLATFORM_TEMPLATES_DIR")
+        or Path(__file__).resolve().parent.parent.parent / "templates"
+    )
     if _templates_dir.exists():
         for _tf in _templates_dir.rglob("*.json"):
             try:
@@ -10677,7 +10707,9 @@ async def add_tool(runtime_id: str, request: Request):
         base = _runtime_internal_base(runtime)
         if base:
             import httpx as _httpx
-            _httpx.post(f"{base}/reload", timeout=5)
+            _tok = runtime.get("mcp_auth_token") or ""
+            _hdr = {"X-API-Key": _tok} if _tok else {}
+            _httpx.post(f"{base}/reload", timeout=5, headers=_hdr)
     except Exception:
         pass
     return RedirectResponse(f"/runtimes/{runtime_id}?tool_added={execution_type}#pane-tools", status_code=303)
@@ -11430,9 +11462,15 @@ def list_runtimes():
     return store.rows(sql.SELECT_RUNTIMES_ACTIVE)
 
 
+_RUNTIME_API_HIDDEN_FIELDS = ("mcp_auth_token",)
+
+
 @app.get("/api/runtimes/{runtime_id}")
 def get_runtime(runtime_id: str):
-    return runtime_payload(runtime_id)
+    # Token MCP jest poświadczeniem do wywoływania serwera — nie wychodzi przez
+    # JSON API. W UI pokazuje go dedykowana sekcja na stronie runtime'u.
+    payload = runtime_payload(runtime_id)
+    return {k: v for k, v in payload.items() if k not in _RUNTIME_API_HIDDEN_FIELDS}
 
 
 @app.post("/api/runtimes/{runtime_id}/action")

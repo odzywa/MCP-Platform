@@ -11,6 +11,8 @@ data:
   MCP_PLATFORM_CALLBACK_URL: http://mcp-platform:8080
   # readOnlyRootFilesystem + losowy UID z SCC = brak zapisywalnego $HOME
   HOME: /tmp
+  # Presety Tool Package — ConfigMap mcp-platform-templates (tworzona przez deploy.sh)
+  MCP_PLATFORM_TEMPLATES_DIR: /templates
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -32,6 +34,10 @@ spec:
       labels:
         app: mcp-platform
     spec:
+      # SA operatora jest na podzie, ale token NIE jest automontowany —
+      # dostaje go tylko kontener operatora, przez jawny projected volume.
+      # Control-plane (komponent wystawiony na zewnątrz) go nie widzi.
+      serviceAccountName: mcp-operator
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
@@ -64,6 +70,9 @@ spec:
               mountPath: /data
             - name: tmp
               mountPath: /tmp
+            - name: templates
+              mountPath: /templates
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /login
@@ -76,6 +85,37 @@ spec:
               port: 8080
             initialDelaySeconds: 15
             periodSeconds: 30
+
+        # Operator w tym samym podzie: dzieli RWO PVC z control-plane bez
+        # podAffinity, która potrafiła zakleszczyć scheduling obu podów.
+        - name: operator
+          image: __PULL_REGISTRY__/mcp-platform-operator-k8s:latest
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: mcp-platform-env
+            - configMapRef:
+                name: mcp-operator-env
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: operator-tmp
+              mountPath: /tmp
+            - name: sa-token
+              mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+              readOnly: true
       volumes:
         - name: data
           persistentVolumeClaim:
@@ -84,6 +124,33 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 64Mi
+        - name: templates
+          configMap:
+            name: mcp-platform-templates
+            optional: true
+        - name: operator-tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 32Mi
+        # Ręczny odpowiednik automountu SA — montowany wyłącznie w kontenerze operatora
+        - name: sa-token
+          projected:
+            defaultMode: 420
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  expirationSeconds: 3607
+              - configMap:
+                  name: kube-root-ca.crt
+                  items:
+                    - key: ca.crt
+                      path: ca.crt
+              - downwardAPI:
+                  items:
+                    - path: namespace
+                      fieldRef:
+                        apiVersion: v1
+                        fieldPath: metadata.namespace
 ---
 apiVersion: v1
 kind: Service

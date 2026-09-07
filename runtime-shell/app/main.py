@@ -26,7 +26,9 @@ app = FastAPI(title="Generic MCP Runtime Shell", version="0.1.0")
 
 @app.middleware("http")
 async def _mcp_auth(request: Request, call_next: Any) -> Response:
-    if request.url.path in ("/health", "/reload"):
+    # /reload przeładowuje konfigurację — wymaga tokenu tak samo jak toole.
+    # Publiczne zostaje samo /health (sondy K8s nie wysyłają nagłówków).
+    if request.url.path == "/health":
         return await call_next(request)
     token: str = runtime_config.get("auth_token", "")
     if not token:
@@ -90,10 +92,6 @@ runtime_config: dict[str, Any] = {}
 policy: dict[str, Any] = {}
 tools: dict[str, dict[str, Any]] = {}
 
-# Pending approvals: hash(tool_name + frozen_args) → expires_at
-# When a tool returns approval_required, the same call within the window is auto-confirmed.
-_pending_approvals: dict[str, float] = {}
-_APPROVAL_WINDOW_SECONDS = 300
 _CONFIRM_VALUES = frozenset(["yes", "tak", "true", "1", "y", "ok", "ja", "si", "oui", "confirm", "approve", "yep", "yeah"])
 
 
@@ -253,7 +251,7 @@ def validate_with_pydantic(tool_name: str, arguments: dict, schema: dict, tool_p
         return str(exc)
 
 
-def _policy_check_stage(argv: list[str], skip_blocked_prefixes: bool = False) -> None:
+def _policy_check_stage(argv: list[str]) -> None:
     """Validate one pipeline stage. Raises ValueError on violation."""
     if not argv:
         raise ValueError("empty command stage")
@@ -288,10 +286,10 @@ def _policy_check_stage(argv: list[str], skip_blocked_prefixes: bool = False) ->
         _pfx_match(stage_text, pfx) or _pfx_match(sub, pfx) for pfx in allowed_prefixes
     ):
         raise ValueError(f"command prefix not allowed: {stage_text}")
-    if not skip_blocked_prefixes:
-        for pfx in blocked_prefixes:
-            if _pfx_match(stage_text, pfx) or _pfx_match(sub, pfx):
-                raise ValueError(f"blocked command prefix: {stage_text}")
+    # Blocklista jest kontrolą admina — potwierdzenie od wywołującego jej nie znosi.
+    for pfx in blocked_prefixes:
+        if _pfx_match(stage_text, pfx) or _pfx_match(sub, pfx):
+            raise ValueError(f"blocked command prefix: {stage_text}")
 
     # Check blocked tokens in arguments (not the binary itself).
     for arg in argv[1:]:
@@ -346,8 +344,13 @@ def _build_stage_argv(stage_template: list[str], arguments: dict[str, Any]) -> l
     Shell metacharacters arriving through ${*var} or ${var} are INERT because
     the resulting argv is always passed to Popen/run with shell disabled.
     """
-    merged_env: dict[str, str] = {k: v for k, v in os.environ.items()}
-    merged_env.update({k: str(v) for k, v in arguments.items()})
+    # Kolejność jest krytyczna: os.environ NADPISUJE argumenty, nie odwrotnie.
+    # Schematy toolów nie ustawiają additionalProperties:false, więc wywołujący
+    # może dorzucić dowolny klucz. Przy odwrotnej kolejności argument o nazwie
+    # OC_SERVER podmieniłby adres w szablonie ["oc", "--token=${OC_TOKEN}",
+    # "--server=${OC_SERVER}", ...] i wysłał prawdziwy token pod obcy adres.
+    merged_env: dict[str, str] = {k: str(v) for k, v in arguments.items()}
+    merged_env.update(os.environ)
 
     argv: list[str] = []
     for part in stage_template:
@@ -488,7 +491,9 @@ async def _request_approval(
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        urllib.request.urlopen(req, timeout=5)
+        # urllib jest blokujące — bez to_thread wstrzymałoby całą pętlę zdarzeń
+        # runtime'u na czas żądania, a niżej na każdym odpytaniu.
+        await asyncio.to_thread(lambda: urllib.request.urlopen(req, timeout=5))
     except Exception as exc:
         return {"approved": False, "reason": f"approval request failed: {exc}"}
 
@@ -499,7 +504,7 @@ async def _request_approval(
     while time.monotonic() < deadline:
         await asyncio.sleep(2)
         try:
-            resp = urllib.request.urlopen(poll_url, timeout=5)
+            resp = await asyncio.to_thread(lambda: urllib.request.urlopen(poll_url, timeout=5))
             data = json.loads(resp.read())
             status = data.get("status")
             if status == "approved":
@@ -640,55 +645,68 @@ async def execute_tool(tool_name: str, arguments: dict[str, Any],
         MAX_OUTPUT_BYTES,
     )
 
-    # ── Human-in-the-Loop approval — in-chat confirmation flow.
-    # Confirmation accepted via:
-    #   1. __confirm parameter with any truthy value (yes/tak/true/1/ok/...)
-    #   2. Repeated call with identical args within the approval window (AI re-calls after user confirms)
+    # ── Human-in-the-Loop approval.
+    # Gdy control-plane jest osiągalny, decyzję podejmuje CZŁOWIEK na stronie
+    # /approvals — wywołujący nie może się zatwierdzić sam. __confirm działa
+    # tylko w trybie standalone (runtime bez control-plane), bo tam nie ma
+    # gdzie zapytać. Poprzednia wersja zatwierdzała każde powtórzone wywołanie
+    # o identycznych argumentach, więc zwykły retry modelu wykonywał operację.
     confirm_val = str(arguments.pop("__confirm", "")).strip().lower()
-    user_confirmed = confirm_val in _CONFIRM_VALUES
+    caller_confirmed = confirm_val in _CONFIRM_VALUES
 
-    if not user_confirmed:
-        # Check pending approval window — same tool + same args repeated after approval_required
-        _args_key = f"{tool_name}:{json.dumps(arguments, sort_keys=True)}"
-        _now = time.monotonic()
-        # Expire old entries
-        for k in list(_pending_approvals):
-            if _pending_approvals[k] < _now:
-                del _pending_approvals[k]
-        if _args_key in _pending_approvals:
-            user_confirmed = True
-            del _pending_approvals[_args_key]
-
-    if not user_confirmed and (_needs_approval(tool) or _stages_need_approval(stages)):
+    if _needs_approval(tool) or _stages_need_approval(stages):
         cmd_preview = " | ".join(shlex.join(s) for s in stages)
-        # Register pending approval so the next identical call is auto-confirmed
-        _args_key = f"{tool_name}:{json.dumps(arguments, sort_keys=True)}"
-        _pending_approvals[_args_key] = time.monotonic() + _APPROVAL_WINDOW_SECONDS
-        result = {
-            "ok": False,
-            "tool": tool_name,
-            "approval_required": True,
-            "message": (
-                f"⚠️ This operation requires user confirmation before execution.\n\n"
-                f"Command to execute:\n  {cmd_preview}\n\n"
-                f"Ask the user if they want to run this command.\n"
-                f"If they confirm — call this same tool again with the EXACT same parameters "
-                f"(the tool will execute automatically on the second call).\n"
-                f"Alternatively add __confirm=\"yes\" to the parameters.\n"
-                f"If they decline — do nothing."
-            ),
-        }
-        _fire_tool_call_log(tool_name, arguments, result,
-                            int((time.monotonic() - _t0) * 1000),
-                            caller_ip=caller_ip, model=model)
-        return result
+        tool_mode = (tool.get("security") or {}).get("mode") or tool.get("mode", "read-only")
+
+        if CALLBACK_URL:
+            decision = await _request_approval(
+                tool_name,
+                {**arguments, "_command": cmd_preview},
+                tool_mode,
+                caller_ip,
+                model,
+            )
+            if not decision.get("approved"):
+                result = {
+                    "ok": False,
+                    "tool": tool_name,
+                    "approval_required": True,
+                    "approval_denied": True,
+                    "error": f"operation not approved: {decision.get('reason') or 'rejected'}",
+                    "message": (
+                        f"⛔ Operation was not approved.\n\n"
+                        f"Command: {cmd_preview}\n"
+                        f"Reason: {decision.get('reason') or 'rejected'}\n\n"
+                        f"Do not retry — a human declined or did not respond in time."
+                    ),
+                }
+                _fire_tool_call_log(tool_name, arguments, result,
+                                    int((time.monotonic() - _t0) * 1000),
+                                    caller_ip=caller_ip, model=model)
+                return result
+
+        elif not caller_confirmed:
+            result = {
+                "ok": False,
+                "tool": tool_name,
+                "approval_required": True,
+                "message": (
+                    f"⚠️ This operation requires user confirmation before execution.\n\n"
+                    f"Command to execute:\n  {cmd_preview}\n\n"
+                    f"Ask the user if they want to run this command.\n"
+                    f"If they confirm — call this same tool again with __confirm=\"yes\".\n"
+                    f"If they decline — do nothing."
+                ),
+            }
+            _fire_tool_call_log(tool_name, arguments, result,
+                                int((time.monotonic() - _t0) * 1000),
+                                caller_ip=caller_ip, model=model)
+            return result
 
     # ── Hard policy check for every pipeline stage.
-    # When user_confirmed=True the blocked_command_prefixes check is skipped —
-    # the explicit user confirmation takes precedence over prefix blocklist.
     for stage_argv in stages:
         try:
-            _policy_check_stage(stage_argv, skip_blocked_prefixes=user_confirmed)
+            _policy_check_stage(stage_argv)
         except ValueError as exc:
             return {"ok": False, "tool": tool_name, "error": str(exc)}
 
