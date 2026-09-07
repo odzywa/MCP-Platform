@@ -9,6 +9,8 @@ data:
   MCP_PLATFORM_CONFIG_ROOT: /data/configs
   MCP_PLATFORM_CONFIG_HOST_ROOT: /data/configs
   MCP_PLATFORM_CALLBACK_URL: http://mcp-platform:8080
+  # readOnlyRootFilesystem + losowy UID z SCC = brak zapisywalnego $HOME
+  HOME: /tmp
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -33,6 +35,8 @@ spec:
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: control-plane
           image: __PULL_REGISTRY__/mcp-platform-control-plane:latest

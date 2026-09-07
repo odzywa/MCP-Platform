@@ -335,6 +335,7 @@ td code { font-size: 12px; }
     <div class="nav-section">Operacje</div>
     <ul>
       <li><a href="#lifecycle">Cykl życia runtimeu</a></li>
+      <li><a href="#platform-manager">Platform Manager <span class="badge green">LLM</span></a></li>
       <li><a href="#rebuild">Rebuild obrazu</a></li>
       <li><a href="#troubleshoot">Rozwiązywanie problemów</a></li>
     </ul>
@@ -1124,6 +1125,90 @@ curl -X POST https://mcp-runtime-&lt;id&gt;-mcp-platform.apps.&lt;domain&gt;/rel
       <tr><td><code>failed</code></td><td>Błąd przy starcie lub healthcheck</td><td>Sprawdź Logi → Redeploy</td></tr>
       <tr><td><code>error</code></td><td>Błąd operatora (np. brak obrazu)</td><td>Sprawdź logi operatora</td></tr>
     </table>
+  </div>
+</div>
+
+<!-- ─── PLATFORM MANAGER ────────────────────────────────────────── -->
+<div class="section" id="platform-manager">
+  <h2>Platform Manager — lokalny LLM tworzy serwery MCP</h2>
+
+  <p><strong>Platform Manager</strong> to wbudowana paczka narzędzi (<code>platform-manager</code>), która pozwala <strong>lokalnemu LLM</strong> (Qwen, Llama, Mistral, Phi…) samodzielnie tworzyć, konfigurować i zarządzać serwerami MCP na platformie — bez pisania kodu i bez interwencji człowieka.</p>
+
+  <h3>Przepływ działania</h3>
+
+  <div class="flow">
+    <div class="flow-step neutral">Użytkownik prosi LLM</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step accent">get_instructions</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step accent">list_packages</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step warn">create_mcp_server</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step warn">deploy_server</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step ok">✅ Serwer działa</div>
+  </div>
+
+  <p>LLM sam wybiera odpowiednią paczkę narzędzi, uzupełnia credentials i deployuje — całość autonomicznie w odpowiedzi na jedno zapytanie użytkownika.</p>
+
+  <h3>Dostępne narzędzia</h3>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>Narzędzie</th><th>Tryb</th><th>Opis</th></tr>
+      <tr><td><code>get_instructions</code></td><td><span class="badge blue">read</span></td><td>Pobiera schemat paczki MCP — zawsze pierwsze narzędzie</td></tr>
+      <tr><td><code>list_packages</code></td><td><span class="badge blue">read</span></td><td>Lista wbudowanych paczek (openshift-monitor, raghybrid…)</td></tr>
+      <tr><td><code>list_servers</code></td><td><span class="badge blue">read</span></td><td>Lista serwerów — id, status, endpoint MCP</td></tr>
+      <tr><td><code>server_details</code></td><td><span class="badge blue">read</span></td><td>Pełne szczegóły serwera (tools, policy, status)</td></tr>
+      <tr><td><code>server_status</code></td><td><span class="badge blue">read</span></td><td>Szybki status: running/stopped/failed + URL endpointu</td></tr>
+      <tr><td><code>server_logs</code></td><td><span class="badge blue">read</span></td><td>Ostatnie logi kontenera — do diagnostyki błędów</td></tr>
+      <tr><td><code>create_mcp_server</code></td><td><span class="badge amber">write</span></td><td>Tworzy serwer z paczki JSON + credentials</td></tr>
+      <tr><td><code>deploy_server</code></td><td><span class="badge amber">write</span></td><td>Uruchamia/deployuje serwer</td></tr>
+      <tr><td><code>restart_server</code></td><td><span class="badge amber">write</span></td><td>Restartuje działający serwer</td></tr>
+      <tr><td><code>stop_server</code></td><td><span class="badge amber">write</span></td><td>Zatrzymuje serwer</td></tr>
+      <tr><td><code>delete_server</code></td><td><span class="badge red">destructive</span></td><td>Usuwa serwer i kontener — nieodwracalne</td></tr>
+    </table>
+  </div>
+
+  <h3>Konfiguracja</h3>
+
+  <ol class="steps">
+    <li>
+      <strong>Utwórz runtime</strong>
+      <p>UI → Tool Packages → <strong>MCP Platform Manager</strong> → Utwórz runtime (lub Quick Start → wybierz platform-manager).</p>
+    </li>
+    <li>
+      <strong>Dodaj PLATFORM_URL</strong>
+      <p>Secrets → + Add → <code>PLATFORM_URL</code> = wewnętrzny URL platformy.</p>
+      <div class="table-wrap"><table>
+        <tr><th>Środowisko</th><th>PLATFORM_URL</th></tr>
+        <tr><td>Docker Compose</td><td><code>http://mcp-platform:8080</code></td></tr>
+        <tr><td>OpenShift (wewnątrz klastra)</td><td><code>http://mcp-platform.mcp-platform.svc:8080</code></td></tr>
+        <tr><td>Zewnętrzny URL (HTTPS)</td><td><code>https://mcp-platform.apps.cluster.dom</code></td></tr>
+      </table></div>
+    </li>
+    <li><strong>Deploy</strong> — kliknij ▶ Deploy. Runtime startuje i jest dostępny pod endpointem MCP.</li>
+    <li><strong>Podłącz LLM</strong> — skopiuj endpoint <code>/mcp</code> do OpenWebUI / LM Studio / Ollama / Open WebUI.</li>
+  </ol>
+
+  <h3>Przykładowe zapytania do LLM</h3>
+
+  <div class="code-label">Przykłady — co możesz powiedzieć do lokalnego LLM</div>
+  <pre><code>"Stwórz serwer MCP do monitorowania klastra OpenShift"
+"Lista wszystkich serwerów MCP i ich statusy"
+"Sprawdź logi serwera openshift-monitor i zrestartuj jeśli są błędy"
+"Usuń serwer test-runtime i utwórz nowy z paczki openshift-readonly"
+"Zatrzymaj wszystkie serwery w statusie failed"</code></pre>
+
+  <div class="callout info">
+    <strong>Autonomiczne zarządzanie</strong>
+    LLM sam wybiera odpowiednią paczkę, uzupełnia schemat JSON, ustawia credentials i deployuje. Nie wymaga znajomości API platformy. Dostępne narzędzia + <code>get_instructions</code> dają wystarczający kontekst do działania bez dodatkowej dokumentacji.
+  </div>
+
+  <div class="callout warn">
+    <strong>Bezpieczeństwo</strong>
+    Platform Manager ma domyślnie włączone zatwierdzenia (<code>require_approval_for: "auto"</code>). Operacje <code>create_mcp_server</code>, <code>delete_server</code> wymagają potwierdzenia użytkownika przed wykonaniem. <code>delete_server</code> jest trybem <code>destructive</code> — zawsze pyta o zgodę.
   </div>
 </div>
 

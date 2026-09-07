@@ -8,12 +8,12 @@ data:
   MCP_PLATFORM_DB: /data/mcp_platform.db
   MCP_PLATFORM_CONFIG_ROOT: /data/configs
   MCP_PLATFORM_CALLBACK_URL: http://mcp-platform:8080
-  MCP_DEPLOYMENT_DRIVER: kubernetes
   MCP_RUNTIME_NAMESPACE: __NAMESPACE__
   MCP_RUNTIME_IMAGE_REGISTRY_PREFIX: __PULL_REGISTRY__
   # URL bazy dla runtime endpointów — używany przez control-plane do wyświetlania linku
   # Format: https://mcp-runtime-<id>.__NAMESPACE__.__APPS_DOMAIN__/mcp
   MCP_RUNTIME_PUBLIC_BASE_URL: https://mcp-platform.__APPS_DOMAIN__
+  HOME: /tmp
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -37,6 +37,8 @@ spec:
       serviceAccountName: mcp-operator
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       # Operator i control-plane muszą być na tym samym nodzie bo dzielą RWO PVC
       affinity:
         podAffinity:

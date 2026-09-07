@@ -196,6 +196,7 @@ td code { font-size: 12px; }
     <div class="nav-section">Operations</div>
     <ul>
       <li><a href="#lifecycle">Runtime Lifecycle</a></li>
+      <li><a href="#platform-manager">Platform Manager <span class="badge green">LLM</span></a></li>
       <li><a href="#rebuild">Rebuilding Images</a></li>
       <li><a href="#troubleshoot">Troubleshooting</a></li>
     </ul>
@@ -988,6 +989,90 @@ curl -X POST https://mcp-runtime-&lt;id&gt;-mcp-platform.apps.&lt;domain&gt;/rel
       <tr><td><code>failed</code></td><td>Error at startup or healthcheck</td><td>Check Logs → Redeploy</td></tr>
       <tr><td><code>error</code></td><td>Operator error (e.g. missing image)</td><td>Check operator logs</td></tr>
     </table>
+  </div>
+</div>
+
+<!-- ─── PLATFORM MANAGER ────────────────────────────────────────── -->
+<div class="section" id="platform-manager">
+  <h2>Platform Manager — Local LLM Creates MCP Servers Autonomously</h2>
+
+  <p><strong>Platform Manager</strong> is a built-in tool package (<code>platform-manager</code>) that lets a <strong>local LLM</strong> (Qwen, Llama, Mistral, Phi…) autonomously create, configure, and manage MCP servers on the platform — without writing any code and without human intervention.</p>
+
+  <h3>How it works</h3>
+
+  <div class="flow">
+    <div class="flow-step neutral">User asks LLM</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step accent">get_instructions</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step accent">list_packages</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step warn">create_mcp_server</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step warn">deploy_server</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step ok">✅ Server running</div>
+  </div>
+
+  <p>The LLM picks the right tool package, fills in the JSON schema with credentials, and deploys — all autonomously in response to a single user request.</p>
+
+  <h3>Available tools</h3>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>Tool</th><th>Mode</th><th>Description</th></tr>
+      <tr><td><code>get_instructions</code></td><td><span class="badge blue">read</span></td><td>Fetches MCP package schema + creation guide — always call first</td></tr>
+      <tr><td><code>list_packages</code></td><td><span class="badge blue">read</span></td><td>List of built-in packages (openshift-monitor, raghybrid…)</td></tr>
+      <tr><td><code>list_servers</code></td><td><span class="badge blue">read</span></td><td>List of servers — id, status, MCP endpoint</td></tr>
+      <tr><td><code>server_details</code></td><td><span class="badge blue">read</span></td><td>Full server details (tools, policy, status)</td></tr>
+      <tr><td><code>server_status</code></td><td><span class="badge blue">read</span></td><td>Quick status: running/stopped/failed + endpoint URL</td></tr>
+      <tr><td><code>server_logs</code></td><td><span class="badge blue">read</span></td><td>Recent container logs — for diagnosing startup errors</td></tr>
+      <tr><td><code>create_mcp_server</code></td><td><span class="badge amber">write</span></td><td>Creates a server from a package JSON + credentials</td></tr>
+      <tr><td><code>deploy_server</code></td><td><span class="badge amber">write</span></td><td>Deploys / starts the server</td></tr>
+      <tr><td><code>restart_server</code></td><td><span class="badge amber">write</span></td><td>Restarts a running server</td></tr>
+      <tr><td><code>stop_server</code></td><td><span class="badge amber">write</span></td><td>Stops the server</td></tr>
+      <tr><td><code>delete_server</code></td><td><span class="badge red">destructive</span></td><td>Deletes the server and container — irreversible</td></tr>
+    </table>
+  </div>
+
+  <h3>Setup</h3>
+
+  <ol class="steps">
+    <li>
+      <strong>Create the runtime</strong>
+      <p>UI → Tool Packages → <strong>MCP Platform Manager</strong> → Create runtime (or Quick Start → select platform-manager).</p>
+    </li>
+    <li>
+      <strong>Add PLATFORM_URL</strong>
+      <p>Secrets → + Add → <code>PLATFORM_URL</code> = internal platform URL.</p>
+      <div class="table-wrap"><table>
+        <tr><th>Environment</th><th>PLATFORM_URL</th></tr>
+        <tr><td>Docker Compose</td><td><code>http://mcp-platform:8080</code></td></tr>
+        <tr><td>OpenShift (in-cluster)</td><td><code>http://mcp-platform.mcp-platform.svc:8080</code></td></tr>
+        <tr><td>External HTTPS</td><td><code>https://mcp-platform.apps.cluster.dom</code></td></tr>
+      </table></div>
+    </li>
+    <li><strong>Deploy</strong> — click ▶ Deploy. The runtime starts and is available at its MCP endpoint.</li>
+    <li><strong>Connect LLM</strong> — paste the <code>/mcp</code> endpoint into OpenWebUI / LM Studio / Ollama / Open WebUI.</li>
+  </ol>
+
+  <h3>Example prompts for the LLM</h3>
+
+  <div class="code-label">Examples — what to say to the local LLM</div>
+  <pre><code>"Create an MCP server for monitoring the OpenShift cluster"
+"List all MCP servers and their statuses"
+"Check logs for openshift-monitor and restart it if there are errors"
+"Delete test-runtime and create a new one from the openshift-readonly package"
+"Stop all servers in failed status"</code></pre>
+
+  <div class="callout info">
+    <strong>Autonomous management</strong>
+    The LLM picks the right package, fills in the JSON schema, sets credentials, and deploys — no knowledge of the platform API required. The available tools plus <code>get_instructions</code> provide enough context to operate without additional documentation.
+  </div>
+
+  <div class="callout warn">
+    <strong>Security</strong>
+    Platform Manager has approvals enabled by default (<code>require_approval_for: "auto"</code>). <code>create_mcp_server</code> and <code>delete_server</code> require user confirmation before execution. <code>delete_server</code> is <code>destructive</code> mode — always asks for confirmation.
   </div>
 </div>
 

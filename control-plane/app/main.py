@@ -625,10 +625,17 @@ def builtin_tool_packages() -> list[dict[str, Any]]:
             },
         ],
     }
+    _pm_action_schema = lambda desc: {"type": "object", "properties": {"runtime_id": {"type": "string", "description": desc}}, "required": ["runtime_id"]}
+    _pm_action_cmd = lambda action: ["curl", "-s", "-X", "POST", "-H", "Content-Type: application/json", "${PLATFORM_URL}/api/runtimes/${runtime_id}/action", "-d", f'{{"action":"{action}"}}'  ]
     platform_manager_package = {
         "id": "platform-manager",
         "name": "MCP Platform Manager",
-        "description": "Meta-MCP: AI tworzy i zarządza serwerami MCP na platformie. Czyta instrukcje, generuje paczki, deployuje — wszystko automatycznie.",
+        "description": (
+            "Meta-MCP: lokalny LLM (Qwen, Llama, Mistral…) może samodzielnie tworzyć, konfigurować i zarządzać "
+            "serwerami MCP na platformie bez interwencji człowieka. "
+            "Wywołaj get_instructions → list_packages → create_mcp_server → deploy_server. "
+            "Wymaga zmiennej PLATFORM_URL w Runtime Credentials."
+        ),
         "category": "other",
         "risk_level": "high",
         "runtime_class": {
@@ -637,29 +644,47 @@ def builtin_tool_packages() -> list[dict[str, Any]]:
             "allowed_execution_types": ["shell"],
             "security_profile": "restricted",
         },
-        "policy": {"allowed_binaries": ["curl", "jq"], "require_read_only": False, "timeout_seconds": 30},
+        "policy": {
+            "allowed_binaries": ["curl", "jq"],
+            "require_read_only": False,
+            "timeout_seconds": 30,
+            "require_approval_for": "auto",
+        },
+        "credentials_hint": {"PLATFORM_URL": "URL platformy, np. http://mcp-platform:8080 lub https://mcp-platform.apps.cluster.dom"},
         "tools": [
-            {"name": "get_instructions", "description": "Pobiera instrukcję jak tworzyć serwery MCP. ZAWSZE wywołaj PRZED tworzeniem serwera.", "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "other",
+            {"name": "get_instructions", "description": "Pobiera instrukcję tworzenia serwerów MCP. ZAWSZE wywołaj jako PIERWSZE narzędzie przed create_mcp_server.", "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "other",
              "config": {"command": ["curl", "-s", "${PLATFORM_URL}/api/platform-docs"], "timeout_seconds": 10},
              "input_schema": {"type": "object", "properties": {}}},
-            {"name": "create_mcp_server", "description": "Tworzy nowy serwer MCP. Przyjmuje JSON z package, name, credentials. NAJPIERW wywołaj get_instructions.", "execution_type": "shell", "enabled": True, "risk_level": "high", "mode": "write", "category": "other",
-             "config": {"command": ["curl", "-s", "-X", "POST", "-H", "Content-Type: application/json", "${PLATFORM_URL}/api/auto-create", "-d", "${payload}"], "timeout_seconds": 30},
-             "input_schema": {"type": "object", "properties": {"payload": {"type": "string", "description": "JSON: {package: {...}, name: '...', credentials: {KEY: 'val'}, deploy: true}"}}, "required": ["payload"]}},
-            {"name": "list_servers", "description": "Lista serwerów MCP — nazwy, statusy, endpointy.", "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "other",
-             "config": {"command": ["curl", "-s", "${PLATFORM_URL}/api/runtimes"], "timeout_seconds": 10},
-             "input_schema": {"type": "object", "properties": {}}},
-            {"name": "list_packages", "description": "Lista gotowych paczek narzędzi.", "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "other",
+            {"name": "list_packages", "description": "Lista gotowych paczek narzędzi do wyboru przy tworzeniu serwera.", "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "other",
              "config": {"command": ["curl", "-s", "${PLATFORM_URL}/api/tool-packages"], "timeout_seconds": 10},
              "input_schema": {"type": "object", "properties": {}}},
-            {"name": "server_details", "description": "Szczegóły serwera MCP.", "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "other",
+            {"name": "list_servers", "description": "Lista serwerów MCP — id, nazwy, statusy, endpointy MCP.", "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "other",
+             "config": {"command": ["curl", "-s", "${PLATFORM_URL}/api/runtimes"], "timeout_seconds": 10},
+             "input_schema": {"type": "object", "properties": {}}},
+            {"name": "server_details", "description": "Szczegóły serwera MCP — tools, policy, status, endpoint.", "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "other",
              "config": {"command": ["curl", "-s", "${PLATFORM_URL}/api/runtimes/${runtime_id}"], "timeout_seconds": 10},
-             "input_schema": {"type": "object", "properties": {"runtime_id": {"type": "string", "description": "ID serwera"}}, "required": ["runtime_id"]}},
-            {"name": "deploy_server", "description": "Deployuje serwer MCP.", "execution_type": "shell", "enabled": True, "risk_level": "medium", "mode": "write", "category": "other",
-             "config": {"command": ["curl", "-s", "-X", "POST", "${PLATFORM_URL}/api/runtimes/${runtime_id}/deploy"], "timeout_seconds": 15},
-             "input_schema": {"type": "object", "properties": {"runtime_id": {"type": "string", "description": "ID serwera"}}, "required": ["runtime_id"]}},
+             "input_schema": _pm_action_schema("ID serwera (z list_servers)")},
+            {"name": "server_status", "description": "Status serwera MCP — running/stopped/failed/deploying oraz endpoint URL.", "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "other",
+             "config": {"command": ["curl", "-s", "${PLATFORM_URL}/api/runtimes/${runtime_id}/status"], "timeout_seconds": 10},
+             "input_schema": _pm_action_schema("ID serwera")},
+            {"name": "server_logs", "description": "Ostatnie logi kontenera serwera MCP — przydatne do diagnostyki błędów startowych.", "execution_type": "shell", "enabled": True, "risk_level": "low", "mode": "read-only", "category": "other",
+             "config": {"command": ["curl", "-s", "${PLATFORM_URL}/api/runtimes/${runtime_id}/logs"], "timeout_seconds": 15},
+             "input_schema": _pm_action_schema("ID serwera")},
+            {"name": "create_mcp_server", "description": "Tworzy nowy serwer MCP z paczki JSON. NAJPIERW wywołaj get_instructions i list_packages.", "execution_type": "shell", "enabled": True, "risk_level": "high", "mode": "write", "category": "other",
+             "config": {"command": ["curl", "-s", "-X", "POST", "-H", "Content-Type: application/json", "${PLATFORM_URL}/api/auto-create", "-d", "${payload}"], "timeout_seconds": 30},
+             "input_schema": {"type": "object", "properties": {"payload": {"type": "string", "description": 'JSON string: {"package": {...}, "name": "moj-serwer", "credentials": {"KEY": "val"}, "deploy": true}'}}, "required": ["payload"]}},
+            {"name": "deploy_server", "description": "Deployuje (uruchamia) serwer MCP. Użyj po create_mcp_server lub gdy serwer jest w statusie stopped/draft.", "execution_type": "shell", "enabled": True, "risk_level": "medium", "mode": "write", "category": "other",
+             "config": {"command": _pm_action_cmd("deploy"), "timeout_seconds": 15},
+             "input_schema": _pm_action_schema("ID serwera do wdrożenia")},
+            {"name": "restart_server", "description": "Restartuje działający serwer MCP — kontener jest zatrzymywany i uruchamiany ponownie.", "execution_type": "shell", "enabled": True, "risk_level": "medium", "mode": "write", "category": "other",
+             "config": {"command": _pm_action_cmd("restart"), "timeout_seconds": 15},
+             "input_schema": _pm_action_schema("ID serwera do restartu")},
             {"name": "stop_server", "description": "Zatrzymuje serwer MCP.", "execution_type": "shell", "enabled": True, "risk_level": "medium", "mode": "write", "category": "other",
-             "config": {"command": ["curl", "-s", "-X", "POST", "${PLATFORM_URL}/api/runtimes/${runtime_id}/stop"], "timeout_seconds": 15},
-             "input_schema": {"type": "object", "properties": {"runtime_id": {"type": "string", "description": "ID serwera"}}, "required": ["runtime_id"]}},
+             "config": {"command": _pm_action_cmd("stop"), "timeout_seconds": 15},
+             "input_schema": _pm_action_schema("ID serwera do zatrzymania")},
+            {"name": "delete_server", "description": "Usuwa serwer MCP i jego kontener. Operacja nieodwracalna — usuwa runtime, tools i policy z bazy.", "execution_type": "shell", "enabled": True, "risk_level": "high", "mode": "destructive", "category": "other",
+             "config": {"command": _pm_action_cmd("delete"), "timeout_seconds": 15},
+             "input_schema": _pm_action_schema("ID serwera do usunięcia")},
         ],
     }
     # Load extra templates from templates/ directory
@@ -10649,8 +10674,7 @@ async def add_tool(runtime_id: str, request: Request):
     store.audit("admin", "add_tool", "runtime", runtime_id, {"tool": str(form.get("name") or "")})
     # Auto-reload config so new tool is immediately active (no redeploy needed)
     try:
-        endpoint = (runtime.get("endpoint_url") or "").rstrip("/")
-        base = endpoint[:-4] if endpoint.endswith("/mcp") else endpoint
+        base = _runtime_internal_base(runtime)
         if base:
             import httpx as _httpx
             _httpx.post(f"{base}/reload", timeout=5)
@@ -11238,6 +11262,22 @@ def export_runtime_as_package(runtime_id: str):
     return resp
 
 
+def _runtime_internal_base(runtime: dict) -> str:
+    """
+    Bazowy URL do wywołań runtime'u z wnętrza platformy.
+
+    container_name jest nazwą kontenera (Docker) lub Deploymentu == Service (K8s),
+    więc rozwiązuje się w obu środowiskach. endpoint_url to na K8s zewnętrzny
+    Route — z wnętrza klastra wymagałby zaufania certyfikatowi routera, więc
+    używamy go tylko jako fallbacku.
+    """
+    container = runtime.get("container_name")
+    if container:
+        return f"http://{container}:8080"
+    endpoint = (runtime.get("endpoint_url") or "").rstrip("/")
+    return endpoint[:-4] if endpoint.endswith("/mcp") else endpoint
+
+
 @app.post("/api/runtimes/{runtime_id}/test-tool")
 async def test_tool(runtime_id: str, request: Request):
     body = await request.json()
@@ -11252,13 +11292,8 @@ async def test_tool(runtime_id: str, request: Request):
         args = json.loads(args_raw)
     except json.JSONDecodeError as exc:
         return {"ok": False, "error": f"Nieprawidłowy JSON argumentów: {exc}"}
-    # Używamy nazwy kontenera (sieć Docker) zamiast publicznego URL
-    container = runtime.get("container_name")
-    if container:
-        base_url = f"http://{container}:8080"
-    elif runtime.get("endpoint_url"):
-        base_url = runtime["endpoint_url"].replace("/mcp", "")
-    else:
+    base_url = _runtime_internal_base(runtime)
+    if not base_url:
         return {"ok": False, "error": "Brak endpointu — najpierw zdeployuj runtime"}
     try:
         async with httpx.AsyncClient(timeout=30) as client:
@@ -11400,6 +11435,47 @@ def get_runtime(runtime_id: str):
     return runtime_payload(runtime_id)
 
 
+@app.post("/api/runtimes/{runtime_id}/action")
+async def runtime_action_json(runtime_id: str, request: Request):
+    """JSON API for lifecycle actions — used by platform-manager LLM tools."""
+    if not store.one(sql.SELECT_RUNTIME_ID_EXISTS, (runtime_id,)):
+        raise HTTPException(status_code=404, detail="Runtime not found")
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    action = str(data.get("action") or "").strip()
+    allowed = {"start", "stop", "restart", "delete", "reload", "deploy", "redeploy"}
+    if action not in allowed:
+        raise HTTPException(status_code=400, detail=f"Unknown action. Allowed: {sorted(allowed)}")
+    if action in {"deploy", "redeploy"}:
+        write_runtime_config(runtime_id)
+    enqueue_runtime_action(runtime_id, action)
+    store.audit("admin", f"{action}_runtime", "runtime", runtime_id, {"via": "json-api"})
+    messages = {
+        "deploy": "Deployment started — runtime will be running in ~30s.",
+        "redeploy": "Redeploy started — container will restart.",
+        "stop": "Stop enqueued — runtime will shut down shortly.",
+        "start": "Start enqueued.",
+        "restart": "Restart enqueued.",
+        "reload": "Config reload triggered.",
+        "delete": "Delete enqueued — runtime and container will be removed.",
+    }
+    return {"ok": True, "action": action, "runtime_id": runtime_id, "message": messages[action]}
+
+
+@app.get("/api/runtimes/{runtime_id}/logs")
+def get_runtime_logs(runtime_id: str, limit: int = 50):
+    """Return recent runtime log lines as JSON — used by platform-manager LLM tools."""
+    if not store.one(sql.SELECT_RUNTIME_ID_EXISTS, (runtime_id,)):
+        raise HTTPException(status_code=404, detail="Runtime not found")
+    rows = store.rows(
+        "SELECT created_at, level, message FROM runtime_logs WHERE runtime_id = ? ORDER BY id DESC LIMIT ?",
+        (runtime_id, min(limit, 200)),
+    )
+    return {"runtime_id": runtime_id, "logs": [dict(r) for r in reversed(rows)]}
+
+
 @app.get("/api/adapters")
 def list_adapters():
     return store.rows(sql.SELECT_ADAPTERS_ALL)
@@ -11489,13 +11565,17 @@ def lang_js():
 
 @app.get("/api/health")
 async def platform_health():
-    runtimes = store.rows("SELECT id, endpoint_url FROM runtimes WHERE endpoint_url IS NOT NULL")
+    runtimes = store.rows(
+        "SELECT id, endpoint_url, container_name FROM runtimes WHERE endpoint_url IS NOT NULL"
+    )
     checked = []
     async with httpx.AsyncClient(timeout=3) as client:
         for runtime in runtimes:
-            endpoint = runtime["endpoint_url"].rstrip("/")
+            base = _runtime_internal_base(runtime)
+            if not base:
+                continue
             try:
-                response = await client.get(endpoint.replace("/mcp", "/health"))
+                response = await client.get(f"{base}/health")
                 checked.append({"runtime_id": runtime["id"], "status": response.status_code})
             except Exception as exc:
                 checked.append({"runtime_id": runtime["id"], "error": str(exc)})

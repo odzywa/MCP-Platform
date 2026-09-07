@@ -14,7 +14,8 @@ metadata:
   namespace: __NAMESPACE__
 rules:
   - apiGroups: ["apps"]
-    resources: ["deployments", "replicasets"]
+    # deployments/scale to osobny zasób w RBAC — bez niego Start/Stop dostaje 403
+    resources: ["deployments", "deployments/scale", "replicasets"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: [""]
     resources: ["services", "configmaps", "secrets", "pods", "pods/log"]

@@ -4,6 +4,7 @@ import sqlite3
 import threading
 import time
 import urllib.request
+from contextlib import closing
 from pathlib import Path
 
 from drivers.kubernetes_driver import DeploySpec, InstanceStatus, KubernetesDeploymentDriver
@@ -103,7 +104,7 @@ def run_action(driver: KubernetesDeploymentDriver, conn: sqlite3.Connection,
         if not config_path or not Path(config_path).exists():
             raise RuntimeError(f"config path missing: {config_path}")
         status = driver.apply(build_deploy_spec(runtime))
-        # Wymuś pull nowego obrazu przez rollout restart
+        # Wymuś pull nowego obrazu przez rollout restart (config mógł się nie zmienić)
         driver.restart(runtime_id)
         conn.execute(
             "UPDATE runtimes SET status=?, endpoint_url=?, container_name=?, last_error=NULL, updated_at=? WHERE id=?",
@@ -160,24 +161,17 @@ def run_action(driver: KubernetesDeploymentDriver, conn: sqlite3.Connection,
                    {"state": status.state, "error": status.last_error})
 
     elif action == "reload":
-        # Na K8s: zaktualizuj ConfigMap i Secret, następnie rollout restart
+        # apply() liczy config-hash i wstawia go w adnotację pod template,
+        # więc zmiana konfiguracji sama wymusza nowy ReplicaSet.
         config_path = runtime["config_path"]
-        if config_path and Path(config_path).exists():
-            from drivers.kubernetes_driver import (
-                _load_config_files, _load_env_vars, _make_configmap, _make_secret,
-                _cm, _sec, NAMESPACE,
-            )
-            from kubernetes import client as k8s_client
-            core = k8s_client.CoreV1Api()
-            cp = Path(config_path)
-            cm = _make_configmap(runtime_id, cp)
-            sec = _make_secret(runtime_id, _load_env_vars(cp))
-            core.replace_namespaced_config_map(_cm(runtime_id), NAMESPACE, cm)
-            core.replace_namespaced_secret(_sec(runtime_id), NAMESPACE, sec)
-        driver.restart(runtime_id)
-        conn.execute("UPDATE runtimes SET last_error=NULL, updated_at=? WHERE id=?",
-                     (now_sql(), runtime_id))
-        log(conn, runtime_id, "Config reloaded (ConfigMap updated + rollout restart)")
+        if not config_path or not Path(config_path).exists():
+            raise RuntimeError(f"config path missing: {config_path}")
+        status = driver.apply(build_deploy_spec(runtime))
+        conn.execute(
+            "UPDATE runtimes SET endpoint_url=?, container_name=?, last_error=NULL, updated_at=? WHERE id=?",
+            (status.endpoint_url, status.container_name, now_sql(), runtime_id),
+        )
+        log(conn, runtime_id, "Config reloaded (ConfigMap + Secret updated, rollout wymuszony config-hashem)")
         audit_json(conn, "reload_runtime", runtime_id, {})
 
     elif action == "logs":
@@ -213,9 +207,10 @@ def sync_runtime_statuses(driver: KubernetesDeploymentDriver,
     for runtime in runtimes:
         rid = runtime["id"]
         if rid in status_by_id:
+            found = status_by_id[rid]
             conn.execute(
-                "UPDATE runtimes SET status=?, updated_at=? WHERE id=?",
-                (status_by_id[rid].state, now_sql(), rid),
+                "UPDATE runtimes SET status=?, endpoint_url=?, updated_at=? WHERE id=?",
+                (found.state, found.endpoint_url, now_sql(), rid),
             )
         else:
             conn.execute(
@@ -229,7 +224,7 @@ def loop() -> None:
     driver = KubernetesDeploymentDriver()
     while True:
         try:
-            with connect() as conn:
+            with closing(connect()) as conn, conn:
                 sync_runtime_statuses(driver, conn)
                 requests = conn.execute(
                     "SELECT * FROM deployment_requests WHERE status='pending' ORDER BY id LIMIT 5"
