@@ -38,9 +38,18 @@ MANAGED_BY_LABEL  = "app.kubernetes.io/managed-by"
 MANAGED_BY_VALUE  = "mcp-platform"
 RUNTIME_ID_LABEL  = "mcp-platform/runtime-id"
 CONFIG_HASH_ANNOTATION = "mcp-platform/config-hash"
+# Label ma limit 63 znaków, więc długie runtime_id jest w nim przycięte.
+# Pełne id trzymamy w adnotacji (bez limitu) i to ją czyta sync_statuses.
+RUNTIME_ID_ANNOTATION = "mcp-platform/runtime-id-full"
 
 # Obrazy budowane przez platformę — tylko one dostają prefix rejestru.
-PLATFORM_IMAGE_PREFIXES = ("mcp-runtime-", "mcp-generic-", "mcp-platform-")
+# Rozszerzalne, bo Runtime Image Builder pozwala nadać obrazowi dowolną nazwę.
+PLATFORM_IMAGE_PREFIXES = tuple(
+    p.strip() for p in os.getenv(
+        "MCP_RUNTIME_LOCAL_IMAGE_PREFIXES",
+        "mcp-runtime-,mcp-generic-,mcp-platform-,mcp-",
+    ).split(",") if p.strip()
+)
 
 # Jak długo cache'ujemy negatywny wynik detekcji OpenShift (sekundy).
 _OPENSHIFT_RECHECK_SECONDS = 300
@@ -229,6 +238,13 @@ def _make_secret_files(sid: str, files: dict[str, str]) -> k8s.V1Secret:
     )
 
 
+def _annotations(sid: str, config_hash: str = "") -> dict[str, str]:
+    ann = {RUNTIME_ID_ANNOTATION: sid}
+    if config_hash:
+        ann[CONFIG_HASH_ANNOTATION] = config_hash
+    return ann
+
+
 def _make_deployment(spec: DeploySpec, config_hash: str = "") -> k8s.V1Deployment:
     sid = spec.server_id
     labels = _labels(sid)
@@ -253,7 +269,8 @@ def _make_deployment(spec: DeploySpec, config_hash: str = "") -> k8s.V1Deploymen
     ]
 
     return k8s.V1Deployment(
-        metadata=k8s.V1ObjectMeta(name=_dep(sid), namespace=NAMESPACE, labels=labels),
+        metadata=k8s.V1ObjectMeta(name=_dep(sid), namespace=NAMESPACE, labels=labels,
+                                  annotations=_annotations(sid)),
         spec=k8s.V1DeploymentSpec(
             replicas=1,
             strategy=k8s.V1DeploymentStrategy(type="Recreate"),
@@ -261,7 +278,7 @@ def _make_deployment(spec: DeploySpec, config_hash: str = "") -> k8s.V1Deploymen
             template=k8s.V1PodTemplateSpec(
                 metadata=k8s.V1ObjectMeta(
                     labels=labels,
-                    annotations={CONFIG_HASH_ANNOTATION: config_hash} if config_hash else None,
+                    annotations=_annotations(sid, config_hash),
                 ),
                 spec=k8s.V1PodSpec(
                     automount_service_account_token=False,
@@ -406,7 +423,9 @@ class KubernetesDeploymentDriver:
         self._core   = k8s.CoreV1Api()
         self._custom = k8s.CustomObjectsApi()
         self._openshift = False
-        self._openshift_checked_at = 0.0
+        # -inf, nie 0.0: time.monotonic() liczy od startu systemu, więc 0.0
+        # oznaczałoby "sprawdzone przed chwilą" przez pierwsze 5 min po bootcie.
+        self._openshift_checked_at = float("-inf")
 
     def _check_openshift(self) -> bool:
         try:
@@ -476,10 +495,15 @@ class KubernetesDeploymentDriver:
             else:
                 raise
 
-    def _upsert_deployment(self, spec: DeploySpec, config_hash: str = "") -> None:
+    def _upsert_deployment(self, spec: DeploySpec, config_hash: str = "",
+                           preserve_replicas: bool = False) -> None:
         obj = _make_deployment(spec, config_hash)
         try:
-            self._apps.read_namespaced_deployment(_dep(spec.server_id), NAMESPACE)
+            existing = self._apps.read_namespaced_deployment(_dep(spec.server_id), NAMESPACE)
+            if preserve_replicas:
+                # Szablon ma na stałe replicas=1; bez tego reload wystartowałby
+                # runtime zatrzymany wcześniej przez użytkownika.
+                obj.spec.replicas = existing.spec.replicas or 0
             self._apps.replace_namespaced_deployment(_dep(spec.server_id), NAMESPACE, obj)
         except ApiException as e:
             if e.status == 404:
@@ -562,19 +586,20 @@ class KubernetesDeploymentDriver:
 
     # ── Publiczny interfejs (identyczny jak DockerDeploymentDriver) ────────────
 
-    def apply(self, spec: DeploySpec) -> InstanceStatus:
+    def apply(self, spec: DeploySpec, preserve_replicas: bool = False) -> InstanceStatus:
         config_dir = Path(spec.config_mount)
         self._upsert_cm(spec.server_id, config_dir)
         self._upsert_secret(spec.server_id, _load_env_vars(config_dir))
         self._upsert_secret_config(spec.server_id, _load_secret_config_files(config_dir))
         self._upsert_secret_files(spec.server_id, _load_secret_files(config_dir))
-        self._upsert_deployment(spec, _config_hash(config_dir))
+        self._upsert_deployment(spec, _config_hash(config_dir), preserve_replicas)
         self._upsert_service(spec.server_id)
         route_url = self._upsert_route(spec.server_id)
         endpoint = route_url or self._internal_url(spec.server_id)
+        replicas = self._replicas(spec.server_id) or 0
         return InstanceStatus(
             server_id=spec.server_id,
-            state="running",
+            state="starting" if replicas > 0 else "stopped",
             endpoint_url=endpoint,
             container_name=_dep(spec.server_id),
         )
@@ -684,7 +709,9 @@ class KubernetesDeploymentDriver:
 
         result: list[InstanceStatus] = []
         for dep in deps.items:
-            sid = (dep.metadata.labels or {}).get(RUNTIME_ID_LABEL, "")
+            # Adnotacja trzyma pełne id; label bywa przycięty do 63 znaków.
+            sid = (dep.metadata.annotations or {}).get(RUNTIME_ID_ANNOTATION) \
+                or (dep.metadata.labels or {}).get(RUNTIME_ID_LABEL, "")
             if not sid:
                 continue
             desired = dep.spec.replicas or 0

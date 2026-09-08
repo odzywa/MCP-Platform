@@ -166,10 +166,10 @@ def run_action(driver: KubernetesDeploymentDriver, conn: sqlite3.Connection,
         config_path = runtime["config_path"]
         if not config_path or not Path(config_path).exists():
             raise RuntimeError(f"config path missing: {config_path}")
-        status = driver.apply(build_deploy_spec(runtime))
+        status = driver.apply(build_deploy_spec(runtime), preserve_replicas=True)
         conn.execute(
-            "UPDATE runtimes SET endpoint_url=?, container_name=?, last_error=NULL, updated_at=? WHERE id=?",
-            (status.endpoint_url, status.container_name, now_sql(), runtime_id),
+            "UPDATE runtimes SET status=?, endpoint_url=?, container_name=?, last_error=NULL, updated_at=? WHERE id=?",
+            (status.state, status.endpoint_url, status.container_name, now_sql(), runtime_id),
         )
         log(conn, runtime_id, "Config reloaded (ConfigMap + Secret updated, rollout wymuszony config-hashem)")
         audit_json(conn, "reload_runtime", runtime_id, {})
@@ -207,10 +207,12 @@ def sync_runtime_statuses(driver: KubernetesDeploymentDriver,
     for runtime in runtimes:
         rid = runtime["id"]
         if rid in status_by_id:
-            found = status_by_id[rid]
+            # Tylko status. endpoint_url ustawiają akcje (deploy/start/restart/
+            # reload) — tutaj transientny błąd API Route podmieniłby publiczny
+            # URL na wewnętrzny .svc, który trafia do UI i configów klientów.
             conn.execute(
-                "UPDATE runtimes SET status=?, endpoint_url=?, updated_at=? WHERE id=?",
-                (found.state, found.endpoint_url, now_sql(), rid),
+                "UPDATE runtimes SET status=?, updated_at=? WHERE id=?",
+                (status_by_id[rid].state, now_sql(), rid),
             )
         else:
             conn.execute(

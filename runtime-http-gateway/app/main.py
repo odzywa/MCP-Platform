@@ -13,7 +13,7 @@ from typing import Any
 import httpx
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
-from jsonschema import validate
+from jsonschema import validate, ValidationError as JsonSchemaValidationError
 
 
 CONFIG_DIR = Path(os.getenv("RUNTIME_CONFIG_DIR", "/config"))
@@ -458,11 +458,22 @@ async def execute_tool(tool_name: str, arguments: dict[str, Any], response_profi
     if tool.get("execution_type") != "http_request":
         return {"error": f"unsupported execution type: {tool.get('execution_type')}"}
     arguments = {**input_defaults(tool.get("input_schema") or {}), **(arguments or {})}
-    validate(arguments, tool.get("input_schema") or {})
+    try:
+        validate(arguments, tool.get("input_schema") or {})
+    except JsonSchemaValidationError as exc:
+        # Bez tego wyjątek wychodził z handlera jako HTTP 500 (a w trybie MCP
+        # rozwalał całą paczkę JSON-RPC). runtime-shell zwraca tu czysty błąd.
+        return {"error": f"validation error: {exc.message}", "validation_blocked": True}
     execution = tool.get("execution") or {}
+    if not execution.get("url"):
+        return {"error": f"tool {tool_name} has no execution.url configured"}
     method = str(execution.get("method", "POST")).upper()
     template_values = {**runtime_config, **arguments}
-    header_values = {**os.environ, **template_values}
+    # os.environ NA KOŃCU: nagłówki niosą poświadczenia (Authorization:
+    # Bearer ${BACKEND_AUTH_TOKEN}), a schematy toolów nie ustawiają
+    # additionalProperties:false — bez tego wywołujący podmieniłby token
+    # argumentem o tej samej nazwie.
+    header_values = {**template_values, **os.environ}
     url = Template(str(execution["url"])).safe_substitute(template_values)
     body_template = execution.get("body", arguments)
     if isinstance(body_template, dict):
@@ -475,14 +486,35 @@ async def execute_tool(tool_name: str, arguments: dict[str, Any], response_profi
     headers = {str(k): str(v) for k, v in substitute_template(headers_template, header_values).items()}
     timeout = int(execution.get("timeout_seconds") or policy.get("timeout_seconds") or 30)
     max_response_bytes = int(execution.get("max_response_bytes") or policy.get("max_response_bytes") or 5_242_880)
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.request(method, url, json=body if method in {"POST", "PUT", "PATCH"} else None,
-                                         headers=headers or None)
-        content = response.content[:max_response_bytes]
-        try:
-            output = json.loads(content.decode("utf-8")) if content else {}
-        except json.JSONDecodeError:
-            output = {"text": content.decode("utf-8", errors="replace")}
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            # Strumieniowo: response.content wciągnąłby całe ciało do pamięci
+            # przed przycięciem, więc limit nie chronił runtime'u (512 MB)
+            # przed backendem zwracającym gigabajty.
+            async with client.stream(
+                method, url,
+                json=body if method in {"POST", "PUT", "PATCH"} else None,
+                headers=headers or None,
+            ) as response:
+                chunks: list[bytes] = []
+                received = 0
+                async for chunk in response.aiter_bytes():
+                    chunks.append(chunk)
+                    received += len(chunk)
+                    if received >= max_response_bytes:
+                        break
+                content = b"".join(chunks)[:max_response_bytes]
+                status_code = response.status_code
+            try:
+                output = json.loads(content.decode("utf-8")) if content else {}
+            except json.JSONDecodeError:
+                output = {"text": content.decode("utf-8", errors="replace")}
+    except httpx.HTTPError as exc:
+        result = {"ok": False, "tool": tool_name, "error": f"request failed: {exc}"}
+        _fire_tool_call_log(tool_name, arguments, result,
+                            int((time.monotonic() - _t0) * 1000),
+                            caller_ip=caller_ip, model=model)
+        return result
     response_mode = "json"
     if response_profile == "mcp":
         response_mode = str(execution.get("mcp_response_mode") or tool.get("mcp_response_mode") or "json")
@@ -494,8 +526,8 @@ async def execute_tool(tool_name: str, arguments: dict[str, Any], response_profi
     elif response_mode == "health_text":
         formatted = format_health_text(output)
     result = {
-        "ok": 200 <= response.status_code < 300,
-        "status_code": response.status_code,
+        "ok": 200 <= status_code < 300,
+        "status_code": status_code,
         "tool": tool_name,
         "output": formatted,
     }

@@ -33,6 +33,8 @@ from .config import (
     CUSTOM_TEMPLATES_FILE,
     SESSION_TTL_H,
 )
+from pydantic import ValidationError as PydanticValidationError
+
 from .models import AdapterCreate, RuntimeCreate, ToolCreate
 from .templates import render_template
 from .tools.docker import build_runtime_dockerfile
@@ -118,7 +120,11 @@ def _api_token_user(request: Request) -> dict[str, Any] | None:
         auth = request.headers.get("Authorization", "")
         if auth.startswith("Bearer "):
             presented = auth[7:]
-    if not presented or not _secrets_mod.compare_digest(presented, _API_TOKEN):
+    # Starlette dekoduje nagłówki jako latin-1; compare_digest wymaga ASCII
+    # i na bajcie >127 rzuciłoby TypeError z middleware → 500 zamiast 401.
+    if not presented or not presented.isascii():
+        return None
+    if not _secrets_mod.compare_digest(presented, _API_TOKEN):
         return None
     return {"id": 0, "username": "api-token", "role": _API_TOKEN_ROLE}
 
@@ -712,6 +718,11 @@ def builtin_tool_packages() -> list[dict[str, Any]]:
              "input_schema": _pm_action_schema("ID serwera do usunięcia")},
         ],
     }
+    # Pakiety definiowane w kodzie — plik o tym samym id z templates/ nadpisałby je
+    # przez ON CONFLICT DO UPDATE w seed_builtin_tool_packages().
+    _BUILTIN_PACKAGE_IDS = {
+        "raghybrid-assistant", "openshift-readonly", "openshift-monitor", "platform-manager",
+    }
     # Load extra templates from templates/ directory
     _extra_packages = []
     # W kontenerze obraz nie zawiera katalogu templates/ (build context to control-plane/),
@@ -724,7 +735,7 @@ def builtin_tool_packages() -> list[dict[str, Any]]:
         for _tf in _templates_dir.rglob("*.json"):
             try:
                 _tp = json.loads(_tf.read_text(encoding="utf-8"))
-                if _tp.get("id") and _tp.get("tools") and _tp["id"] not in {"raghybrid-assistant", "openshift-readonly", "platform-manager"}:
+                if _tp.get("id") and _tp.get("tools") and _tp["id"] not in _BUILTIN_PACKAGE_IDS:
                     _extra_packages.append(_tp)
             except Exception:
                 pass
@@ -1086,7 +1097,7 @@ def enabled_adapters() -> list[dict[str, Any]]:
 def runtime_class_options(selected: str = "") -> str:
     classes = enabled_runtime_classes()
     return "".join(
-        f'<option value="{item["name"]}" {"selected" if item["name"] == selected else ""}>{item["name"]}</option>'
+        f'<option value="{escape(item["name"])}" {"selected" if item["name"] == selected else ""}>{escape(item["name"])}</option>'
         for item in classes
     )
 
@@ -1104,7 +1115,7 @@ def package_options(selected: str = "") -> str:
 def adapter_options(selected: str = "") -> str:
     adapters = enabled_adapters()
     return "".join(
-        f'<option value="{item["name"]}" {"selected" if item["name"] == selected else ""}>{item["name"]}</option>'
+        f'<option value="{escape(item["name"])}" {"selected" if item["name"] == selected else ""}>{escape(item["name"])}</option>'
         for item in adapters
     )
 
@@ -8870,11 +8881,11 @@ def legacy_all() -> str:
     rows_html = "".join(
         f"""
         <tr>
-          <td><a href="/runtimes/{r['id']}">{r['name']}</a></td>
-          <td><span class="badge {r['status']}">{r['status']}</span></td>
-          <td>{r['runtime_class']}</td>
-          <td><span class="risk {r['risk_level']}">{r['risk_level']}</span></td>
-          <td>{r['endpoint_url'] or '-'}</td>
+          <td><a href="/runtimes/{escape(r['id'])}">{escape(r['name'])}</a></td>
+          <td><span class="badge {escape(r['status'])}">{escape(r['status'])}</span></td>
+          <td>{escape(r['runtime_class'])}</td>
+          <td><span class="risk {escape(r['risk_level'])}">{escape(r['risk_level'])}</span></td>
+          <td>{escape(r['endpoint_url'] or '-')}</td>
           <td>
             {action_forms(r['id'], compact=True, return_to='/runtimes')}
           </td>
@@ -8885,10 +8896,10 @@ def legacy_all() -> str:
     class_rows_html = "".join(
         f"""
         <tr>
-          <td>{item['name']}</td>
-          <td>{item['runtime_image']}</td>
-          <td>{", ".join(json.loads(item['allowed_execution_types_json'] or '[]'))}</td>
-          <td><span class="risk {item['risk_level']}">{item['risk_level']}</span></td>
+          <td>{escape(item['name'])}</td>
+          <td>{escape(item['runtime_image'])}</td>
+          <td>{escape(", ".join(json.loads(item['allowed_execution_types_json'] or '[]')))}</td>
+          <td><span class="risk {escape(item['risk_level'])}">{escape(item['risk_level'])}</span></td>
           <td>{'enabled' if item['enabled'] else 'disabled'}</td>
         </tr>
         """
@@ -8897,14 +8908,14 @@ def legacy_all() -> str:
     adapter_rows_html = "".join(
         f"""
         <tr>
-          <td>{item['name']}</td>
-          <td>{item['adapter_type']}</td>
-          <td>{item['mode']}</td>
-          <td><span class="risk {item['risk_level']}">{item['risk_level']}</span></td>
+          <td>{escape(item['name'])}</td>
+          <td>{escape(item['adapter_type'])}</td>
+          <td>{escape(item['mode'])}</td>
+          <td><span class="risk {escape(item['risk_level'])}">{escape(item['risk_level'])}</span></td>
           <td>{'yes' if item['implemented'] else 'planned'}</td>
           <td>{'enabled' if item['enabled'] else 'disabled'}</td>
           <td>
-            <form method="post" action="/api/adapters/{item['name']}/toggle"><button>{'Disable' if item['enabled'] else 'Enable'}</button></form>
+            <form method="post" action="/api/adapters/{quote(item['name'])}/toggle"><button>{'Disable' if item['enabled'] else 'Enable'}</button></form>
           </td>
         </tr>
         """
@@ -8975,16 +8986,22 @@ def legacy_all() -> str:
 async def create_runtime(request: Request):
     form = await request.form()
     selected_adapters = list(form.getlist("adapter_names")) if hasattr(form, "getlist") else []
-    data = RuntimeCreate(
-        name=str(form.get("name") or ""),
-        package_id=str(form.get("package_id") or ""),
-        runtime_class=str(form.get("runtime_class") or "http-gateway"),
-        risk_level=str(form.get("risk_level") or "low"),
-        first_tool_name=str(form.get("first_tool_name") or ""),
-        first_tool_url=str(form.get("first_tool_url") or ""),
-        first_tool_method=str(form.get("first_tool_method") or "POST"),
-        first_tool_enabled=str(form.get("first_tool_enabled") or "true") == "true",
-    )
+    try:
+        data = RuntimeCreate(
+            name=str(form.get("name") or ""),
+            package_id=str(form.get("package_id") or ""),
+            runtime_class=str(form.get("runtime_class") or "http-gateway"),
+            risk_level=str(form.get("risk_level") or "low"),
+            first_tool_name=str(form.get("first_tool_name") or ""),
+            first_tool_url=str(form.get("first_tool_url") or ""),
+            first_tool_method=str(form.get("first_tool_method") or "POST"),
+            first_tool_enabled=str(form.get("first_tool_enabled") or "true") == "true",
+        )
+    except PydanticValidationError as exc:
+        detail = "; ".join(
+            f"{'.'.join(str(x) for x in e['loc'])}: {e['msg']}" for e in exc.errors()[:3]
+        )
+        return RedirectResponse(f"/create?error={quote(detail)}", status_code=303)
     # Read policy from new advanced form fields
     deploy_after = str(form.get("deploy_after_create") or "false") == "true"
     try:
@@ -11095,10 +11112,11 @@ async def generate_mcp_token(runtime_id: str, request: Request):
         "UPDATE runtimes SET mcp_auth_token = ?, updated_at = ? WHERE id = ?",
         (token, store.now_iso(), runtime_id),
     )
-    # Re-write runtime-config.json so the running container picks up the new token on /reload
+    # Restart, nie reload: /reload wymaga tokenu, a kontener wciąż wymusza stary —
+    # żądanie z nowym tokenem dostałoby 401 i zmiana nigdy by nie weszła.
     try:
         write_runtime_config(runtime_id)
-        enqueue_runtime_action(runtime_id, "reload")
+        enqueue_runtime_action(runtime_id, "restart")
     except Exception:
         pass
     user = _current_user.get() or {}
@@ -11118,9 +11136,10 @@ async def revoke_mcp_token(runtime_id: str, request: Request):
         "UPDATE runtimes SET mcp_auth_token = '', updated_at = ? WHERE id = ?",
         (store.now_iso(), runtime_id),
     )
+    # Jak wyżej — po odwołaniu tokenu reload nie miałby czym się uwierzytelnić.
     try:
         write_runtime_config(runtime_id)
-        enqueue_runtime_action(runtime_id, "reload")
+        enqueue_runtime_action(runtime_id, "restart")
     except Exception:
         pass
     user = _current_user.get() or {}
@@ -11457,12 +11476,16 @@ class Tools:
     )
 
 
+_RUNTIME_API_HIDDEN_FIELDS = ("mcp_auth_token",)
+
+
 @app.get("/api/runtimes")
 def list_runtimes():
-    return store.rows(sql.SELECT_RUNTIMES_ACTIVE)
-
-
-_RUNTIME_API_HIDDEN_FIELDS = ("mcp_auth_token",)
+    # SELECT * zawiera mcp_auth_token — platform-manager podaje tę listę wprost modelowi.
+    return [
+        {k: v for k, v in row.items() if k not in _RUNTIME_API_HIDDEN_FIELDS}
+        for row in store.rows(sql.SELECT_RUNTIMES_ACTIVE)
+    ]
 
 
 @app.get("/api/runtimes/{runtime_id}")
