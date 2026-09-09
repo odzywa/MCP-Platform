@@ -1983,6 +1983,14 @@ def _lang_bridge() -> str:
 </script>"""
 
 
+def _pending_approvals_badge() -> str:
+    try:
+        row = store.one("SELECT COUNT(*) AS n FROM approval_requests WHERE status='pending'")
+        return f" ({row['n']})" if row and row["n"] else ""
+    except Exception:
+        return ""
+
+
 def page_shell(active: str, body: str) -> str:
     user = _current_user.get()
     role = (user or {}).get("role", "admin")
@@ -2001,6 +2009,7 @@ def page_shell(active: str, body: str) -> str:
         ("classes",    "🏗️  Typy środowisk",       "/runtime-classes", "Docker images i klasy runtime — definiują jakie binarki są dostępne",     "admin"),
         ("images",     "🐳  Obrazy Docker",         "/runtime-images",  "Zbudowane obrazy kontenerów — historia buildów i zarządzanie",             "admin"),
         ("security",   "🔒  Bezpieczeństwo",       "/security",        "Przegląd polityk i hardening kontenerów",                                 "read_only"),
+        ("approvals",  f"🛡️  Zatwierdzenia{_pending_approvals_badge()}", "/approvals", "Wywołania narzędzi czekające na decyzję człowieka",                        "read_only"),
         ("audit",      "🔍  Audit",                "/audit",           "Historia wszystkich operacji — deploy, stop, reload, błędy",               "read_only"),
         ("logs",       "📋  Logi",                 "/logs",            "Logi runtimeów — informacje diagnostyczne i błędy kontenerów",            "read_only"),
         ("admin",      "👥  Użytkownicy",           "/admin/users",     "Zarządzanie użytkownikami — role, rejestracje, hasła",                    "admin"),
@@ -6360,7 +6369,7 @@ def create_page(error: str = "") -> str:
           if (oaSummEl) {{
             var backUrl = (document.getElementById('oa-backend-url')||{{}}).value || '';
             var specUrl = (document.getElementById('oa-spec-url')||{{}}).value || (backUrl ? backUrl.replace(/\/$/, '') + '/openapi.json' : '');
-            oaSummEl.textContent = 'Backend: ' + backUrl + (specUrl ? '\nSpec: ' + specUrl : '');
+            oaSummEl.textContent = 'Backend: ' + backUrl + (specUrl ? '\\nSpec: ' + specUrl : '');
           }}
         }}
       }}
@@ -11713,6 +11722,97 @@ async def reject_request(req_id: str, request: Request) -> Any:
     return RedirectResponse("/approvals?ok=Odrzucono", status_code=303)
 
 
-@app.get("/approvals")
-def approvals_page(request: Request) -> RedirectResponse:
-    return RedirectResponse("/", status_code=302)
+@app.get("/approvals", response_class=HTMLResponse)
+def approvals_page(ok: str = "") -> str:
+    pending = store.rows(
+        "SELECT * FROM approval_requests WHERE status='pending' ORDER BY created_at DESC"
+    )
+    decided = store.rows(
+        "SELECT * FROM approval_requests WHERE status!='pending' ORDER BY decided_at DESC LIMIT 30"
+    )
+    names = {r["id"]: r["name"] for r in store.rows("SELECT id, name FROM runtimes")}
+    alert = f'<div class="success">{escape(ok)}</div>' if ok else ""
+
+    def _cmd_preview(raw: str) -> str:
+        """Runtime dokłada do argumentów _command z podglądem komendy."""
+        try:
+            args = json.loads(raw or "{}")
+        except json.JSONDecodeError:
+            return ""
+        return str(args.get("_command") or "") if isinstance(args, dict) else ""
+
+    pending_rows = ""
+    for a in pending:
+        cmd = _cmd_preview(a["arguments_json"])
+        cmd_html = (
+            f'<code style="font-size:11px;color:#f0b429;word-break:break-all">{escape(cmd)}</code>'
+            if cmd else ""
+        )
+        risk_cls = a["mode"] if a["mode"] in ("write", "destructive") else "low"
+        pending_rows += f"""<tr>
+          <td style="font-size:12px;color:var(--muted);white-space:nowrap">{escape(a['created_at'][:19].replace('T',' '))}</td>
+          <td style="font-size:12px;font-family:monospace;color:#7dd3fc">{escape(names.get(a['runtime_id'], a['runtime_id']))}</td>
+          <td style="font-weight:700;color:var(--blue)">{escape(a['tool_name'])}</td>
+          <td><span class="risk {escape(risk_cls)}" style="font-size:11px;padding:2px 7px">{escape(a['mode'])}</span></td>
+          <td style="max-width:340px">{cmd_html}
+            <details style="padding:4px;border:none;background:transparent"><summary style="font-size:11px;color:var(--muted)">argumenty</summary><pre style="font-size:11px;max-height:120px;margin-top:4px">{escape(a['arguments_json'])}</pre></details>
+          </td>
+          <td style="font-size:11px;font-family:monospace;color:var(--muted)">{escape(a['caller_ip'] or '—')}</td>
+          <td style="font-size:11px;color:var(--muted)">{escape((a['model'] or '—')[:22])}</td>
+          <td style="white-space:nowrap">
+            <form method="post" action="/api/approval/{quote(a['id'])}/approve" style="display:inline">
+              <button style="background:#0d2a1a;border:1px solid #1f6a3f;color:#5fd08a;padding:5px 12px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">✅ Zatwierdź</button>
+            </form>
+            <form method="post" action="/api/approval/{quote(a['id'])}/reject" style="display:inline;margin-left:4px">
+              <input type="hidden" name="reason" value="Odrzucone z panelu zatwierdzeń">
+              <button style="background:#3a1010;border:1px solid #6a2020;color:#f47a80;padding:5px 12px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">⛔ Odrzuć</button>
+            </form>
+          </td>
+        </tr>"""
+
+    decided_rows = ""
+    for a in decided:
+        badge = "running" if a["status"] == "approved" else "failed"
+        decided_rows += f"""<tr>
+          <td style="font-size:12px;color:var(--muted);white-space:nowrap">{escape((a['decided_at'] or a['created_at'])[:19].replace('T',' '))}</td>
+          <td style="font-size:12px;font-family:monospace;color:#7dd3fc">{escape(names.get(a['runtime_id'], a['runtime_id']))}</td>
+          <td style="font-weight:700">{escape(a['tool_name'])}</td>
+          <td><span class="badge {badge}" style="font-size:11px">{escape(a['status'])}</span></td>
+          <td style="font-size:12px">{escape(a['decided_by'] or '—')}</td>
+          <td style="font-size:11px;color:var(--muted)">{escape(a['reject_reason'] or '')}</td>
+        </tr>"""
+
+    pending_html = (
+        '<table><thead><tr><th>Czas</th><th>Serwer</th><th>Narzędzie</th><th>Tryb</th>'
+        '<th>Komenda / argumenty</th><th>IP</th><th>Model</th><th>Decyzja</th></tr></thead>'
+        f'<tbody>{pending_rows}</tbody></table>'
+    ) if pending else '<p class="muted">Brak oczekujących zatwierdzeń.</p>'
+
+    decided_html = (
+        '<table><thead><tr><th>Czas</th><th>Serwer</th><th>Narzędzie</th><th>Status</th>'
+        '<th>Kto</th><th>Powód</th></tr></thead>'
+        f'<tbody>{decided_rows}</tbody></table>'
+    ) if decided else '<p class="muted">Brak decyzji w historii.</p>'
+
+    # Wywołujący jest zablokowany do approval_timeout_seconds, więc strona musi
+    # sama się odświeżać — inaczej operator nie zobaczy żądania na czas.
+    refresh = '<script>setTimeout(()=>location.reload(),5000)</script>' if pending else ""
+
+    body = f"""
+      {alert}
+      <section>
+        <h2>🛡️ Zatwierdzenia wywołań narzędzi</h2>
+        <p class="muted">
+          Serwery MCP z włączoną polityką zatwierdzeń wstrzymują wywołania write/destructive
+          i czekają tutaj na decyzję człowieka. Wywołujący jest zablokowany do upływu
+          <code>approval_timeout_seconds</code> — po tym czasie żądanie przepada jako odrzucone.
+          Politykę ustawisz na stronie serwera → Policy.
+        </p>
+        <h3 style="margin-top:18px">Oczekujące ({len(pending)})</h3>
+        {pending_html}
+        <h3 style="margin-top:26px">Historia decyzji</h3>
+        {decided_html}
+      </section>
+      {refresh}
+    """
+    return page_shell("approvals", body)
