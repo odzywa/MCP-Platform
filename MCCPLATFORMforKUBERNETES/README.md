@@ -4,14 +4,26 @@
 
 ### 1. Fill in config.env
 
+`config.env` is gitignored, so start from the template:
+
 ```bash
+cp config.env.example config.env
 nano config.env
 ```
 
-Three fields to fill in:
-- `REGISTRY` — Docker registry accessible from the cluster
-- `APPS_DOMAIN` — cluster application domain
-- `STORAGE_CLASS` — block storage StorageClass (not NFS)
+Required — `deploy.sh` aborts if any is empty:
+- `REGISTRY` — registry to **push** to, reachable from the machine running the script
+- `PULL_REGISTRY` — registry the **cluster pulls from**; on OpenShift this is the
+  internal registry service and differs from `REGISTRY`
+- `APPS_DOMAIN` — cluster application domain, used to build Route hostnames
+- `NAMESPACE` — project for the platform and all runtimes (created if absent)
+
+Optional:
+- `STORAGE_CLASS` — block storage class for the SQLite PVC; empty = cluster default.
+  **Must not be NFS** — SQLite WAL needs file locking that NFS does not provide.
+- `OC_MCP_TOKEN` / `OC_MCP_SERVER` — fill both to have `deploy.sh` also deploy the
+  `openshift-monitor` MCP server automatically. Leave empty to skip and add it later
+  from the UI.
 
 ```bash
 # Find APPS_DOMAIN:
