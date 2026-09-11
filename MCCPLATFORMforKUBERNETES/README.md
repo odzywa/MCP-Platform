@@ -92,7 +92,35 @@ oc login https://api.your-cluster.example.com:6443
 oc registry login
 ```
 
-### 2. Run deploy
+### 2. Container engine
+
+`deploy.sh` works with **podman or docker** — it does not need both. It auto-detects
+what is installed, preferring podman when available:
+
+```bash
+./deploy.sh                          # auto-detect
+CONTAINER_ENGINE=docker ./deploy.sh  # force docker
+```
+
+Images are built directly with `podman build` / `docker build` — `compose` is not
+required, since the deploy needs exactly five known images.
+
+Pushing to the OpenShift internal registry uses podman when present, because
+`--tls-verify=false` handles a self-signed registry CA without touching daemon
+config. **With docker only**, add the registry to `/etc/docker/daemon.json` first:
+
+```json
+{ "insecure-registries": ["default-route-openshift-image-registry.apps.your-cluster.example.com"] }
+```
+
+then restart the docker daemon. This is not needed for an external registry with a
+trusted certificate (Quay, Harbor, Nexus).
+
+If you build with docker but push with podman — the case when both are installed and
+you force `CONTAINER_ENGINE=docker` — the script moves images between the two stores
+via the `docker-daemon:` transport automatically.
+
+### 3. Run deploy
 
 ```bash
 chmod +x deploy.sh

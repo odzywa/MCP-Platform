@@ -32,53 +32,99 @@ echo ""
 
 PARENT_DIR="$(cd .. && pwd)"
 
+# ── 0. Silnik kontenerowy ─────────────────────────────────────────────────────
+# Skrypt działa na podmanie albo na dockerze — nie wymaga obu naraz.
+# Wymuszenie: CONTAINER_ENGINE=docker ./deploy.sh
+ENGINE="${CONTAINER_ENGINE:-}"
+if [ -z "$ENGINE" ]; then
+  if command -v podman &>/dev/null;  then ENGINE=podman
+  elif command -v docker &>/dev/null; then ENGINE=docker
+  else
+    echo "BŁĄD: nie znaleziono ani podmana, ani dockera" >&2
+    exit 1
+  fi
+fi
+command -v "$ENGINE" &>/dev/null || { echo "BŁĄD: $ENGINE niedostępny" >&2; exit 1; }
+
+# Do rejestru OpenShift pchamy podmanem, bo --tls-verify=false rozwiązuje
+# problemy z samopodpisanym CA bez grzebania w konfiguracji demona.
+# Gdy jest tylko docker, pchamy dockerem — wymaga wtedy wpisu w
+# /etc/docker/daemon.json: {"insecure-registries": ["<REGISTRY_HOST>"]}
+if command -v podman &>/dev/null; then PUSH_ENGINE=podman; else PUSH_ENGINE=docker; fi
+
+# Obrazy zbudowane dockerem, a pchane podmanem, trzeba przenieść między
+# magazynami przez transport docker-daemon:. Przy jednym silniku to zbędne.
+NEED_TRANSFER=false
+[ "$ENGINE" = docker ] && [ "$PUSH_ENGINE" = podman ] && NEED_TRANSFER=true
+
+echo "  Silnik      : $ENGINE (push: $PUSH_ENGINE$([ "$NEED_TRANSFER" = true ] && echo ", przez docker-daemon:"))"
+echo ""
+
 # ── 1. Buduj obrazy ────────────────────────────────────────────────────────────
 echo "[1/6] Budowanie obrazów..."
 
-# Operator k8s (z tego projektu)
-docker build -t mcp-platform-operator-k8s:latest ./operator/
+# Budujemy wprost, bez compose — deploy potrzebuje dokładnie tych pięciu obrazów,
+# a `compose` nie jest dostępne w każdej instalacji podmana.
+# Format: <nazwa obrazu>|<katalog kontekstu>
+IMAGES="
+mcp-platform-operator-k8s|./operator
+mcp-platform-control-plane|$PARENT_DIR/control-plane
+mcp-runtime-http-gateway|$PARENT_DIR/runtime-http-gateway
+mcp-runtime-shell|$PARENT_DIR/runtime-shell
+mcp-runtime-openapi|$PARENT_DIR/runtime-openapi
+"
 
-# Control plane i runtime images (z głównego projektu).
-# Błąd builda nie przerywa deployu — wypchniemy obraz zbudowany wcześniej —
-# ale komunikat musi być widoczny, więc bez 2>/dev/null.
-(cd "$PARENT_DIR" && docker compose build mcp-platform) || \
-  echo "  UWAGA: control-plane build failed — próbuję użyć istniejącego obrazu"
-(cd "$PARENT_DIR" && docker compose --profile build-only build) || \
-  echo "  UWAGA: runtime images build failed — próbuję użyć istniejących obrazów"
+while IFS='|' read -r img ctx; do
+  [ -z "$img" ] && continue
+  echo "  budowanie $img:latest  (kontekst: $ctx)"
+  # Błąd builda nie przerywa deployu — może istnieć obraz zbudowany wcześniej.
+  # Komunikat musi być widoczny, więc bez 2>/dev/null.
+  "$ENGINE" build -t "$img:latest" "$ctx" || \
+    echo "  UWAGA: build $img nieudany — spróbuję użyć istniejącego obrazu"
+done <<< "$IMAGES"
 
 # ...ale pchać można tylko to, co faktycznie istnieje.
 require_image() {
-  docker image inspect "$1" >/dev/null 2>&1 || {
-    echo "BŁĄD: brak obrazu $1 w lokalnym demonie Docker — zbuduj go przed deployem" >&2
+  "$ENGINE" image inspect "$1" >/dev/null 2>&1 || {
+    echo "BŁĄD: brak obrazu $1 w magazynie $ENGINE — zbuduj go przed deployem" >&2
     exit 1
   }
 }
-for _img in mcp-platform-control-plane mcp-platform-operator-k8s \
-            mcp-runtime-http-gateway mcp-runtime-shell mcp-runtime-openapi; do
-  require_image "$_img:latest"
-done
+while IFS='|' read -r img _; do
+  [ -z "$img" ] && continue
+  require_image "$img:latest"
+done <<< "$IMAGES"
 
 # ── 2. Push obrazów do rejestru ───────────────────────────────────────────────
 echo "[2/6] Push obrazów do rejestru..."
 
-# Logowanie do rejestru OpenShift przez podman (--tls-verify=false omija problemy z CA)
+# Logowanie do rejestru OpenShift. --tls-verify=false (podman) omija problemy
+# z samopodpisanym CA; docker nie ma odpowiednika i wymaga insecure-registries.
+TLS_FLAG=""
+[ "$PUSH_ENGINE" = podman ] && TLS_FLAG="--tls-verify=false"
+
 if [[ "$REGISTRY" == *"openshift-image-registry"* ]]; then
   REGISTRY_HOST=$(echo "$REGISTRY" | cut -d'/' -f1)
   TOKEN=$(oc whoami -t 2>/dev/null || true)
   if [ -n "$TOKEN" ]; then
-    podman login --tls-verify=false -u "$(oc whoami)" -p "$TOKEN" "$REGISTRY_HOST" 2>/dev/null || \
-      echo "  UWAGA: podman login failed — próbuję bez logowania"
+    # shellcheck disable=SC2086
+    "$PUSH_ENGINE" login $TLS_FLAG -u "$(oc whoami)" -p "$TOKEN" "$REGISTRY_HOST" 2>/dev/null || \
+      echo "  UWAGA: $PUSH_ENGINE login nieudany — próbuję bez logowania"
   fi
 fi
 
 push() {
   local src="$1" dst="$REGISTRY/$2"
   echo "  $src → $dst"
-  # Skopiuj z docker daemon do podman, potem wypchnij.
-  # Każdy krok musi się udać — inaczej wypchnęlibyśmy stary obraz spod tego samego tagu.
-  podman pull --tls-verify=false "docker-daemon:${src}"
-  podman tag "$src" "$dst"
-  podman push --tls-verify=false "$dst"
+  # Każdy krok musi się udać — inaczej wypchnęlibyśmy stary obraz pod tym samym tagiem.
+  if [ "$NEED_TRANSFER" = true ]; then
+    # Obraz siedzi w demonie dockera, a pchamy podmanem — przenieś między magazynami.
+    # shellcheck disable=SC2086
+    "$PUSH_ENGINE" pull $TLS_FLAG "docker-daemon:${src}"
+  fi
+  "$PUSH_ENGINE" tag "$src" "$dst"
+  # shellcheck disable=SC2086
+  "$PUSH_ENGINE" push $TLS_FLAG "$dst"
 }
 
 push "mcp-platform-control-plane:latest"  "mcp-platform-control-plane:latest"
