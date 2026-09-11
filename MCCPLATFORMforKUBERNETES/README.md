@@ -2,6 +2,61 @@
 
 ## Before First Deploy
 
+### 0. Create the deploy account (once, by a cluster admin)
+
+`deploy.sh` does **not** create this account — it assumes you are already logged in as it.
+
+Cluster-admin rights are needed **only for this one step**. Everything the installer
+does afterwards happens inside the `mcp-platform` namespace.
+
+```bash
+# As a cluster admin — creates the namespace, the mcp-deployer ServiceAccount
+# and the roles it needs:
+oc apply -f k8s/00-deployer-account.yaml
+
+# Issue a token for the account (24h; adjust as needed):
+oc create token mcp-deployer -n mcp-platform --duration=24h
+```
+
+Then log in as that account on the machine that will run `deploy.sh`:
+
+```bash
+oc login --token=<TOKEN-FROM-ABOVE> --server=https://api.your-cluster.example.com:6443
+oc whoami          # expect: system:serviceaccount:mcp-platform:mcp-deployer
+```
+
+The account is scoped to the `mcp-platform` namespace. The only cluster-wide grant is
+`get/patch/update` on the single namespace object named `mcp-platform` — `oc apply`
+sends a PATCH to it even when nothing changes, and without this the deploy fails with
+`namespaces is forbidden`.
+
+Its Role is deliberately a **superset** of the `mcp-operator` Role created later.
+Kubernetes forbids granting permissions you do not hold yourself, so a narrower deploy
+account would fail at `02-rbac.yaml` with `attempt to grant extra privileges`.
+
+If a long-lived token is preferred over a 24h one (CI pipelines, unattended installs):
+
+```bash
+oc apply -n mcp-platform -f - <<'YAML'
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mcp-deployer-token
+  namespace: mcp-platform
+  annotations:
+    kubernetes.io/service-account.name: mcp-deployer
+type: kubernetes.io/service-account-token
+YAML
+
+oc get secret mcp-deployer-token -n mcp-platform -o jsonpath='{.data.token}' | base64 -d
+```
+
+Note that this token does not expire — store it like any other credential and delete the
+Secret when it is no longer needed.
+
+> Changing `NAMESPACE` in `config.env`? Update it in `k8s/00-deployer-account.yaml`
+> as well — the namespace is hardcoded there in 9 YAML fields.
+
 ### 1. Fill in config.env
 
 `config.env` is gitignored, so start from the template:

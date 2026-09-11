@@ -1,0 +1,135 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Konto serwisowe do wdrażania MCP Platform
+#
+# Ten plik stosuje JEDNORAZOWO ktoś z uprawnieniami cluster-admin. deploy.sh
+# go NIE aplikuje — zakłada, że konto już istnieje i że jesteś nim zalogowany.
+#
+#   oc apply -f k8s/00-deployer-account.yaml
+#   oc create token mcp-deployer -n mcp-platform --duration=24h
+#
+# Namespace jest tu zapisany na sztywno jako "mcp-platform". Jeśli zmienisz
+# NAMESPACE w config.env, popraw go również w tym pliku (9 wystąpień w polach YAML).
+# ──────────────────────────────────────────────────────────────────────────────
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mcp-platform
+  labels:
+    app.kubernetes.io/name: mcp-platform
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mcp-deployer
+  namespace: mcp-platform
+---
+# Uprawnienia do wszystkiego, co tworzy deploy.sh wewnątrz namespace'u.
+#
+# WAŻNE: ta Rola musi być NADZBIOREM Roli mcp-operator z 02-rbac.yaml.
+# Kubernetes nie pozwala nadać uprawnień, których samemu się nie posiada
+# (privilege escalation prevention), więc bez sekcji route/build/image
+# polecenie `oc apply -f 02-rbac.yaml` odbiłoby się błędem
+# "attempt to grant extra privileges".
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mcp-deployer
+  namespace: mcp-platform
+rules:
+  # Deploymenty platformy i runtime'ów
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale", "replicasets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Zasoby podstawowe. serviceaccounts — bo 02-rbac.yaml tworzy SA operatora.
+  # persistentvolumeclaims — bo 01-namespace-storage.yaml tworzy PVC na bazę.
+  - apiGroups: [""]
+    resources:
+      - services
+      - configmaps
+      - secrets
+      - pods
+      - pods/log
+      - serviceaccounts
+      - persistentvolumeclaims
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Tworzenie Roli i RoleBindingu operatora
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # NetworkPolicy z 05-networkpolicy.yaml
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # ── Poniższe trzy grupy istnieją wyłącznie po to, by dało się utworzyć
+  #    Rolę operatora. Deployer sam z nich nie korzysta.
+  - apiGroups: ["route.openshift.io"]
+    resources: ["routes"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["build.openshift.io"]
+    resources: ["buildconfigs", "builds", "buildconfigs/instantiate"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["image.openshift.io"]
+    resources: ["imagestreams", "imagestreamtags"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mcp-deployer
+  namespace: mcp-platform
+subjects:
+  - kind: ServiceAccount
+    name: mcp-deployer
+    namespace: mcp-platform
+roleRef:
+  kind: Role
+  name: mcp-deployer
+  apiGroup: rbac.authorization.k8s.io
+---
+# Push obrazów do wbudowanego rejestru OpenShift (krok [2/6] deploy.sh).
+# Niepotrzebne, jeśli używasz rejestru zewnętrznego (Quay, Harbor, Nexus).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mcp-deployer-image-builder
+  namespace: mcp-platform
+subjects:
+  - kind: ServiceAccount
+    name: mcp-deployer
+    namespace: mcp-platform
+roleRef:
+  kind: ClusterRole
+  name: system:image-builder
+  apiGroup: rbac.authorization.k8s.io
+---
+# `oc apply -f 01-namespace-storage.yaml` wysyła PATCH na obiekt Namespace,
+# nawet gdy ten już istnieje i nic się nie zmienia. Bez tych uprawnień krok
+# [4/6] deploy.sh kończy się błędem "namespaces is forbidden".
+#
+# Zakres zawężony przez resourceNames do jednego namespace'u — konto nie
+# widzi ani nie zmienia żadnego innego. Verb "create" celowo pominięty:
+# namespace tworzy ten plik, a RBAC i tak nie pozwala ograniczyć "create"
+# do konkretnej nazwy.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: mcp-deployer-namespace
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    resourceNames: ["mcp-platform"]
+    verbs: ["get", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: mcp-deployer-namespace
+subjects:
+  - kind: ServiceAccount
+    name: mcp-deployer
+    namespace: mcp-platform
+roleRef:
+  kind: ClusterRole
+  name: mcp-deployer-namespace
+  apiGroup: rbac.authorization.k8s.io
