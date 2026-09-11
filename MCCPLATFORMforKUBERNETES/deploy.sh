@@ -103,13 +103,39 @@ echo "[2/6] Push obrazów do rejestru..."
 TLS_FLAG=""
 [ "$PUSH_ENGINE" = podman ] && TLS_FLAG="--tls-verify=false"
 
-if [[ "$REGISTRY" == *"openshift-image-registry"* ]]; then
-  REGISTRY_HOST=$(echo "$REGISTRY" | cut -d'/' -f1)
-  TOKEN=$(oc whoami -t 2>/dev/null || true)
-  if [ -n "$TOKEN" ]; then
+REGISTRY_HOST="${REGISTRY%%/*}"
+
+# Poświadczenia w kolejności: jawne z config.env → sesja oc → brak.
+# Hasło zawsze przez --password-stdin: przy -p token byłby widoczny
+# w `ps` dla każdego użytkownika maszyny.
+if [ -n "${REGISTRY_USER:-}" ]; then
+  echo "  logowanie do $REGISTRY_HOST jako $REGISTRY_USER (z config.env)"
+  # shellcheck disable=SC2086
+  printf '%s' "${REGISTRY_PASSWORD:-}" | \
+    "$PUSH_ENGINE" login $TLS_FLAG -u "$REGISTRY_USER" --password-stdin "$REGISTRY_HOST" || {
+      echo "BŁĄD: logowanie do $REGISTRY_HOST nieudane — sprawdź REGISTRY_USER/REGISTRY_PASSWORD" >&2
+      exit 1
+    }
+else
+  # Wbudowany rejestr OpenShift uwierzytelnia się SAMYM TOKENEM — nazwa
+  # użytkownika jest ignorowana przez rejestr, ale musi być niepusta.
+  #
+  # Celowo NIE używamy `oc whoami` do jej ustalenia: to polecenie odpytuje
+  # API serwera i zwraca pustą wartość, gdy API jest nieosiągalne lub sesja
+  # wygasła — podczas gdy `oc whoami -t` czyta token z kubeconfig i zwraca go
+  # zawsze. Kombinacja "pusty użytkownik + poprawny token" kończy się myląco
+  # brzmiącym błędem: invalid username/password.
+  OC_TOKEN=$(oc whoami -t 2>/dev/null || true)
+  if [ -n "$OC_TOKEN" ]; then
+    # Dowolna niepusta nazwa; rejestr OpenShift patrzy wyłącznie na token.
+    OC_USER=unused
+    echo "  logowanie do $REGISTRY_HOST tokenem sesji oc (użytkownik: $OC_USER)"
     # shellcheck disable=SC2086
-    "$PUSH_ENGINE" login $TLS_FLAG -u "$(oc whoami)" -p "$TOKEN" "$REGISTRY_HOST" 2>/dev/null || \
-      echo "  UWAGA: $PUSH_ENGINE login nieudany — próbuję bez logowania"
+    printf '%s' "$OC_TOKEN" | \
+      "$PUSH_ENGINE" login $TLS_FLAG -u "$OC_USER" --password-stdin "$REGISTRY_HOST" || \
+      echo "  UWAGA: logowanie nieudane — push najpewniej padnie za chwilę"
+  else
+    echo "  UWAGA: brak sesji oc i brak REGISTRY_USER — push bez uwierzytelnienia"
   fi
 fi
 
