@@ -11687,11 +11687,17 @@ async def create_approval_request(request: Request) -> JSONResponse:
 def get_approval_status(req_id: str) -> JSONResponse:
     """Polled by runtime containers (no auth). Returns current status."""
     row = store.one(
-        "SELECT status, reject_reason FROM approval_requests WHERE id = ?", (req_id,)
+        "SELECT status, reject_reason, decided_at FROM approval_requests WHERE id = ?", (req_id,)
     )
     if not row:
         return JSONResponse({"status": "not_found"}, status_code=404)
-    return JSONResponse({"status": row["status"], "reject_reason": row.get("reject_reason")})
+    # decided_at pozwala runtime'owi odrzucić zatwierdzenie sprzed godzin —
+    # bez tego jedna zgoda działałaby bezterminowo dla tej samej komendy.
+    return JSONResponse({
+        "status": row["status"],
+        "reject_reason": row.get("reject_reason"),
+        "decided_at": row.get("decided_at"),
+    })
 
 
 @app.post("/api/approval/{req_id}/approve")

@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import os
 import re as _re
@@ -7,7 +8,9 @@ import shlex
 import subprocess
 import time
 import threading
+import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 from string import Template
 from typing import Any
@@ -457,7 +460,35 @@ def _needs_approval(tool: dict[str, Any]) -> bool:
     return tool_mode in modes
 
 
-async def _request_approval(
+def _approval_key(tool_name: str, arguments: dict[str, Any]) -> str:
+    """
+    Deterministyczny identyfikator zgody: te same narzędzie + argumenty zawsze
+    dają ten sam klucz. Dzięki temu kolejne wywołanie odnajduje decyzję podjętą
+    w control-plane, bez trzymania otwartego połączenia HTTP.
+    """
+    payload = json.dumps(
+        {"r": RUNTIME_ID, "t": tool_name, "a": arguments}, sort_keys=True, default=str
+    )
+    return hashlib.sha256(payload.encode()).hexdigest()[:32]
+
+
+def _approval_fresh(decided_at: str | None, max_age_s: int) -> bool:
+    """Zgoda starsza niż okno ważności nie upoważnia do wykonania."""
+    if not decided_at:
+        return False
+    # Control-plane zapisuje czas przez datetime.isoformat(), czyli
+    # "2026-09-14T07:37:49.383534+00:00" — z mikrosekundami i offsetem, a nie
+    # z sufiksem "Z". fromisoformat radzi sobie z obiema postaciami.
+    try:
+        ts = datetime.fromisoformat(decided_at.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - ts).total_seconds() <= max_age_s
+
+
+async def _approval_state(
     tool_name: str,
     arguments: dict[str, Any],
     tool_mode: str,
@@ -465,15 +496,47 @@ async def _request_approval(
     model: str,
 ) -> dict[str, Any]:
     """
-    Submit an approval request to the control plane and poll until a decision
-    is made or the configured timeout expires.
+    Sprawdza stan zgody i — jeśli jeszcze nie istnieje — zakłada ją.
+    NIE czeka na decyzję.
 
-    Returns {"approved": bool, "reason": str | None}.
+    Poprzednia wersja odpytywała control-plane w pętli aż do
+    approval_timeout_seconds. Przy dostępie przez Route OpenShift router
+    (HAProxy, domyślnie 30 s) zrywał połączenie wcześniej i wywołujący
+    dostawał 504 Gateway Timeout zamiast czytelnej prośby o zatwierdzenie.
+
+    Zwraca {"state": "approved" | "pending" | "rejected", "reason": str | None}.
     """
     if not CALLBACK_URL:
-        return {"approved": False, "reason": "no callback URL — approval cannot be requested"}
+        return {"state": "pending", "reason": "brak CALLBACK_URL — nie ma gdzie zapytać"}
 
-    req_id = secrets.token_urlsafe(16)
+    req_id = _approval_key(tool_name, arguments)
+    max_age = int(policy.get("approval_timeout_seconds") or 300)
+    status_url = f"{CALLBACK_URL}/api/approval-status/{req_id}"
+
+    def _get() -> dict[str, Any] | None:
+        try:
+            with urllib.request.urlopen(status_url, timeout=5) as resp:
+                return json.loads(resp.read())
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return None
+            raise
+    try:
+        data = await asyncio.to_thread(_get)
+    except Exception as exc:
+        return {"state": "pending", "reason": f"nie udało się sprawdzić zgody: {exc}"}
+
+    if data is not None:
+        status = data.get("status")
+        if status == "approved":
+            if _approval_fresh(data.get("decided_at"), max_age):
+                return {"state": "approved", "reason": None}
+            # Zgoda wygasła — zakładamy nową prośbę pod tym samym kluczem.
+        elif status == "rejected":
+            return {"state": "rejected", "reason": data.get("reject_reason") or "odrzucone"}
+        elif status == "pending":
+            return {"state": "pending", "reason": "czeka na decyzję"}
+
     payload = json.dumps({
         "id": req_id,
         "runtime_id": RUNTIME_ID,
@@ -483,7 +546,6 @@ async def _request_approval(
         "caller_ip": caller_ip,
         "model": model,
     }).encode()
-
     try:
         req = urllib.request.Request(
             f"{CALLBACK_URL}/api/approval-request",
@@ -491,30 +553,10 @@ async def _request_approval(
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        # urllib jest blokujące — bez to_thread wstrzymałoby całą pętlę zdarzeń
-        # runtime'u na czas żądania, a niżej na każdym odpytaniu.
         await asyncio.to_thread(lambda: urllib.request.urlopen(req, timeout=5))
     except Exception as exc:
-        return {"approved": False, "reason": f"approval request failed: {exc}"}
-
-    timeout_s = int(policy.get("approval_timeout_seconds") or 300)
-    deadline = time.monotonic() + timeout_s
-    poll_url = f"{CALLBACK_URL}/api/approval-status/{req_id}"
-
-    while time.monotonic() < deadline:
-        await asyncio.sleep(2)
-        try:
-            resp = await asyncio.to_thread(lambda: urllib.request.urlopen(poll_url, timeout=5))
-            data = json.loads(resp.read())
-            status = data.get("status")
-            if status == "approved":
-                return {"approved": True, "reason": None}
-            if status in ("rejected", "timeout"):
-                return {"approved": False, "reason": data.get("reject_reason") or status}
-        except Exception:
-            pass
-
-    return {"approved": False, "reason": f"approval timeout after {timeout_s}s"}
+        return {"state": "pending", "reason": f"nie udało się złożyć prośby: {exc}"}
+    return {"state": "pending", "reason": "prośba złożona"}
 
 
 def _run_pipeline(
@@ -658,26 +700,47 @@ async def execute_tool(tool_name: str, arguments: dict[str, Any],
         cmd_preview = " | ".join(shlex.join(s) for s in stages)
         tool_mode = (tool.get("security") or {}).get("mode") or tool.get("mode", "read-only")
 
-        if CALLBACK_URL:
-            decision = await _request_approval(
-                tool_name,
-                {**arguments, "_command": cmd_preview},
-                tool_mode,
-                caller_ip,
-                model,
+        # approval_mode decyduje, KTO potwierdza:
+        #   "in_chat"       (domyślne) — agent pyta użytkownika w oknie rozmowy,
+        #                    a ten odpowiada; model wywołuje ponownie z __confirm.
+        #   "control_plane" — decyzję podejmuje człowiek na stronie /approvals.
+        #
+        # Oba tryby zwracają odpowiedź NATYCHMIAST. Wcześniejsza wersja czekała
+        # w pętli do approval_timeout_seconds, przez co router OpenShift (~30 s)
+        # zrywał połączenie i wywołujący dostawał 504 Gateway Timeout.
+        approval_mode = str(policy.get("approval_mode") or "in_chat").lower()
+
+        if approval_mode == "control_plane" and CALLBACK_URL:
+            approval = await _approval_state(
+                tool_name, {**arguments, "_command": cmd_preview},
+                tool_mode, caller_ip, model,
             )
-            if not decision.get("approved"):
+            state = approval.get("state")
+            if state == "rejected":
                 result = {
-                    "ok": False,
-                    "tool": tool_name,
-                    "approval_required": True,
-                    "approval_denied": True,
-                    "error": f"operation not approved: {decision.get('reason') or 'rejected'}",
+                    "ok": False, "tool": tool_name,
+                    "approval_required": True, "approval_denied": True,
+                    "error": f"operation not approved: {approval.get('reason')}",
                     "message": (
-                        f"⛔ Operation was not approved.\n\n"
+                        f"\u26d4 Operation was not approved.\n\n"
                         f"Command: {cmd_preview}\n"
-                        f"Reason: {decision.get('reason') or 'rejected'}\n\n"
-                        f"Do not retry — a human declined or did not respond in time."
+                        f"Reason: {approval.get('reason')}\n\n"
+                        f"Do not retry — a human declined this operation."
+                    ),
+                }
+                _fire_tool_call_log(tool_name, arguments, result,
+                                    int((time.monotonic() - _t0) * 1000),
+                                    caller_ip=caller_ip, model=model)
+                return result
+            if state != "approved":
+                result = {
+                    "ok": False, "tool": tool_name, "approval_required": True,
+                    "message": (
+                        f"\u23f8 This operation is waiting for human approval.\n\n"
+                        f"Command: {cmd_preview}\n\n"
+                        f"A request was created in the MCP Platform. Ask the user to open "
+                        f"the Approvals page and approve it, then call this same tool again "
+                        f"with the EXACT same parameters."
                     ),
                 }
                 _fire_tool_call_log(tool_name, arguments, result,
@@ -686,16 +749,18 @@ async def execute_tool(tool_name: str, arguments: dict[str, Any],
                 return result
 
         elif not caller_confirmed:
+            # Tryb in_chat — potwierdzenie zbiera agent w rozmowie.
             result = {
                 "ok": False,
                 "tool": tool_name,
                 "approval_required": True,
                 "message": (
-                    f"⚠️ This operation requires user confirmation before execution.\n\n"
+                    f"\u26a0\ufe0f This operation requires the user's confirmation.\n\n"
                     f"Command to execute:\n  {cmd_preview}\n\n"
-                    f"Ask the user if they want to run this command.\n"
-                    f"If they confirm — call this same tool again with __confirm=\"yes\".\n"
-                    f"If they decline — do nothing."
+                    f"Show this command to the user and ask whether to run it.\n"
+                    f"If they agree — call this same tool again with the same parameters "
+                    f"plus __confirm=\"yes\".\n"
+                    f"If they decline — do nothing and tell them it was not executed."
                 ),
             }
             _fire_tool_call_log(tool_name, arguments, result,

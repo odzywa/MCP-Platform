@@ -61,7 +61,7 @@ echo "  Silnik      : $ENGINE (push: $PUSH_ENGINE$([ "$NEED_TRANSFER" = true ] &
 echo ""
 
 # ── 1. Buduj obrazy ────────────────────────────────────────────────────────────
-echo "[1/6] Budowanie obrazów..."
+echo "[1/7] Budowanie obrazów..."
 
 # Budujemy wprost, bez compose — deploy potrzebuje dokładnie tych pięciu obrazów,
 # a `compose` nie jest dostępne w każdej instalacji podmana.
@@ -96,7 +96,7 @@ while IFS='|' read -r img _; do
 done <<< "$IMAGES"
 
 # ── 2. Push obrazów do rejestru ───────────────────────────────────────────────
-echo "[2/6] Push obrazów do rejestru..."
+echo "[2/7] Push obrazów do rejestru..."
 
 # Logowanie do rejestru OpenShift. --tls-verify=false (podman) omija problemy
 # z samopodpisanym CA; docker nie ma odpowiednika i wymaga insecure-registries.
@@ -160,7 +160,7 @@ push "mcp-runtime-shell:latest"           "mcp-runtime-shell:latest"
 push "mcp-runtime-openapi:latest"         "mcp-runtime-openapi:latest"
 
 # ── 3. Podstaw wartości w manifestach ─────────────────────────────────────────
-echo "[3/6] Przygotowywanie manifestów..."
+echo "[3/7] Przygotowywanie manifestów..."
 
 WORK_DIR="$(mktemp -d)"
 cp k8s/*.yaml "$WORK_DIR/"
@@ -177,7 +177,7 @@ for f in "$WORK_DIR"/*.yaml; do
 done
 
 # ── 4. Aplikuj manifesty ──────────────────────────────────────────────────────
-echo "[4/6] Aplikowanie manifestów..."
+echo "[4/7] Aplikowanie manifestów..."
 
 oc apply -f "$WORK_DIR/01-namespace-storage.yaml"
 oc apply -f "$WORK_DIR/02-rbac.yaml"
@@ -200,7 +200,7 @@ oc delete deployment mcp-platform-operator -n "$NAMESPACE" --ignore-not-found
 rm -rf "$WORK_DIR"
 
 # ── 5. Wymusz rollout (nowy obraz pod tym samym tagiem) i czekaj ─────────────
-echo "[5/6] Czekam na gotowość control-plane..."
+echo "[5/7] Czekam na gotowość control-plane..."
 oc rollout restart deployment/mcp-platform -n "$NAMESPACE"
 oc rollout status deployment/mcp-platform -n "$NAMESPACE" --timeout=180s
 
@@ -212,7 +212,7 @@ OC_MCP_TOKEN="${OC_MCP_TOKEN:-}"
 OC_MCP_SERVER="${OC_MCP_SERVER:-}"
 
 if [ -n "$OC_MCP_TOKEN" ] && [ -n "$OC_MCP_SERVER" ]; then
-  echo "[6/6] Konfigurowanie OpenShift MCP (openshift-monitor)..."
+  echo "[6/7] Konfigurowanie OpenShift MCP (openshift-monitor)..."
 
   # Czekaj aż platforma odpowie (max 60s)
   echo "  Czekam na API platformy..."
@@ -236,21 +236,73 @@ if [ -n "$OC_MCP_TOKEN" ] && [ -n "$OC_MCP_SERVER" ]; then
     echo "    Dodaj OC_TOKEN i OC_SERVER ręcznie w UI → openshift-monitor → Secrets."
     rm -f "$COOKIE_JAR"
   else
-    # Dodaj credentials
-    curl -sk -b "$COOKIE_JAR" -X POST "$PLATFORM_URL/api/runtimes/openshift-monitor/credentials" \
-      -d "kind=env&name=OC_TOKEN&env_name=OC_TOKEN&value=${OC_MCP_TOKEN}" > /dev/null
-    curl -sk -b "$COOKIE_JAR" -X POST "$PLATFORM_URL/api/runtimes/openshift-monitor/credentials" \
-      -d "kind=env&name=OC_SERVER&env_name=OC_SERVER&value=${OC_MCP_SERVER}" > /dev/null
+    # OC_MCP_TOKEN/OC_MCP_SERVER to nazwy pól w config.env. Wewnątrz platformy
+    # stają się Runtime Credentials o nazwach OC_TOKEN i OC_SERVER — bo tak
+    # nazywają się zmienne w szablonach narzędzi oc (${OC_TOKEN}, ${OC_SERVER}).
+    AUTOCFG_OK=true
 
-    # Wdróż
-    curl -sk -b "$COOKIE_JAR" -X POST "$PLATFORM_URL/api/runtimes/openshift-monitor/deploy" > /dev/null
+    api_post() {
+      local desc="$1" url="$2" data="${3:-}"
+      local code
+      if [ -n "$data" ]; then
+        code=$(curl -sk -o /dev/null -w "%{http_code}" -b "$COOKIE_JAR" -X POST "$url" -d "$data")
+      else
+        code=$(curl -sk -o /dev/null -w "%{http_code}" -b "$COOKIE_JAR" -X POST "$url")
+      fi
+      case "$code" in
+        2??|3??) echo "  ✓ $desc (HTTP $code)" ;;
+        *)       echo "  ✗ $desc — HTTP $code" >&2; AUTOCFG_OK=false ;;
+      esac
+    }
+
+    api_post "credential OC_TOKEN"  "$PLATFORM_URL/api/runtimes/openshift-monitor/credentials" \
+      "kind=env&name=OC_TOKEN&env_name=OC_TOKEN&value=${OC_MCP_TOKEN}"
+    api_post "credential OC_SERVER" "$PLATFORM_URL/api/runtimes/openshift-monitor/credentials" \
+      "kind=env&name=OC_SERVER&env_name=OC_SERVER&value=${OC_MCP_SERVER}"
+    api_post "deploy openshift-monitor" "$PLATFORM_URL/api/runtimes/openshift-monitor/deploy"
 
     rm -f "$COOKIE_JAR"
-    echo "  ✅ openshift-monitor wdrożony!"
-    echo "  Endpoint MCP pojawi się za ~30s w UI → Runtimes → openshift-monitor"
+    if [ "$AUTOCFG_OK" = true ]; then
+      echo "  ✅ openshift-monitor wdrożony!"
+      echo "  Endpoint MCP pojawi się za ~30s w UI → Runtimes → openshift-monitor"
+    else
+      echo "  ⚠ Auto-konfiguracja NIE powiodła się w całości." >&2
+      echo "    Dodaj ręcznie w UI → Runtimes → openshift-monitor → Secrets:" >&2
+      echo "      OC_TOKEN  = <wartość OC_MCP_TOKEN z config.env>" >&2
+      echo "      OC_SERVER = <wartość OC_MCP_SERVER z config.env>" >&2
+      echo "    i kliknij Deploy." >&2
+    fi
   fi
 else
-  echo "[6/6] Pominięto auto-konfigurację OCP MCP (OC_MCP_TOKEN/OC_MCP_SERVER puste w config.env)"
+  echo "[6/7] Pominięto auto-konfigurację OCP MCP (OC_MCP_TOKEN/OC_MCP_SERVER puste w config.env)"
+fi
+
+# ── 7. Odświeżenie runtime'ów ────────────────────────────────────────────────
+# Runtime'y to Deploymenty tworzone przez operatora, nie przez te manifesty.
+# Mają imagePullPolicy: Always, ale samo wypchnięcie nowego obrazu pod tym
+# samym tagiem NICZEGO nie uruchamia — bez tego kroku po upgradzie platformy
+# serwery MCP dalej działają na starym kodzie.
+#
+# rollout restart na Deploymencie z replicas=0 (runtime zatrzymany przez
+# użytkownika) tylko zmienia adnotację i nie startuje poda — jest bezpieczny.
+echo "[7/7] Odświeżanie runtime'ów..."
+RUNTIME_DEPLOYS=$(oc get deployment -n "$NAMESPACE" \
+  -l app.kubernetes.io/managed-by=mcp-platform -o name 2>/dev/null || true)
+
+if [ -z "$RUNTIME_DEPLOYS" ]; then
+  echo "  brak wdrożonych runtime'ów — nic do odświeżenia"
+else
+  RT_COUNT=0
+  while read -r _dep; do
+    [ -z "$_dep" ] && continue
+    if oc rollout restart "$_dep" -n "$NAMESPACE" >/dev/null 2>&1; then
+      echo "  ✓ ${_dep#deployment.apps/}"
+      RT_COUNT=$((RT_COUNT + 1))
+    else
+      echo "  ✗ ${_dep#deployment.apps/} — restart nieudany" >&2
+    fi
+  done <<< "$RUNTIME_DEPLOYS"
+  echo "  odświeżono $RT_COUNT runtime'ów (nowy obraz pobierze się przy starcie poda)"
 fi
 
 echo ""

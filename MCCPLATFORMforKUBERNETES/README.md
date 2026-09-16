@@ -122,6 +122,33 @@ via the `docker-daemon:` transport automatically.
 
 ### 3. Run deploy
 
+`deploy.sh` is idempotent — the same script installs and upgrades. Running it again
+on an existing deployment rebuilds the images, pushes them under the same tags and
+rolls every component, including the MCP runtimes.
+
+What an upgrade covers:
+
+| | handled by |
+|---|---|
+| Control plane + operator | `oc rollout restart deployment/mcp-platform` (step 5) — both run in one pod |
+| Database schema | `init_db()` on startup — `CREATE TABLE IF NOT EXISTS` plus guarded `ALTER TABLE`, idempotent |
+| Seeded tool definitions | `seed_openshift_monitor()` patches `config_json` / `input_schema` of existing runtimes on every start |
+| **MCP runtimes** | `oc rollout restart` on every Deployment labelled `app.kubernetes.io/managed-by=mcp-platform` (step 7) |
+
+Step 7 matters more than it looks. Runtime Deployments are created by the operator,
+not by these manifests, so nothing in steps 1–6 touches them. They do carry
+`imagePullPolicy: Always`, but pushing a new image under an existing tag does not by
+itself restart anything — without step 7 the platform upgrades while every MCP server
+keeps serving the old code.
+
+> **Limit worth knowing.** Step 7 restarts pods, which picks up new *images*. It does
+> not regenerate the per-runtime config artifacts (`tools.json`, `policy.json`, …)
+> held in each runtime's ConfigMap. If a release changes the *format* of those files,
+> hit **Redeploy** on the affected runtime in the UI — that re-renders the config and
+> rolls the pod.
+
+
+
 ```bash
 chmod +x deploy.sh
 ./deploy.sh
@@ -274,6 +301,25 @@ The `__confirm` parameter is defined in every tool's input schema, so the AI cli
 
 **Auto-detection keywords** (matched against tool name): `delete`, `remove`, `destroy`, `drop`, `purge`, `wipe`, `truncate`, `erase`, `clean`, `create`, `apply`, `deploy`, `install`, `patch`, `scale`, `expose`, `rollout`, `add`, `set`, `update`, `replace`, `restart`.
 
+### Approval mode — who confirms
+
+Policy field `approval_mode` decides where the confirmation happens:
+
+| value | behaviour |
+|---|---|
+| `in_chat` *(default)* | The tool returns `approval_required` with the exact command. The agent shows it to the user in the chat window and, on a yes, calls the tool again with `__confirm="yes"`. No web UI involved. |
+| `control_plane` | The tool registers a request visible on the **Approvals** page. A human approves it there, then the agent calls the tool again with the same parameters. |
+
+Both modes answer **immediately**. An earlier version polled the control plane in a
+loop until `approval_timeout_seconds`, which the OpenShift router (HAProxy, ~30 s
+default) cut short — the caller saw `504 Gateway Timeout` instead of a confirmation
+prompt. If you are upgrading from that version, this is the fix.
+
+Repeating the identical call does **not** self-approve: `in_chat` requires the
+explicit `__confirm` parameter, `control_plane` requires a decision recorded in the
+platform. In `control_plane` mode an approval stays valid for
+`approval_timeout_seconds` after it was granted, so the agent has a window to re-call.
+
 ### Prefix-Based Approval
 
 `require_approval_for_prefixes` triggers approval for specific commands regardless of tool mode:
@@ -375,6 +421,15 @@ On Kubernetes the token works identically to Docker — it is stored in `runtime
 
 The platform ships with a pre-configured `openshift-monitor` runtime — a full set of OpenShift tools for cluster management. On first startup, the control plane seeds it automatically in `draft` status. You only need to add credentials and click Deploy.
 
+> **Two layers of naming — the usual source of confusion.**
+> In `config.env` the fields are `OC_MCP_TOKEN` / `OC_MCP_SERVER`. Inside the
+> platform they become Runtime Credentials named `OC_TOKEN` / `OC_SERVER`,
+> because that is what the `oc` tool templates reference:
+> `["oc", "--token=${OC_TOKEN}", "--server=${OC_SERVER}", ...]`.
+> `deploy.sh` performs that translation for you. When adding credentials by hand
+> in the UI they **must** be named `OC_TOKEN` and `OC_SERVER` — the `OC_MCP_*`
+> names work only inside `config.env`.
+
 ### Option A — Auto-deploy via config.env (recommended)
 
 Fill in two optional fields in `config.env` **before** running `deploy.sh`:
@@ -393,7 +448,8 @@ echo "OC_MCP_TOKEN=$OC_MCP_TOKEN" >> config.env
 echo "OC_MCP_SERVER=$OC_MCP_SERVER" >> config.env
 ```
 
-Then run `./deploy.sh` — step 6 will automatically:
+Then run `./deploy.sh` — step 6 prints the HTTP status of every call it makes, so
+a failure shows up instead of being reported as success. It will:
 1. Wait for the platform API to be ready
 2. Log in with default admin credentials
 3. Set `OC_TOKEN` and `OC_SERVER` as Runtime Credentials on `openshift-monitor`
