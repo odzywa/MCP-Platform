@@ -1,13 +1,15 @@
-FROM python:3.12-slim
+FROM registry.access.redhat.com/ubi9/python-312-minimal
 
-RUN useradd -u 1000 -m app
+USER 0
+
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --root-user-action=ignore -r requirements.txt
 
 COPY drivers ./drivers
 COPY app ./app
+RUN fix-permissions /app
 
-USER 1000:1000
+USER 1000:0
 
 CMD ["python", "-m", "app.worker"]

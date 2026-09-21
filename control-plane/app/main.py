@@ -2966,7 +2966,7 @@ def page_shell(active: str, body: str) -> str:
     ['🔨 Przebudowywanie obrazu Docker — może potrwać kilka minut. Status zaktualizuje się automatycznie.','🔨 Rebuilding Docker image — may take a few minutes. Status will update automatically.'],
     ['🚀 Deployment zlecony — kontener uruchomi się za kilka sekund. Status zmieni się automatycznie.','🚀 Deployment queued — the container will start in a few seconds. Status will change automatically.'],
     ['✅ Zawiera:','✅ Contains:'],
-    ['+ Python 3.12 (Debian) — dodaj tylko brakujące narzędzia','+ Python 3.12 (Debian) — add only the missing tools'],
+    ['+ Python 3.12 (UBI9 / RHEL 9) — dodaj tylko brakujące narzędzia. Nazwy pakietów wg RHEL, np. <code>iputils</code>, <code>postgresql</code>','+ Python 3.12 (Debian) — add only the missing tools'],
     ['+ Python 3.12 (Debian Slim) — dodasz tylko brakujące narzędzia','+ Python 3.12 (Debian Slim) — you only add the missing tools'],
     ['🔨 Przebudowanie obrazu zlecone. Może potrwać kilka minut.','🔨 Image rebuild queued. May take a few minutes.'],
     ['🚀 Deployment zlecony! Kontener uruchomi się za chwilę.','🚀 Deployment queued! The container will start shortly.'],
@@ -3323,9 +3323,10 @@ def quick_start_page(error: str = "") -> str:
             packages.append(_p)
     # Available base images: built-in + previously built
     _builtin_images = [
-        ("mcp-runtime-shell:latest", "mcp-runtime-shell:latest — standardowy (oc, kubectl, curl, jq) [zalecane]"),
+        ("mcp-runtime-shell:latest", "mcp-runtime-shell:latest — standardowy UBI9 (oc, kubectl, curl, jq) [zalecane]"),
         ("mcp-runtime-http-gateway:latest", "mcp-runtime-http-gateway:latest — HTTP gateway"),
         ("mcp-runtime-openapi:latest", "mcp-runtime-openapi:latest — auto-MCP z OpenAPI spec (FastMCP)"),
+        ("registry.access.redhat.com/ubi9/python-312-minimal", "ubi9/python-312-minimal — czysty Python 3.12 / RHEL 9"),
         ("python:3.12-slim", "python:3.12-slim — czysty Python/Debian"),
         ("python:3.11-slim", "python:3.11-slim — Python 3.11 Debian"),
         ("debian:bookworm-slim", "debian:bookworm-slim — czysty Debian"),
@@ -4029,7 +4030,7 @@ window.updateBaseHint = function() {{
   var custom = document.getElementById('build-base-custom');
   var hint = document.getElementById('base-hint');
   var hints = {{
-    'mcp-runtime-shell:latest': '✅ Zawiera: <b>oc, kubectl, curl, jq</b> + Python 3.12 (Debian) — dodaj tylko brakujące narzędzia',
+    'mcp-runtime-shell:latest': '✅ Zawiera: <b>oc, kubectl, curl, jq</b> + Python 3.12 (UBI9 / RHEL 9) — dodaj tylko brakujące narzędzia. Nazwy pakietów wg RHEL, np. <code>iputils</code>, <code>postgresql</code>',
     'mcp-runtime-http-gateway:latest': '✅ HTTP gateway — brak oc/kubectl, Python 3.12',
     'mcp-runtime-openapi:latest': '✅ <b>Auto-MCP z OpenAPI</b> — ustaw <code>BACKEND_BASE_URL</code> i <code>OPENAPI_SPEC_URL</code>; narzędzia generowane automatycznie z każdego endpointu',
     'python:3.12-slim': '⚠️ Czysty Python Debian — brak oc/kubectl/curl. Dodaj <b>curl ca-certificates</b> w APT',
@@ -5093,7 +5094,7 @@ def docs_page() -> str:
     <div class="doc-card">
       <h3>🐚 mcp-runtime-shell:latest</h3>
       <div class="muted" style="font-size:13px;line-height:1.8">
-        Baza: <code>python:3.12-slim</code> (Debian)<br>
+        Baza: <code>ubi9/python-312-minimal</code> (RHEL 9)<br>
         Zawiera: <code>oc</code> <code>kubectl</code> <code>curl</code> <code>jq</code> <code>bash</code> <code>grep</code> <code>sed</code> <code>awk</code><br>
         Użyj gdy: komendy CLI — OpenShift, Kubernetes, HTTP przez curl
       </div>
@@ -5101,7 +5102,7 @@ def docs_page() -> str:
     <div class="doc-card">
       <h3>🌐 mcp-runtime-http-gateway:latest</h3>
       <div class="muted" style="font-size:13px;line-height:1.8">
-        Baza: <code>python:3.12-slim</code> (Debian)<br>
+        Baza: <code>ubi9/python-312-minimal</code> (RHEL 9)<br>
         Zawiera: runtime HTTP do wywoływania REST API<br>
         Użyj gdy: wywołania REST API (GitLab, Jira, własny serwis)
       </div>
@@ -5109,7 +5110,7 @@ def docs_page() -> str:
     <div class="doc-card" style="background:#061810;border-color:#1a4a30">
       <h3 style="color:#34d399">📄 mcp-runtime-openapi:latest</h3>
       <div class="muted" style="font-size:13px;line-height:1.8">
-        Baza: <code>python:3.12-slim</code> (Debian)<br>
+        Baza: <code>ubi9/python-312-minimal</code> (RHEL 9)<br>
         Zawiera: <code>fastmcp</code>, <code>httpx</code>, <code>uvicorn</code> — auto-MCP z OpenAPI spec<br>
         Użyj gdy: silnik OpenAPI w Kreatorze zaawansowanym — podajesz URL serwisu i dostajesz tools automatycznie
       </div>
@@ -5812,7 +5813,7 @@ def create_page(error: str = "") -> str:
     runtime_classes = store.rows("SELECT name, runtime_image FROM runtime_classes WHERE enabled=1 ORDER BY name")
     # Available images for env picker
     _adv_builtin = [
-        ("mcp-runtime-shell:latest", "🐚 Standardowe — oc, kubectl, curl, jq (Python 3.12 Debian) [zalecane]"),
+        ("mcp-runtime-shell:latest", "🐚 Standardowe — oc, kubectl, curl, jq (Python 3.12 UBI9) [zalecane]"),
         ("mcp-runtime-http-gateway:latest", "🌐 HTTP Gateway — REST API calls"),
         ("python:3.12-slim", "🐍 Python 3.12 czysty Debian"),
         ("debian:bookworm-slim", "📦 Debian czysty"),
@@ -6010,7 +6011,7 @@ def create_page(error: str = "") -> str:
               {_adv_base_opts}
             </select>
             <input id="adv-build-base-custom" placeholder="np. ubuntu:22.04" style="display:none;font-size:13px;margin-top:6px">
-            <div id="adv-base-hint" class="hint" style="color:#7dd3fc">✅ Zawiera oc, kubectl, curl, jq + Python 3.12 Debian</div>
+            <div id="adv-base-hint" class="hint" style="color:#7dd3fc">✅ Zawiera oc, kubectl, curl, jq + Python 3.12 UBI9 (RHEL 9)</div>
           </div>
           <div class="adv-field" style="margin:0">
             <label>Dodatkowe pakiety APT (spacja)</label>
@@ -6472,7 +6473,7 @@ def create_page(error: str = "") -> str:
     var custom = document.getElementById('adv-build-base-custom');
     var hint = document.getElementById('adv-base-hint');
     var hints = {{
-      'mcp-runtime-shell:latest': '✅ Zawiera oc, kubectl, curl, jq + Python 3.12 Debian',
+      'mcp-runtime-shell:latest': '✅ Zawiera oc, kubectl, curl, jq + Python 3.12 UBI9 (RHEL 9)',
       'mcp-runtime-http-gateway:latest': '✅ HTTP gateway, Python 3.12',
       'python:3.12-slim': '⚠️ Czysty Python — dodaj curl w APT jeśli potrzebny',
       'debian:bookworm-slim': '⚠️ Czysty Debian — dodaj wszystkie potrzebne paczki',

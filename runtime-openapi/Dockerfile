@@ -1,10 +1,13 @@
-FROM python:3.12-slim
+FROM registry.access.redhat.com/ubi9/python-312-minimal
 
-RUN useradd -u 1000 -m runtime
+USER 0
+
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --root-user-action=ignore -r requirements.txt
 COPY app ./app
-USER 1000:1000
+RUN fix-permissions /app
+
+USER 1000:0
 EXPOSE 8080
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]

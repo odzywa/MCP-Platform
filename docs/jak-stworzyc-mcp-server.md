@@ -95,22 +95,25 @@ Platforma dostarcza dwa gotowe obrazy Docker które zawierają wbudowany serwer 
 
 **Skąd pochodzi:** budowany przez `docker compose --profile build-only build` z katalogu `runtime-shell/`
 
-**Dockerfile:**
+**Dockerfile** (w skrócie):
 ```dockerfile
-FROM python:3.12-slim
+FROM registry.access.redhat.com/ubi9/python-312-minimal
 
-RUN apt-get install -y ca-certificates curl gzip iputils-ping jq openssh-client tar \
+USER 0
+RUN microdnf install -y --nodocs ca-certificates gzip tar jq iputils openssh-clients shadow-utils \
+    && microdnf clean all \
     && curl -fsSL https://mirror.openshift.com/.../openshift-client-linux.tar.gz \
-       -o /tmp/oc.tar.gz \
-    && tar -xzf /tmp/oc.tar.gz -C /usr/local/bin oc kubectl \
-    && rm /tmp/oc.tar.gz
+       -o /tmp/openshift-client.tar.gz \
+    && tar -xzf /tmp/openshift-client.tar.gz -C /usr/local/bin oc kubectl \
+    && rm -f /tmp/openshift-client.tar.gz
 
-RUN useradd -u 1000 -m runtime
+RUN useradd -u 1000 -g 0 -m runtime
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
-USER 1000:1000
+RUN fix-permissions /app
+USER 1000:0
 EXPOSE 8080
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
 ```
@@ -118,15 +121,20 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
 **Co zawiera:**
 | Komponent | Opis |
 |-----------|------|
-| `python:3.12-slim` | baza (Debian Bookworm Slim) |
-| `curl`, `jq` | HTTP i parsowanie JSON |
+| `ubi9/python-312-minimal` | baza — Red Hat UBI 9 (RHEL 9), Python 3.12 |
+| `curl`, `jq` | HTTP i parsowanie JSON (`curl` jako `curl-minimal` z obrazu bazowego) |
 | `oc`, `kubectl` | OpenShift i Kubernetes CLI |
-| `ping` (iputils-ping) | diagnostyka sieci |
-| `ssh` (openssh-client) | połączenia SSH |
+| `ping` (iputils) | diagnostyka sieci |
+| `ssh` (openssh-clients) | połączenia SSH |
 | FastAPI + uvicorn | serwer MCP nasłuchujący na porcie 8080 |
 | `app/main.py` | obsługuje `/mcp`, `/tools/{name}`, `/openwebui`, `/health` |
 
 **Kiedy używać:** narzędzia shell — curl, oc, kubectl, psql, ping, ssh
+
+> **Dokładając pakiety w Runtime Image Builderze** podawaj nazwy wg RHEL, nie
+> Debiana — np. `iputils` zamiast `iputils-ping`, `openssh-clients` zamiast
+> `openssh-client`, `postgresql` zamiast `postgresql-client`. Builder sam wykrywa
+> menedżer pakietów obrazu bazowego (microdnf, dnf, apt-get, apk), ale nazw nie tłumaczy.
 
 ---
 
@@ -136,14 +144,15 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
 
 **Dockerfile:**
 ```dockerfile
-FROM python:3.12-slim
+FROM registry.access.redhat.com/ubi9/python-312-minimal
 
-RUN addgroup --system app && adduser --system --ingroup app app
+USER 0
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
-USER app
+RUN fix-permissions /app
+USER 1000:0
 EXPOSE 8080
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
 ```
@@ -151,7 +160,7 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
 **Co zawiera:**
 | Komponent | Opis |
 |-----------|------|
-| `python:3.12-slim` | baza (Debian Bookworm Slim) |
+| `ubi9/python-312-minimal` | baza — Red Hat UBI 9 (RHEL 9), Python 3.12 |
 | FastAPI + uvicorn + httpx | serwer MCP + async HTTP client |
 | `app/main.py` | wywołuje zewnętrzne REST API przez httpx, obsługuje `/mcp`, `/tools/{name}` |
 
