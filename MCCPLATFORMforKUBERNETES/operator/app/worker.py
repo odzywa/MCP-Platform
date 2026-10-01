@@ -186,14 +186,16 @@ def run_action(driver: KubernetesDeploymentDriver, conn: sqlite3.Connection,
 
 def run_image_build(driver: KubernetesDeploymentDriver, conn: sqlite3.Connection,
                     request: sqlite3.Row) -> None:
+    """Buduje obraz z Dockerfile zapisanego przez control-plane; wraca dopiero po zakończeniu builda."""
     build_id = request["id"]
     image    = request["image"]
-    log(conn, build_id, f"Triggering BuildConfig for image {image}")
+    log(conn, build_id, f"Building image {image} from {request['base_image']} (OpenShift BuildConfig)")
+    conn.commit()
     try:
-        driver.build_image(Path("/dev/null"), image)
+        driver.build_image(request["dockerfile"], request["base_image"], image)
     except NotImplementedError as exc:
         raise RuntimeError(str(exc))
-    log(conn, build_id, f"BuildConfig triggered: {image}")
+    log(conn, build_id, f"Image built: {image}")
     audit_json(conn, "build_runtime_image", build_id, {"image": image})
 
 

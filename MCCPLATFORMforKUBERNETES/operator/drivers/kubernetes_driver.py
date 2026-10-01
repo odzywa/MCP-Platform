@@ -11,9 +11,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import time
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -50,6 +51,11 @@ PLATFORM_IMAGE_PREFIXES = tuple(
         "mcp-runtime-,mcp-generic-,mcp-platform-,mcp-",
     ).split(",") if p.strip()
 )
+
+# Runtime Image Builder: ile czekamy na zakończenie builda i jak często pytamy o status.
+IMAGE_BUILD_TIMEOUT_SECONDS = int(os.getenv("MCP_IMAGE_BUILD_TIMEOUT_SECONDS", "1800"))
+IMAGE_BUILD_POLL_SECONDS = 5
+_BUILD_FAILED_PHASES = {"Failed", "Error", "Cancelled"}
 
 # Jak długo cache'ujemy negatywny wynik detekcji OpenShift (sekundy).
 _OPENSHIFT_RECHECK_SECONDS = 300
@@ -403,6 +409,12 @@ def _qualify_image(image: str) -> str:
     return f"{IMAGE_REGISTRY_PREFIX}/{image}"
 
 
+def _split_image(image: str) -> tuple[str, str]:
+    """'rejestr/sciezka/nazwa:tag' → ('nazwa', 'tag'); brak tagu = latest."""
+    name, _, tag = image.rsplit("/", 1)[-1].partition(":")
+    return name, tag or "latest"
+
+
 # ── Driver ─────────────────────────────────────────────────────────────────────
 
 class KubernetesDeploymentDriver:
@@ -586,7 +598,24 @@ class KubernetesDeploymentDriver:
 
     # ── Publiczny interfejs (identyczny jak DockerDeploymentDriver) ────────────
 
+    def _with_resolved_image(self, spec: DeploySpec) -> DeploySpec:
+        """
+        Obraz zbudowany w Image Builderze pod nazwą spoza PLATFORM_IMAGE_PREFIXES
+        też leży w rejestrze namespace'u (ImageStream) — bez prefixu rejestru
+        Deployment szukałby go w docker.io i skończył na ImagePullBackOff.
+        """
+        image = spec.runtime_image
+        if not IMAGE_REGISTRY_PREFIX or "/" in image or image.startswith(PLATFORM_IMAGE_PREFIXES):
+            return spec
+        try:
+            if self._is_openshift() and self._imagestream_exists(_split_image(image)[0]):
+                return replace(spec, runtime_image=f"{IMAGE_REGISTRY_PREFIX}/{image}")
+        except Exception:
+            pass
+        return spec
+
     def apply(self, spec: DeploySpec, preserve_replicas: bool = False) -> InstanceStatus:
+        spec = self._with_resolved_image(spec)
         config_dir = Path(spec.config_mount)
         self._upsert_cm(spec.server_id, config_dir)
         self._upsert_secret(spec.server_id, _load_env_vars(config_dir))
@@ -722,32 +751,149 @@ class KubernetesDeploymentDriver:
                                          endpoint_url=url, container_name=dep.metadata.name))
         return result
 
-    def build_image(self, context_path: Path, tag: str) -> None:
-        """Triggeruje OpenShift BuildConfig. Na vanilla K8s — push obraz ręcznie."""
+    # ── Runtime Image Builder (OpenShift BuildConfig) ──────────────────────────
+
+    def _imagestream_exists(self, name: str) -> bool:
+        try:
+            self._custom.get_namespaced_custom_object(
+                "image.openshift.io", "v1", NAMESPACE, "imagestreams", name,
+            )
+            return True
+        except ApiException as e:
+            if e.status == 404:
+                return False
+            raise
+
+    def _ensure_imagestream(self, name: str) -> None:
+        if self._imagestream_exists(name):
+            return
+        self._custom.create_namespaced_custom_object(
+            "image.openshift.io", "v1", NAMESPACE, "imagestreams",
+            {
+                "apiVersion": "image.openshift.io/v1",
+                "kind": "ImageStream",
+                "metadata": {"name": name, "namespace": NAMESPACE,
+                             "labels": {MANAGED_BY_LABEL: MANAGED_BY_VALUE}},
+            },
+        )
+
+    def _upsert_buildconfig(self, name: str, body: dict) -> None:
+        try:
+            existing = self._custom.get_namespaced_custom_object(
+                "build.openshift.io", "v1", NAMESPACE, "buildconfigs", name,
+            )
+            body["metadata"]["resourceVersion"] = existing["metadata"]["resourceVersion"]
+            self._custom.replace_namespaced_custom_object(
+                "build.openshift.io", "v1", NAMESPACE, "buildconfigs", name, body,
+            )
+        except ApiException as e:
+            if e.status == 404:
+                self._custom.create_namespaced_custom_object(
+                    "build.openshift.io", "v1", NAMESPACE, "buildconfigs", body,
+                )
+            else:
+                raise
+
+    def _wait_for_build(self, build_name: str) -> None:
+        """Czeka aż Build dojdzie do Complete; błąd/timeout → RuntimeError z opisem z OpenShift."""
+        deadline = time.monotonic() + IMAGE_BUILD_TIMEOUT_SECONDS
+        api_errors = 0
+        while True:
+            try:
+                build = self._custom.get_namespaced_custom_object(
+                    "build.openshift.io", "v1", NAMESPACE, "builds", build_name,
+                )
+                api_errors = 0
+            except ApiException as e:
+                # Pojedynczy błąd API (restart apiservera, timeout) nie może uwalić builda.
+                api_errors += 1
+                if api_errors > 5:
+                    raise RuntimeError(f"Nie można odczytać statusu builda {build_name}: {e.reason}")
+                build = {}
+            status = build.get("status") or {}
+            phase = status.get("phase") or ""
+            if phase == "Complete":
+                return
+            if phase in _BUILD_FAILED_PHASES:
+                details = " — ".join(
+                    part for part in (status.get("reason"), status.get("message"), status.get("logSnippet")) if part
+                )
+                raise RuntimeError(f"Build {build_name} zakończony statusem {phase}" + (f": {details}" if details else ""))
+            if time.monotonic() >= deadline:
+                raise RuntimeError(
+                    f"Build {build_name} nie zakończył się w {IMAGE_BUILD_TIMEOUT_SECONDS}s (ostatni status: {phase or 'brak'})"
+                )
+            time.sleep(IMAGE_BUILD_POLL_SECONDS)
+
+    def build_image(self, dockerfile: str, base_image: str, tag: str) -> None:
+        """
+        Buduje obraz `tag` z Dockerfile wygenerowanego przez control-plane
+        (obraz bazowy + doinstalowane narzędzia) — tak samo jak operator dockerowy,
+        tylko przez OpenShift BuildConfig. Blokuje do końca builda.
+
+        Na vanilla K8s nie ma wbudowanego mechanizmu budowania — obraz trzeba
+        zbudować i wypchnąć do rejestru ręcznie.
+        """
         if not self._is_openshift():
             raise NotImplementedError(
-                f"build_image nie działa na vanilla K8s. "
-                f"Push obraz {tag} ręcznie do rejestru."
+                f"Budowanie obrazów działa tylko na OpenShift (BuildConfig). "
+                f"Na vanilla K8s zbuduj obraz {tag} ręcznie i wypchnij do rejestru."
             )
-        # Nazwa BuildConfig = część tagu bez registry i :tag
-        bc_name = tag.split("/")[-1].split(":")[0]
-        build_request = {
+        name, version = _split_image(tag)
+        # Nazwa obrazu staje się nazwą BuildConfig i ImageStream — obowiązują reguły nazw K8s.
+        if not re.fullmatch(r"[a-z0-9]([a-z0-9.-]{0,61}[a-z0-9])?", name):
+            raise RuntimeError(
+                f"Nazwa obrazu '{name}' nie może być użyta na OpenShift: dozwolone małe litery, "
+                f"cyfry, '-' i '.', maksymalnie 63 znaki."
+            )
+
+        # Obraz bazowy: lokalny (ImageStream w namespace) albo z zewnętrznego rejestru.
+        # dockerStrategy.from podmienia FROM z Dockerfile, więc krótka nazwa
+        # typu 'mcp-runtime-shell:latest' nie jest szukana w docker.io.
+        base_name, base_version = _split_image(base_image)
+        if "/" not in base_image and self._imagestream_exists(base_name):
+            build_from = {"kind": "ImageStreamTag", "name": f"{base_name}:{base_version}"}
+        else:
+            build_from = {"kind": "DockerImage", "name": base_image}
+
+        if "/" in tag:  # jawny rejestr docelowy
+            output = {"kind": "DockerImage", "name": tag}
+        else:
+            self._ensure_imagestream(name)
+            output = {"kind": "ImageStreamTag", "name": f"{name}:{version}"}
+
+        self._upsert_buildconfig(name, {
             "apiVersion": "build.openshift.io/v1",
-            "kind": "BuildRequest",
-            "metadata": {"name": bc_name},
-        }
+            "kind": "BuildConfig",
+            "metadata": {"name": name, "namespace": NAMESPACE,
+                         "labels": {MANAGED_BY_LABEL: MANAGED_BY_VALUE}},
+            "spec": {
+                "runPolicy": "Serial",
+                "source": {"type": "Dockerfile", "dockerfile": dockerfile},
+                "strategy": {"type": "Docker", "dockerStrategy": {"from": build_from}},
+                "output": {"to": output},
+                "successfulBuildsHistoryLimit": 2,
+                "failedBuildsHistoryLimit": 2,
+            },
+        })
+
         # CustomObjectsApi nie obsługuje subresourców (plural z '/' zostaje
         # zakodowany jako %2F → 404), więc wołamy surową ścieżkę API.
-        self._custom.api_client.call_api(
+        build = self._custom.api_client.call_api(
             f"/apis/build.openshift.io/v1/namespaces/{NAMESPACE}"
-            f"/buildconfigs/{bc_name}/instantiate",
+            f"/buildconfigs/{name}/instantiate",
             "POST",
-            body=build_request,
+            body={
+                "apiVersion": "build.openshift.io/v1",
+                "kind": "BuildRequest",
+                "metadata": {"name": name},
+            },
             header_params={"Accept": "application/json", "Content-Type": "application/json"},
             auth_settings=["BearerToken"],
             response_type="object",
             _return_http_data_only=True,
         )
+        self._wait_for_build(build["metadata"]["name"])
 
     def container_logs(self, server_id: str, tail: int = 100) -> list[str]:
         try:

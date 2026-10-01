@@ -232,10 +232,47 @@ operator/
 | Credentials | `runtime-env.json` → env | `Secret` → `envFrom` |
 | Runtime port | host port 19000+ | `Route` (HTTPS) |
 | Start/Stop | `docker start/stop` | `scale replicas 1/0` |
+| Image builds | `docker build` in the operator | OpenShift `BuildConfig` with the same generated Dockerfile (see *Image Builder*) |
 
 Control plane and config file format — **unchanged**.
 
 ---
+
+## Image Builder (custom runtime images)
+
+The **Budowanie obrazów** tab works the same way as on Docker Compose: a custom image is a
+base runtime image plus extra tools (system packages, pip packages, optional Dockerfile fragment).
+The control plane generates the Dockerfile; the operator builds it.
+
+On OpenShift the operator:
+
+1. creates or updates a `BuildConfig` named after the image, with the generated Dockerfile inline
+   (`source.type: Dockerfile`, Docker strategy);
+2. sets the base image through `dockerStrategy.from` — an `ImageStreamTag` when the base lives in the
+   namespace (platform images, previously built images), otherwise a `DockerImage` reference;
+3. writes the result to an `ImageStream` in the namespace (created when missing), i.e. the same
+   internal registry path that runtime Deployments pull from;
+4. starts the build and **waits for it to finish** — the build shows `gotowy` only after the Build
+   reaches `Complete`; on `Failed` / `Error` / `Cancelled` the OpenShift reason and log snippet are
+   shown in the error column.
+
+Notes:
+
+- Image names must be valid Kubernetes names (lowercase letters, digits, `-`, `.`).
+- While a build runs the operator does not process other actions (same as the Docker operator).
+  Timeout: `MCP_IMAGE_BUILD_TIMEOUT_SECONDS` (default `1800`).
+- The build pod needs network access to the package repositories used by the base image
+  (UBI repos for platform images, PyPI for pip packages).
+- Docker-strategy builds must be allowed for the operator's ServiceAccount. This is the OpenShift
+  default (`system:build-strategy-docker` is bound to authenticated users); if your cluster
+  restricts it, grant it: `oc adm policy add-cluster-role-to-user system:build-strategy-docker -z mcp-operator -n <namespace>`.
+- Runtimes using a built image whose name does not start with one of
+  `MCP_RUNTIME_LOCAL_IMAGE_PREFIXES` are still resolved to the internal registry when an
+  ImageStream of that name exists in the namespace.
+- Vanilla Kubernetes has no built-in build mechanism: the build fails with a message asking to
+  build and push the image manually.
+- Deleting an image in the UI removes the build record and its runtime class; the ImageStream and
+  BuildConfig stay in the cluster (`oc delete bc,is <name>`).
 
 ## Security
 
