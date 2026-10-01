@@ -1,0 +1,10 @@
+{% extends "auth_base.html" %}
+{% block content %}
+    {% if error %}<div class="auth-err">{{ error }}</div>{% endif %}
+    <form method="post" action="/login">
+      <input type="hidden" name="next" value="{{ next }}">
+      <div class="auth-field"><label>Login</label><input name="username" autofocus placeholder="admin"></div>
+      <div class="auth-field"><label>Hasło</label><input type="password" name="password" placeholder="••••••••"></div>
+      <button class="auth-btn">Zaloguj się →</button>
+    </form>
+    <div class="auth-link">Nie masz konta? <a href="/register">Zarejestruj się</a></div>{% endblock %}

@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block content %}
+    {% if error %}<div class="alert">{{ error }}</div>{% endif %}{% if ok %}<div class="alert" style="border-color:#1a7a3f;background:#0d2e1a;color:#8ee7b3">{{ ok }}</div>{% endif %}
+    <section>
+      <h2>External MCP Servers</h2>
+      <p class="muted">
+        Zewnętrzne MCP servery — działające poza platformą, niedeployowane przez operatora.
+        Platforma odkrywa ich tools i monitoruje status. Możesz np. podłączyć:
+        GitHub MCP, serwery z innej infrastruktury, lokalne dev servery, serwery teammates.
+      </p>
+      {% if not servers %}<p class='muted'>Brak zarejestrowanych external MCP servers. Dodaj poniżej.</p>{% endif %}
+      {% if servers %}<table><thead><tr><th>Nazwa</th><th>Endpoint</th><th>Status</th><th>Tools</th><th>Ostatni check</th><th>Akcja</th></tr></thead><tbody>{% for srv in servers %}{% set tools = json.loads((srv['tools_json'] or '[]')) %}        <tr>
+          <td>
+            <b>{{ srv['name'] }}</b>
+            <div class="muted" style="font-size:12px">{{ srv['description'] }}</div>
+          </td>
+          <td><code style="font-size:12px;word-break:break-all">{{ srv['endpoint_url'] }}</code></td>
+          <td><span class="badge {% if srv['status'] == 'healthy' %}running{% elif srv['status'] in set(['unreachable', 'unhealthy']) %}failed{% endif %}">{{ srv['status'] }}</span>
+            {% if srv.get('last_error') %}<div class='muted' style='font-size:11px;margin-top:2px'>{{ srv['last_error'][:80] }}</div>{% endif %}
+          </td>
+          <td>
+            {% if tools %}
+          <details style="margin-top:8px">
+            <summary class="muted" style="font-size:12px">{{ len(tools) }} tools — rozwiń</summary>
+            <table style="margin-top:6px;font-size:12px">
+              <thead><tr><th>Tool</th><th>Opis</th></tr></thead>
+              <tbody>{% for t in tools %}<tr><td><b>{{ t.get('name', '?') }}</b></td><td class="muted">{{ t.get('description', '')[:100] }}</td></tr>{% endfor %}</tbody>
+            </table>
+          </details>
+        {% else %}<span class="muted">brak odkrytych tools</span>{% endif %}
+          </td>
+          <td class="muted" style="font-size:12px">{{ (srv['last_checked_at'] or 'nigdy') }}</td>
+          <td>
+            <div class="actions compact">
+              <form method="post" action="/api/external-mcp/{{ srv['id'] }}/check">
+                <button title="Sprawdź status i odkryj tools">Check</button>
+              </form>
+              <form method="post" action="/api/external-mcp/{{ srv['id'] }}/delete"
+                    onsubmit="return confirm('Usunąć ten external MCP server z rejestru?')">
+                <button class="delete">Usuń</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}</tbody></table>{% endif %}
+    </section>
+    <section>
+      <h2>Zarejestruj External MCP Server</h2>
+      <p class="muted">Po rejestracji platforma automatycznie sprawdzi status i odkryje tools przez MCP protocol.</p>
+      <form method="post" action="/api/external-mcp">
+        <div class="grid">
+          <label>Nazwa<input name="name" placeholder="GitHub MCP" required></label>
+          <label>Endpoint URL
+            <input name="endpoint_url" placeholder="http://hostname:8080/mcp" required>
+          </label>
+          <label>Auth
+            <select name="auth_type" id="auth-type-sel" onchange="document.getElementById('auth-tok').style.display=this.value==='none'?'none':''">
+              <option value="none">None</option>
+              <option value="bearer">Bearer Token</option>
+              <option value="api_key">API Key (X-API-Key)</option>
+              <option value="basic">Basic (user:pass)</option>
+            </select>
+          </label>
+          <label id="auth-tok" style="display:none">Token / Key
+            <input name="auth_token" type="password" placeholder="secret value">
+          </label>
+        </div>
+        <label>Opis (opcjonalny)<input name="description" placeholder="np. GitLab MCP dev team"></label>
+        <div class="actions" style="margin-top:12px">
+          <button>Zarejestruj i sprawdź status</button>
+        </div>
+      </form>
+    </section>
+    <section>
+      <h2>Jak używać z Continue / OpenWebUI?</h2>
+      <p class="muted">Po wykryciu tools, skopiuj endpoint URL i dodaj go do konfiguracji klienta MCP:</p>
+      <pre style="font-size:12px"># Continue (config.json)
+{
+  "mcpServers": [
+    {
+      "name": "My External MCP",
+      "transport": {
+        "type": "http",
+        "url": "http://hostname:8080/mcp"
+      }
+    }
+  ]
+}</pre>
+    </section>
+    {% endblock %}

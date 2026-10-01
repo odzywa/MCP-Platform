@@ -1,0 +1,495 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.gen-wrap { max-width:820px; margin:0 auto; display:grid; gap:18px; }
+.gen-step { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:26px 28px; display:none; }
+.gen-step.active { display:block; }
+.gen-step h2 { margin:0 0 4px; font-size:20px; font-weight:800; }
+.gen-step .sub { color:var(--muted); font-size:14px; margin-bottom:20px; }
+.gen-field { margin-bottom:14px; }
+.gen-field label { display:block; font-weight:700; font-size:13px; color:#aac8e0; margin-bottom:5px; }
+.gen-field input,.gen-field select,.gen-field textarea { width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #34465b; border-radius:6px; background:#0d1420; color:var(--text); font-size:14px; }
+.gen-field textarea { min-height:80px; font-family:monospace; font-size:13px; }
+.gen-field .hint { color:var(--muted); font-size:12px; margin-top:4px; }
+.gen-next { width:100%; padding:13px; font-size:15px; font-weight:800; border:none; border-radius:8px; background:var(--blue); color:white; cursor:pointer; margin-top:10px; }
+.gen-next:hover { background:var(--blue-dark); }
+.gen-back { background:#263548; color:#c9d7e6; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-size:13px; margin-bottom:16px; }
+.gen-prog { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:4px; }
+.gen-p { padding:10px; border-radius:8px; text-align:center; background:var(--panel-2); border:1px solid var(--line); font-size:12px; font-weight:700; color:var(--muted); transition:.2s; }
+.gen-p.done { background:#0e2e1e; color:#5ce89a; border-color:#1a5a38; }
+.gen-p.cur { background:#0d3a55; color:white; border-color:var(--blue); }
+.tool-card { background:#0d1420; border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:12px; }
+.tool-card h4 { margin:0 0 12px; font-size:14px; color:#7dd3fc; display:flex; justify-content:space-between; }
+.ptype-btn { background:#0d1822; border:2px solid var(--line); border-radius:10px; padding:18px 14px; cursor:pointer; text-align:center; transition:.15s; color:var(--text); width:100%; }
+.ptype-btn:hover,.ptype-btn.sel { border-color:var(--blue); background:#0d2a40; }
+.ptype-btn .pi { font-size:30px; margin-bottom:8px; }
+.ptype-btn .pn { font-weight:800; font-size:14px; margin-bottom:5px; }
+.ptype-btn .pd { color:var(--muted); font-size:12px; line-height:1.5; }
+</style>
+
+{% if error %}<div class="alert">{{ error }}</div>{% endif %}
+
+<div class="gen-wrap">
+  <!-- Progress bar -->
+  <div class="gen-prog" id="gprog">
+    <div class="gen-p cur" id="gp1">1. Typ narzędzi</div>
+    <div class="gen-p" id="gp2">2. Narzędzia (tools)</div>
+    <div class="gen-p" id="gp3">3. Bezpieczeństwo</div>
+    <div class="gen-p" id="gp4">4. Metadane i install</div>
+  </div>
+
+  <!-- STEP 1: Typ -->
+  <div class="gen-step active" id="gs1">
+    <h2>Jakiego typu narzędzia chcesz stworzyć?</h2>
+    <div class="sub">Wybór określa jakiego obrazu Docker użyjemy i jak tools będą działać.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <button type="button" class="ptype-btn" id="pt-shell" onclick="pickType('shell')">
+        <div class="pi">⌨️</div>
+        <div class="pn">Shell / CLI</div>
+        <div class="pd">Komendy: curl, oc, kubectl, dowolne CLI dostępne w kontenerze</div>
+      </button>
+      <button type="button" class="ptype-btn" id="pt-http" onclick="pickType('http')">
+        <div class="pi">🌐</div>
+        <div class="pn">REST API</div>
+        <div class="pd">Wywołania HTTP do zewnętrznych API: GitLab, Jira, własny serwis</div>
+      </button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+      <button type="button" class="ptype-btn" id="pt-mixed" onclick="pickType('mixed')">
+        <div class="pi">🔀</div>
+        <div class="pn">Shell + HTTP</div>
+        <div class="pd">Mieszane narzędzia — część shell, część REST API</div>
+      </button>
+      <button type="button" class="ptype-btn" id="pt-custom" onclick="pickType('custom')">
+        <div class="pi">🛠️</div>
+        <div class="pn">Custom (własny obraz)</div>
+        <div class="pd">Masz własny Docker image z narzędziami — wpisz ręcznie</div>
+      </button>
+    </div>
+    <div id="custom-image-row" style="display:none;margin-top:14px">
+      <div class="gen-field">
+        <label>Własny obraz Docker</label>
+        <input id="custom-image-input" list="image-list" placeholder="mcp-runtime-custom:latest" oninput="gUpdate()">
+        <datalist id="image-list">{% for img in images %}<option value="{{ img }}">{{ img }}</option>{% endfor %}</datalist>
+        <div class="hint">Obraz musi być zbudowany przez Runtime Image Builder lub dostępny lokalnie w Docker</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 2: Tools -->
+  <div class="gen-step" id="gs2">
+    <button type="button" class="gen-back" onclick="gStep(1)">← Wróć</button>
+    <h2>Definiuj narzędzia (tools)</h2>
+    <div class="sub">Każdy tool to jedna komenda lub endpoint. AI może wywoływać każdy z nich niezależnie.</div>
+
+    <div id="tools-container"></div>
+
+    <button type="button" onclick="addTool()" style="background:#263548;color:#c9d7e6;border:none;padding:9px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+      + Dodaj kolejne narzędzie
+    </button>
+
+    <button type="button" class="gen-next" onclick="gStep(3)" style="margin-top:16px">Dalej → Bezpieczeństwo 🔒</button>
+  </div>
+
+  <!-- STEP 3: Bezpieczeństwo -->
+  <div class="gen-step" id="gs3">
+    <button type="button" class="gen-back" onclick="gStep(2)">← Wróć</button>
+    <h2>🔒 Bezpieczeństwo i ograniczenia</h2>
+    <div class="sub">Określ co AI może, a czego nie może robić. Domyślnie maksymalna ochrona.</div>
+
+    <div style="display:grid;gap:10px;margin-bottom:16px">
+      <label style="display:flex;align-items:flex-start;gap:12px;background:#0d1822;border:1px solid var(--line);border-radius:8px;padding:12px 14px;cursor:pointer">
+        <input type="checkbox" id="pol-readonly" checked onchange="gUpdate()" style="width:auto;margin-top:2px;flex-shrink:0">
+        <div><div style="font-weight:700;font-size:13px;color:white">🔒 Tylko odczyt</div>
+        <div style="color:var(--muted);font-size:12px;margin-top:2px">Tools mogą tylko czytać dane</div></div>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:12px;background:#0d1822;border:1px solid var(--line);border-radius:8px;padding:12px 14px;cursor:pointer">
+        <input type="checkbox" id="pol-nowrite" checked onchange="gUpdate()" style="width:auto;margin-top:2px;flex-shrink:0">
+        <div><div style="font-weight:700;font-size:13px;color:white">🚫 Blokuj zapis</div>
+        <div style="color:var(--muted);font-size:12px;margin-top:2px">Blokada operacji zapisu</div></div>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:12px;background:#0d1822;border:1px solid var(--line);border-radius:8px;padding:12px 14px;cursor:pointer">
+        <input type="checkbox" id="pol-nodestr" checked onchange="gUpdate()" style="width:auto;margin-top:2px;flex-shrink:0">
+        <div><div style="font-weight:700;font-size:13px;color:white">⛔ Blokuj destruktywne</div>
+        <div style="color:var(--muted);font-size:12px;margin-top:2px">Blokada usuwania, resetowania, drop</div></div>
+      </label>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div class="gen-field" style="margin:0">
+        <label>Dozwolone binarki (spacja)</label>
+        <input id="pol-bins" placeholder="oc jq curl kubectl" oninput="gUpdate()">
+        <div class="hint">Zostaw puste = wszystkie. Wpisz np. <code>oc jq</code> = tylko te</div>
+      </div>
+      <div class="gen-field" style="margin:0">
+        <label>⏱️ Timeout (sekundy)</label>
+        <input type="number" id="pol-timeout" value="30" min="5" max="300" oninput="gUpdate()">
+      </div>
+    </div>
+
+    <div class="gen-field">
+      <label>Dozwolone prefixy komend (jedna na linię)</label>
+      <textarea id="pol-pfx" placeholder="oc get&#10;oc describe&#10;oc logs" oninput="gUpdate()" style="min-height:70px"></textarea>
+      <div class="hint">Np. <code>oc get</code> = AI może TYLKO uruchamiać komendy zaczynające się od <code>oc get</code></div>
+    </div>
+
+    <div class="gen-field">
+      <label>Zablokowane komendy / prefixy (jedna na linię)</label>
+      <textarea id="pol-blk" placeholder="kubectl delete&#10;kubectl apply&#10;oc delete&#10;oc adm" oninput="gUpdate()" style="min-height:70px"></textarea>
+      <div class="hint">Komendy zaczynające się od tych prefiksów będą odrzucane przez runtime</div>
+    </div>
+
+    <button type="button" class="gen-next" onclick="gStep(4)">Dalej → Metadane i instalacja →</button>
+  </div>
+
+  <!-- STEP 4: Metadane + preview + install -->
+  <div class="gen-step" id="gs4">
+    <button type="button" class="gen-back" onclick="gStep(3)">← Wróć</button>
+    <h2>Metadane i instalacja</h2>
+    <div class="sub">Nadaj paczce nazwę i opis — pojawi się w katalogu Paczki tools.</div>
+
+    <div class="gen-field">
+      <label>Nazwa paczki</label>
+      <input id="pkg-name" placeholder="OpenShift ReadOnly Assistant" oninput="gUpdate()">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div class="gen-field" style="margin:0">
+        <label>Kategoria</label>
+        <select id="pkg-category" oninput="gUpdate()">
+          <option value="other" selected>other</option>
+          <option value="http">http</option>
+          <option value="openshift">openshift</option>
+          <option value="kubernetes">kubernetes</option>
+          <option value="rag">rag</option>
+          <option value="system">system</option>
+        </select>
+      </div>
+      <div class="gen-field" style="margin:0">
+        <label>Poziom ryzyka</label>
+        <select id="pkg-risk" oninput="gUpdate()">
+          <option value="low">low — read-only, bezpieczne</option>
+          <option value="medium" selected>medium — operacje na infrastrukturze</option>
+          <option value="high">high — operacje destruktywne</option>
+        </select>
+      </div>
+    </div>
+    <div class="gen-field">
+      <label>Opis (opcjonalny)</label>
+      <input id="pkg-desc" placeholder="Read-only OCP tools via oc CLI." oninput="gUpdate()">
+    </div>
+
+    <div style="margin-bottom:14px">
+      <div style="font-weight:700;font-size:13px;color:#aac8e0;margin-bottom:8px">Podgląd JSON paczki:</div>
+      <textarea id="json-preview" readonly style="height:280px;font-family:monospace;font-size:12px;color:#c9d7e6;background:#0b1420;border:1px solid var(--line);border-radius:8px;padding:12px;width:100%;box-sizing:border-box"></textarea>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <button type="button" onclick="installPackage()" style="background:#1a7a3f;color:white;border:none;padding:14px;border-radius:8px;font-size:15px;font-weight:800;cursor:pointer">
+        🚀 Zainstaluj paczkę
+      </button>
+      <button type="button" id="copy-btn" onclick="copyJSON()" style="background:#263548;color:#c9d7e6;border:none;padding:14px;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer">
+        📋 Kopiuj JSON
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<form id="install-form" method="post" action="/api/tool-packages/import" style="display:none">
+  <input type="hidden" id="install-json" name="package_json">
+</form>
+
+<script>
+// ── State ──────────────────────────────────────────────────
+let gType = 'shell';
+let toolId = 0;
+let fieldCounters = {};
+
+// ── Step navigation ────────────────────────────────────────
+function gStep(n) {
+  if (n === 3 && document.querySelectorAll('.tool-card').length === 0) {
+    addTool(); // ensure at least one tool
+  }
+  [1,2,3,4].forEach(function(i) {
+    document.getElementById('gs'+i).classList.toggle('active', i===n);
+    var p = document.getElementById('gp'+i);
+    p.className = 'gen-p' + (i<n?' done':(i===n?' cur':''));
+  });
+  window.scrollTo(0,0);
+  gUpdate();
+}
+
+// ── Type selection ─────────────────────────────────────────
+function pickType(t) {
+  gType = t;
+  ['shell','http','mixed','custom'].forEach(function(k) {
+    document.getElementById('pt-'+k).classList.toggle('sel', k===t);
+  });
+  document.getElementById('custom-image-row').style.display = t==='custom' ? '' : 'none';
+  gStep(2);
+  // Pre-populate with one tool if container empty
+  if (document.querySelectorAll('.tool-card').length === 0) addTool();
+}
+
+// ── Tool builder ───────────────────────────────────────────
+function addTool() {
+  toolId++;
+  fieldCounters[toolId] = 0;
+  const c = document.getElementById('tools-container');
+  const d = document.createElement('div');
+  d.id = 'tool-'+toolId;
+  d.className = 'tool-card';
+  d.dataset.toolId = toolId;
+  const showShell = (gType === 'shell' || gType === 'mixed' || gType === 'custom');
+  const showHttp  = (gType === 'http'  || gType === 'mixed');
+  d.innerHTML = toolHTML(toolId, showShell, showHttp);
+  c.appendChild(d);
+  gUpdate();
+}
+
+function toolHTML(tid, showShell, showHttp) {
+  const defType = showShell ? 'shell' : 'http_request';
+  return `<div>
+    <h4>🔧 Narzędzie #${tid}
+      <button type="button" onclick="removeTool(${tid})" style="background:#c43b3b;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:white">Usuń</button>
+    </h4>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div class="gen-field" style="margin:0">
+        <label>Nazwa narzędzia</label>
+        <input id="tool-name-${tid}" placeholder="oc_get_pods" oninput="gUpdate()">
+      </div>
+      <div class="gen-field" style="margin:0">
+        <label>Typ</label>
+        <select id="tool-type-${tid}" onchange="toggleToolType(${tid})">
+          ${showShell ? '<option value="shell" selected>shell — komenda CLI</option>' : ''}
+          ${showHttp  ? '<option value="http_request" '+(showShell?'':'selected')+'>http_request — REST API</option>' : ''}
+        </select>
+      </div>
+    </div>
+    <div class="gen-field">
+      <label>Opis (wyświetlany AI)</label>
+      <input id="tool-desc-${tid}" placeholder="Pobiera listę podów w podanym namespace" oninput="gUpdate()">
+    </div>
+
+    <div id="shell-cfg-${tid}" style="${showShell?'':'display:none'}">
+      <div class="gen-field">
+        <label>Komenda (użyj <code>\${variable}</code> lub <code>\${*args}</code>)</label>
+        <input id="tool-cmd-${tid}" placeholder="oc get ${*args}" oninput="gUpdate()">
+        <div class="hint">
+          <code>\${namespace}</code> = jeden parametr &nbsp;|&nbsp; <code>\${*args}</code> = AI podaje wszystkie argumenty naraz
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+        <span style="font-size:11px;color:var(--muted);align-self:center">Presety:</span>
+        <button type="button" class="preset-btn" onclick="setToolCmd(${tid},'oc get \${*args}','Wykonaj dowolne oc get')">🔴 oc get</button>
+        <button type="button" class="preset-btn" onclick="setToolCmd(${tid},'oc logs \${pod} -n \${namespace} --tail \${lines}','Logi z poda OC')">🔴 oc logs</button>
+        <button type="button" class="preset-btn" onclick="setToolCmd(${tid},'kubectl get \${*args}','Wykonaj dowolne kubectl get')">☸️ kubectl get</button>
+        <button type="button" class="preset-btn" onclick="setToolCmd(${tid},'curl -s -L --max-time 30 \${url}','GET na URL')">🌐 curl GET</button>
+        <button type="button" class="preset-btn" onclick="setToolCmd(${tid},'curl \${*args}','Dowolna komenda curl')">🌐 curl (wszystko)</button>
+      </div>
+    </div>
+
+    <div id="http-cfg-${tid}" style="${showHttp&&!showShell?'':'display:none'}">
+      <div style="display:grid;grid-template-columns:120px 1fr;gap:10px">
+        <div class="gen-field" style="margin:0">
+          <label>Metoda</label>
+          <select id="tool-method-${tid}" oninput="gUpdate()">
+            <option>GET</option><option selected>POST</option><option>PUT</option><option>PATCH</option>
+          </select>
+        </div>
+        <div class="gen-field" style="margin:0">
+          <label>URL</label>
+          <input id="tool-url-${tid}" placeholder="https://api.example.com/v1/search" oninput="gUpdate()">
+        </div>
+      </div>
+      <div class="gen-field">
+        <label>Body template JSON</label>
+        <textarea id="tool-body-${tid}" style="min-height:60px" oninput="gUpdate()">{"query":"\${query}"}</textarea>
+      </div>
+    </div>
+
+    <div style="margin-top:10px">
+      <div style="font-weight:700;font-size:12px;color:#7dd3fc;margin-bottom:6px">Parametry (input schema):</div>
+      <div id="fields-${tid}"></div>
+      <button type="button" onclick="addField(${tid})" style="background:#1a2a3a;border:1px solid var(--line);color:#b0c8e0;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">+ Dodaj parametr</button>
+    </div>
+  </div>`;
+}
+
+function setToolCmd(tid, cmd, desc) {
+  const c = document.getElementById('tool-cmd-'+tid);
+  const d = document.getElementById('tool-desc-'+tid);
+  if (c) c.value = cmd;
+  if (d && !d.value) d.value = desc;
+  // Auto-detect params and add fields
+  gUpdate();
+}
+
+function removeTool(tid) {
+  const el = document.getElementById('tool-'+tid);
+  if (el) el.remove();
+  gUpdate();
+}
+
+function toggleToolType(tid) {
+  const t = document.getElementById('tool-type-'+tid).value;
+  document.getElementById('shell-cfg-'+tid).style.display = t==='shell' ? '' : 'none';
+  document.getElementById('http-cfg-'+tid).style.display  = t==='http_request' ? '' : 'none';
+  gUpdate();
+}
+
+function addField(tid) {
+  if (!fieldCounters[tid]) fieldCounters[tid] = 0;
+  fieldCounters[tid]++;
+  const fid = fieldCounters[tid];
+  const c = document.getElementById('fields-'+tid);
+  const d = document.createElement('div');
+  d.id = 'field-'+tid+'-'+fid;
+  d.style.cssText = 'display:grid;grid-template-columns:1fr 90px 2fr 80px 70px 36px;gap:6px;align-items:end;margin-bottom:6px';
+  d.innerHTML = `
+    <label style="font-size:12px">Nazwa<input class="fname" placeholder="namespace" oninput="gUpdate()"></label>
+    <label style="font-size:12px">Typ<select class="ftype" oninput="gUpdate()">
+      <option value="string" selected>string</option>
+      <option value="integer">integer</option>
+      <option value="boolean">boolean</option>
+    </select></label>
+    <label style="font-size:12px">Opis<input class="fdesc" placeholder="Target namespace" oninput="gUpdate()"></label>
+    <label style="font-size:12px">Default<input class="fdefault" oninput="gUpdate()"></label>
+    <label style="display:flex;gap:5px;align-items:center;font-size:12px;padding-top:16px">
+      <input type="checkbox" class="freq" onchange="gUpdate()"> Req
+    </label>
+    <button type="button" onclick="removeField(${tid},${fid})" style="background:#c43b3b;border:none;padding:6px 8px;border-radius:6px;cursor:pointer;color:white">✕</button>`;
+  c.appendChild(d);
+  gUpdate();
+}
+
+function removeField(tid, fid) {
+  const el = document.getElementById('field-'+tid+'-'+fid);
+  if (el) el.remove();
+  gUpdate();
+}
+
+// ── JSON generation ────────────────────────────────────────
+function val(id) { const el = document.getElementById(id); return el ? el.value : ''; }
+function slugify(s) { return (s||'').toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,''); }
+function safeJSON(s, def) { try { return JSON.parse(s||'null')||def; } catch(e) { return def; } }
+
+function resolveImage() {
+  if (gType === 'shell' || gType === 'mixed') return 'mcp-runtime-shell:latest';
+  if (gType === 'http') return 'mcp-runtime-http-gateway:latest';
+  return val('custom-image-input') || 'mcp-runtime-shell:latest';
+}
+function resolveExecTypes() {
+  if (gType === 'shell') return ['shell'];
+  if (gType === 'http')  return ['http_request'];
+  if (gType === 'mixed') return ['shell','http_request'];
+  return ['shell'];
+}
+
+function generateJSON() {
+  const name = val('pkg-name') || 'My MCP Package';
+  const execTypes = resolveExecTypes();
+  const image = resolveImage();
+  const rcName = slugify(name) || 'custom-runtime';
+
+  const tools = [];
+  document.querySelectorAll('.tool-card').forEach(function(block) {
+    const tid = block.dataset.toolId;
+    const execType = val('tool-type-'+tid) || 'shell';
+    let config = {};
+    if (execType === 'shell') {
+      const raw = val('tool-cmd-'+tid).trim();
+      config = { command: raw ? raw.split(/\s+/) : [], timeout_seconds: 30 };
+    } else {
+      config = {
+        method: val('tool-method-'+tid)||'POST',
+        url: val('tool-url-'+tid),
+        body: safeJSON(val('tool-body-'+tid), {}),
+        timeout_seconds: 30, max_response_bytes: 5242880
+      };
+    }
+    const props = {};
+    const req = [];
+    block.querySelectorAll('.schema-field').forEach(function(f) {
+      const fname = f.querySelector('.fname').value.trim();
+      if (!fname) return;
+      const ftype = f.querySelector('.ftype').value;
+      const prop = { type: ftype };
+      const fdesc = f.querySelector('.fdesc').value.trim();
+      if (fdesc) prop.description = fdesc;
+      const fdef = f.querySelector('.fdefault').value.trim();
+      if (fdef) prop.default = ftype==='integer'?(parseInt(fdef)||0):fdef;
+      props[fname] = prop;
+      if (f.querySelector('.freq').checked) req.push(fname);
+    });
+    const schema = { type:'object', properties:props };
+    if (req.length) schema.required = req;
+    tools.push({
+      name: val('tool-name-'+tid),
+      description: val('tool-desc-'+tid),
+      execution_type: execType,
+      enabled: true,
+      risk_level: 'low',
+      mode: 'read-only',
+      category: val('pkg-category')||'other',
+      config, input_schema: schema
+    });
+  });
+
+  const pol = {};
+  if (document.getElementById('pol-readonly')?.checked) pol.require_read_only = true;
+  if (document.getElementById('pol-nowrite')?.checked) pol.block_write_tools = true;
+  if (document.getElementById('pol-nodestr')?.checked) pol.block_destructive_tools = true;
+  const bins = val('pol-bins').trim(); if (bins) pol.allowed_binaries = bins.split(/\s+/);
+  const pfx = val('pol-pfx').trim(); if (pfx) pol.allowed_command_prefixes = pfx.split(/
++/).filter(Boolean);
+  const blk = val('pol-blk').trim(); if (blk) pol.blocked_command_prefixes = blk.split(/
++/).filter(Boolean);
+  pol.timeout_seconds = parseInt(val('pol-timeout'))||30;
+  pol.max_payload_bytes = 262144;
+  pol.max_response_bytes = 5242880;
+
+  return JSON.stringify({
+    id: slugify(name)||'custom-package',
+    name, description: val('pkg-desc'),
+    category: val('pkg-category')||'other',
+    risk_level: val('pkg-risk')||'low',
+    runtime_class: {
+      name: rcName, runtime_image: image,
+      allowed_execution_types: execTypes,
+      risk_level: 'low', security_profile: 'restricted'
+    },
+    adapters: execTypes.map(function(et) {
+      return { name:et, adapter_type:et==='http_request'?'http':et,
+               implemented:true, enabled:true, risk_level:'low', mode:'read-only' };
+    }),
+    policy: pol, tools
+  }, null, 2);
+}
+
+function gUpdate() {
+  const el = document.getElementById('json-preview');
+  if (el) el.value = generateJSON();
+}
+
+function installPackage() {
+  const name = val('pkg-name').trim();
+  if (!name) { document.getElementById('pkg-name').focus(); return; }
+  document.getElementById('install-json').value = generateJSON();
+  document.getElementById('install-form').submit();
+}
+
+function copyJSON() {
+  navigator.clipboard.writeText(generateJSON()).then(function() {
+    const btn = document.getElementById('copy-btn');
+    const orig = btn.textContent;
+    btn.textContent = '✅ Skopiowano!';
+    setTimeout(function() { btn.textContent = orig; }, 2000);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  gUpdate();
+});
+</script>
+{% endblock %}

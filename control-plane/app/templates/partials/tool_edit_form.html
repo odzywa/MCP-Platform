@@ -1,0 +1,33 @@
+{% from "macros.html" import select_options %}
+    <details id="tool-{{ tool['id'] }}">
+      <summary>{{ tool['name'] }} <span class="muted">{{ tool['execution_type'] }} / {% if tool['enabled'] %}enabled{% else %}disabled{% endif %}</span></summary>
+      <form method="post" action="/api/runtimes/{{ runtime_id }}/tools/{{ tool['id'] }}/update">
+        <div class="grid">
+          <label>Name<input name="name" value="{{ tool['name'] }}"></label>
+          <label>Execution Adapter<select name="execution_type">{{ select_options(adapter_names, tool['execution_type']) }}</select></label>
+          <label>Enabled<select name="enabled">{{ select_options(['true', 'false'], ('true' if tool['enabled'] else 'false')) }}</select></label>
+          <label>Risk<select name="risk_level">{{ select_options(['low', 'medium', 'high'], tool['risk_level']) }}</select></label>
+          <label>Mode<select name="mode">{{ select_options(['read-only', 'write', 'destructive'], tool['mode']) }}</select></label>
+          <label>Category<input name="category" value="{{ tool['category'] }}"></label>
+        </div>
+        <label>Description<textarea name="description" style="min-height:52px">{{ tool['description'] }}</textarea></label>
+        {% if is_shell %}
+        <label>Komenda<input name="cmd" value="{{ cmd_str }}" placeholder="ping -c 4 ${*args}"></label>
+        <label>Timeout (s)<input name="timeout_seconds" type="number" value="{{ timeout_val }}" min="1" max="300" style="width:120px"></label>{% else %}
+        <label>Method<select name="method">{{ select_options(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], str(config.get('method', 'POST')).upper()) }}</select></label>
+        <label>URL<input name="url" value="{{ str(config.get('url', '')) }}"></label>
+        <label>Body JSON<textarea name="body_json">{{ body_json }}</textarea></label>
+        <label>Headers JSON<textarea name="headers_json" placeholder='{"Authorization": "Bearer ${API_TOKEN}"}'>{{ headers_json }}</textarea></label>
+        <div class="muted" style="font-size:11px;margin-top:-4px">Wartości <code>${ZMIENNA}</code> są podstawiane z ENV kontenera (zakładka 🔑 Sekrety) — np. tokeny API, klucze.</div>{% endif %}
+        <label style="margin-top:8px">Input Schema JSON<textarea name="input_schema_json" id="sch-{{ tool['id'] }}" oninput="renderValidationUI('{{ tool['id'] }}')">{{ input_schema_json }}</textarea></label>
+        <div id="val-ui-{{ tool['id'] }}" style="margin-top:8px">{{ _validation_ui(tool) }}</div>
+        <label>Output Schema JSON<textarea name="output_schema_json">{{ output_schema_json }}</textarea></label>
+        <div class="actions" style="margin-top:10px">
+          <button>💾 Zapisz tool</button>
+        </div>
+      </form>
+      <form method="post" action="/api/runtimes/{{ runtime_id }}/tools/{{ tool['id'] }}/delete" style="margin-top:6px">
+        <button class="delete">🗑️ Usuń tool</button>
+      </form>
+    </details>
+    

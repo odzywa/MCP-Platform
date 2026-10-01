@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block content %}{% macro rc_adapter_checks(item) %}{% set current = json.loads(item['allowed_execution_types_json'] or '[]') %}{% for a in implemented_adapters %}<label style="display:inline-flex;gap:5px;align-items:center;margin-right:12px;font-size:12px"><input type="checkbox" name="allowed_adapters" value="{{ a['name'] }}"{% if a['name'] in current %} checked{% endif %}> {{ a['name'] }}</label>{% endfor %}{% endmacro %}
+
+      {% if error %}<div class="alert">{{ error }}</div>{% endif %}{% if ok %}<div class="alert" style="border-color:#1a7a3f;background:#0d2e1a;color:#8ee7b3">{{ ok }}</div>{% endif %}
+      <section>
+        <h2>Typy środowisk (Runtime Classes)</h2>
+        <p class="muted">
+          Typ środowiska określa <b>jaki Docker image jest uruchamiany</b> i <b>jakie silniki wykonania</b> są dozwolone.
+          Nowe typy tworzone są automatycznie przez Runtime Image Builder w
+          <a href="/tool-packages">Paczki tools</a>.
+          Możesz też dodać ręcznie poniżej.
+        </p>
+        <table>
+          <thead><tr><th>Nazwa</th><th>Obraz Docker</th><th>Dozwolone silniki</th><th>Ryzyko</th><th>Status</th><th></th></tr></thead>
+          <tbody>{% for item in runtime_classes %}
+        <tr id="rcrow-{{ item['name'] }}">
+          <td><b style="font-size:13px">{{ item['name'] }}</b></td>
+          <td><code style="font-size:11px">{{ item['runtime_image'] }}</code></td>
+          <td style="font-size:12px">{{ (json.loads((item['allowed_execution_types_json'] or '[]'))|join(', ')) }}</td>
+          <td><span class="risk {{ item['risk_level'] }}" style="font-size:11px">{{ item['risk_level'] }}</span></td>
+          <td><span class="badge {% if item['enabled'] %}running{% else %}stopped{% endif %}" style="font-size:11px">{% if item['enabled'] %}aktywny{% else %}wyłączony{% endif %}</span></td>
+          <td style="white-space:nowrap">
+            <div style="display:flex;gap:6px">
+              <button onclick="toggleRCEdit('{{ item['name'] }}')"
+                style="background:#1a2a3a;border:1px solid #2a4a6a;color:#7dd3fc;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">✏️ Edytuj</button>
+              <form method="post" action="/api/runtime-classes/{{ item['name'] }}/toggle" style="display:inline">
+                <button style="font-size:11px;padding:4px 8px;background:#263548;border:1px solid #34465b;border-radius:6px;cursor:pointer">
+                  {% if item['enabled'] %}Wyłącz{% else %}Włącz{% endif %}
+                </button>
+              </form>
+              <form method="post" action="/api/runtime-classes/{{ item['name'] }}/delete" style="display:inline"
+                    onsubmit="return confirm('Usunąć ten typ środowiska?')">
+                <button class="delete" style="font-size:11px;padding:4px 8px">🗑️</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        <tr id="rcedit-{{ item['name'] }}" style="display:none">
+          <td colspan="6" style="padding:0">
+            <div style="background:#0a1520;border-top:1px solid #1a3a50;padding:16px 18px">
+              <form method="post" action="/api/runtime-classes/{{ item['name'] }}/update">
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+                  <div>
+                    <label style="font-size:11px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Obraz Docker</label>
+                    <input name="runtime_image" value="{{ item['runtime_image'] }}" style="width:100%;box-sizing:border-box;padding:8px 10px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:12px;font-family:monospace">
+                  </div>
+                  <div>
+                    <label style="font-size:11px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Ryzyko</label>
+                    <select name="risk_level" style="width:100%;padding:8px 10px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:13px">
+                      <option {% if item['risk_level'] == 'low' %}selected{% endif %} value="low">niski (low)</option>
+                      <option {% if item['risk_level'] == 'medium' %}selected{% endif %} value="medium">średni (medium)</option>
+                      <option {% if item['risk_level'] == 'high' %}selected{% endif %} value="high">wysoki (high)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style="font-size:11px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Security profile</label>
+                    <select name="security_profile" style="width:100%;padding:8px 10px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:13px">
+                      <option {% if item['security_profile'] == 'restricted' %}selected{% endif %} value="restricted">restricted</option>
+                      <option {% if item['security_profile'] == 'standard' %}selected{% endif %} value="standard">standard</option>
+                    </select>
+                  </div>
+                </div>
+                <div style="margin-bottom:12px">
+                  <label style="font-size:11px;font-weight:700;color:#aac8e0;display:block;margin-bottom:6px">Dozwolone silniki</label>
+                  <div style="display:flex;flex-wrap:wrap;gap:4px">{{ rc_adapter_checks(item) }}</div>
+                </div>
+                <div style="display:flex;gap:8px">
+                  <button type="submit" style="background:var(--blue);border:none;color:white;padding:7px 16px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">💾 Zapisz</button>
+                  <button type="button" onclick="toggleRCEdit('{{ item['name'] }}')" style="background:#263548;border:none;color:#c9d7e6;padding:7px 12px;border-radius:6px;font-size:12px;cursor:pointer">Anuluj</button>
+                </div>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}</tbody>
+        </table>
+      </section>
+      <section>
+        <h2>Dodaj typ środowiska</h2>
+        <p class="muted">
+          Rejestruje nowy typ środowiska. Obraz musi już istnieć lokalnie w Docker
+          (zbudowany przez Runtime Image Builder lub pulled ręcznie).<br>
+          <b>Kiedy tego potrzebujesz:</b> masz własny Docker image z narzędziami (np. terraform, awscli)
+          i chcesz go zarejestrować jako dostępny typ środowiska w kreatorze.
+        </p>
+        <form method="post" action="/api/runtime-classes">
+          <div class="grid">
+            <label>Nazwa typu
+              <input name="name" placeholder="terraform-readonly" required>
+            </label>
+            <label>Obraz Docker
+              <input name="runtime_image" list="img-list" placeholder="mcp-runtime-shell:latest" required>
+              <datalist id="img-list">{% for img in sorted(all_images) %}<option value="{{ img }}">{% endfor %}</datalist>
+            </label>
+            <label>Risk
+              <select name="risk_level">
+                <option value="low">low</option>
+                <option value="medium" selected>medium</option>
+                <option value="high">high</option>
+              </select>
+            </label>
+            <label>Security profile
+              <input name="security_profile" value="restricted">
+            </label>
+          </div>
+          <div style="margin:12px 0 6px;font-weight:700;font-size:13px">Dozwolone silniki wykonania</div>
+          <div style="margin-bottom:14px">{% for a in implemented_adapters %}<label style="display:inline-flex;gap:6px;align-items:center;margin-right:16px"><input type="checkbox" name="allowed_adapters" value="{{ a['name'] }}"> {{ a['name'] }}</label>{% endfor %}</div>
+          <button>Dodaj typ środowiska</button>
+        </form>
+      </section>
+    
+<script>
+function toggleRCEdit(name) {
+  var row = document.getElementById('rcedit-' + name);
+  if (row) row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+}
+</script>{% endblock %}

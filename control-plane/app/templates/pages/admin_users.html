@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block content %}
+    {% if ok %}<div class="success">{{ ok }}</div>{% endif %}
+    {% if requests %}
+    <section style="border-color:#5a420f;background:#1a1000">
+      <h2>⏳ Oczekujące prośby o konto ({{ len(requests) }})</h2>
+      {% if not requests %}<p class='muted'>Brak oczekujących próśb.</p>{% else %}
+      <table>
+        <thead><tr><th>Login</th><th>Żądana rola</th><th>Data</th><th>Akcja</th></tr></thead>
+        <tbody>{% for r in requests %}
+        <tr>
+          <td><b>{{ r['username'] }}</b></td>
+          <td><span class="badge">{{ r['requested_role'] }}</span></td>
+          <td class="muted" style="font-size:12px">{{ r['created_at'][:16].replace('T', ' ') }}</td>
+          <td>
+            <div style="display:flex;gap:6px">
+              <form method="post" action="/admin/users/approve/{{ r['id'] }}">
+                <input type="hidden" name="role" value="{{ r['requested_role'] }}">
+                <button style="background:#1a7a3f;border:none;padding:5px 10px;border-radius:5px;color:white;font-size:12px;cursor:pointer">✅ Akceptuj</button>
+              </form>
+              <form method="post" action="/admin/users/approve/{{ r['id'] }}">
+                <input type="hidden" name="role" value="read_only">
+                <button style="background:#263548;border:none;padding:5px 10px;border-radius:5px;color:#c9d7e6;font-size:12px;cursor:pointer">👁 Akceptuj jako read_only</button>
+              </form>
+              <form method="post" action="/admin/users/reject/{{ r['id'] }}">
+                <button class="delete" style="padding:5px 10px;font-size:12px">❌ Odrzuć</button>
+              </form>
+            </div>
+          </td>
+        </tr>{% endfor %}</tbody>
+      </table>{% endif %}
+    </section>{% endif %}
+
+    <section>
+      <h2>👥 Wszyscy użytkownicy ({{ len(users) }})</h2>
+      <table>
+        <thead><tr><th>Login</th><th>Rola</th><th>Utworzony</th><th>Status</th></tr></thead>
+        <tbody>{% for u in users %}        <tr>
+          <td><b>{{ u['username'] }}</b></td>
+          <td>
+            <form method="post" action="/admin/users/role/{{ u['id'] }}" style="display:flex;gap:6px">
+              <select name="role" style="padding:5px 8px;font-size:12px;background:#0d1420;border:1px solid #34465b;border-radius:5px;color:#dce7f3">{% for r in ['read_only', 'read_write', 'admin'] %}<option value="{{ r }}" {% if r == u['role'] %}selected{% endif %}>{{ r }}</option>{% endfor %}</select>
+              <button style="background:#263548;border:none;padding:5px 10px;border-radius:5px;color:#c9d7e6;font-size:12px;cursor:pointer">Zmień</button>
+            </form>
+          </td>
+          <td class="muted" style="font-size:12px">{{ u['created_at'][:16].replace('T', ' ') }}</td>
+          <td>
+            <form method="post" action="/admin/users/toggle/{{ u['id'] }}">
+              <button style="background:{% if u['active'] %}#263548{% else %}#1a7a3f{% endif %};border:none;padding:5px 10px;border-radius:5px;color:#c9d7e6;font-size:12px;cursor:pointer">
+                {% if u['active'] %}⛔ Dezaktywuj{% else %}✅ Aktywuj{% endif %}
+              </button>
+            </form>
+          </td>
+        </tr>{% endfor %}</tbody>
+      </table>
+    </section>{% endblock %}

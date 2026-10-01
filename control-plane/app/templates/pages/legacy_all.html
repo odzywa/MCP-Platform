@@ -1,0 +1,87 @@
+{% from "macros.html" import runtime_actions_compact, select_options %}{% set class_rows_html %}{% for item in runtime_classes %}
+        <tr>
+          <td>{{ item['name'] }}</td>
+          <td>{{ item['runtime_image'] }}</td>
+          <td>{{ (json.loads((item['allowed_execution_types_json'] or '[]'))|join(', ')) }}</td>
+          <td><span class="risk {{ item['risk_level'] }}">{{ item['risk_level'] }}</span></td>
+          <td>{% if item['enabled'] %}enabled{% else %}disabled{% endif %}</td>
+        </tr>
+        {% endfor %}{% endset %}
+
+    <!doctype html>
+    <html><head><title>MCP Platform</title><link rel="stylesheet" href="/static/css/base.css"></head><body>
+    <header><h1>MCP Platform</h1><div>Twórz i zarządzaj serwerami MCP</div></header>
+    <main>
+      <section>
+        <h2>Nowy serwer MCP</h2>
+        <div class="wizard">
+          <div class="step"><b>1. Server</b><div class="muted">Name and runtime class</div></div>
+          <div class="step"><b>2. First Tool</b><div class="muted">HTTP tool or empty server</div></div>
+          <div class="step"><b>3. Policy</b><div class="muted">Risk and read-only defaults</div></div>
+          <div class="step"><b>4. Uruchomienie</b><div class="muted">Tworzy kontener Docker i uruchamia serwer MCP</div></div>
+        </div>
+        <form method="post" action="/api/runtimes">
+          <div class="grid">
+            <label>Server name<input name="name" placeholder="GitLab Assistant"></label>
+            <label>Runtime Class<select name="runtime_class">{{ select_options(runtime_class_names, 'http-gateway') }}</select></label>
+            <label>Risk<select name="risk_level"><option>low</option><option>medium</option><option>high</option></select></label>
+            <label>Initial tool enabled<select name="first_tool_enabled"><option value="true">yes</option><option value="false">no</option></select></label>
+          </div>
+          <div class="grid">
+            <label>First tool name<input name="first_tool_name" placeholder="gitlab_search"></label>
+            <label>First tool URL<input name="first_tool_url" placeholder="https://gitlab.example/api/v4/search"></label>
+            <label>Method<select name="first_tool_method"><option>POST</option><option>GET</option></select></label>
+            <label>Body JSON<textarea name="first_tool_body_json">{"query":"${query}"}</textarea></label>
+          </div>
+          <p class="muted">You can leave first tool empty and add tools later on the server detail page.</p>
+          <button>Create MCP Server</button>
+        </form>
+      </section>
+      <section id="admin" class="admin-panel">
+        <h2>Execution Adapters</h2>
+        <form class="inline" method="post" action="/api/adapters">
+          <label>Name<input name="name" placeholder="gitlab_api"></label>
+          <label>Type<select name="adapter_type"><option>http</option><option>shell</option><option>python</option><option>openshift</option><option>workflow</option></select></label>
+          <label>Risk<select name="risk_level"><option>low</option><option>medium</option><option>high</option></select></label>
+          <button>Add Adapter</button>
+        </form>
+        <table><thead><tr><th>Nazwa</th><th>Typ</th><th>Tryb</th><th>Ryzyko</th><th>Zaimpl.</th><th>Status</th><th>Akcja</th></tr></thead><tbody>{% for item in adapters %}
+        <tr>
+          <td>{{ item['name'] }}</td>
+          <td>{{ item['adapter_type'] }}</td>
+          <td>{{ item['mode'] }}</td>
+          <td><span class="risk {{ item['risk_level'] }}">{{ item['risk_level'] }}</span></td>
+          <td>{% if item['implemented'] %}yes{% else %}planned{% endif %}</td>
+          <td>{% if item['enabled'] %}enabled{% else %}disabled{% endif %}</td>
+          <td>
+            <form method="post" action="/api/adapters/{{ quote(item['name']) }}/toggle"><button>{% if item['enabled'] %}Disable{% else %}Enable{% endif %}</button></form>
+          </td>
+        </tr>
+        {% endfor %}</tbody></table>
+      </section>
+      <section>
+        <h2>Typy środowisk (Runtime Classes)</h2>
+        <table><thead><tr><th>Nazwa</th><th>Obraz Docker</th><th>Dozwolone adaptery</th><th>Ryzyko</th><th>Status</th></tr></thead><tbody>{{ class_rows_html }}</tbody></table>
+      </section>
+      <section>
+        <h2>Runtime List</h2>
+        <p><a href="#admin">Show platform adapter/runtime class catalog</a></p>
+        <table><thead><tr><th>Nazwa</th><th>Status</th><th>Środowisko</th><th>Ryzyko</th><th>Endpoint</th><th>Akcja</th></tr></thead><tbody>{% for r in runtimes %}
+        <tr>
+          <td><a href="/runtimes/{{ r['id'] }}">{{ r['name'] }}</a></td>
+          <td><span class="badge {{ r['status'] }}">{{ r['status'] }}</span></td>
+          <td>{{ r['runtime_class'] }}</td>
+          <td><span class="risk {{ r['risk_level'] }}">{{ r['risk_level'] }}</span></td>
+          <td>{{ (r['endpoint_url'] or '-') }}</td>
+          <td>
+            {{ runtime_actions_compact(r['id'], return_to='/runtimes') }}
+          </td>
+        </tr>
+        {% endfor %}</tbody></table>
+      </section>
+      <div class="grid">
+        <section><h2>Audit</h2><ul>{% for a in audit %}<li>{{ a['created_at'] }} {{ a['actor'] }} {{ a['action'] }} {{ a['target_type'] }}:{{ a['target_id'] }}</li>{% endfor %}</ul></section>
+        <section><h2>Logs</h2><ul>{% for l in logs %}<li>{{ l['created_at'] }} [{{ l['level'] }}] {{ l['runtime_id'] }}: {{ l['message'] }}</li>{% endfor %}</ul></section>
+      </div>
+    </main></body></html>
+    

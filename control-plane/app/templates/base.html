@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="pl"><head><title>{{ shell.page_title }} — MCP Platform</title>{{ _FAVICON_TAG }}<link rel="stylesheet" href="/static/css/base.css"></head><body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+            <div class="brand-title">MCP Platform</div>
+            <div class="lang-btn" title="Wybierz język / Select language">
+              <button id="btn-pl" class="lang-active" onclick="setLang('pl')">PL</button>
+              <button id="btn-en" onclick="setLang('en')">EN</button>
+            </div>
+          </div>
+          <div class="brand-subtitle" data-i18n="brand_sub">Platforma MCP serverów</div>
+        </div>
+        <nav class="tabs">{% for tab in shell.tabs %}<a class="{% if tab.key == shell.active %}active{% endif %}" href="{{ tab.href }}" title="{{ tab.desc }}">{{ tab.label }}</a>{% endfor %}</nav>
+      </aside>
+      <div class="content">
+        <header class="topbar">
+          <div><h1>{{ shell.page_title }}</h1><div class="sub">{{ shell.page_sub }}</div></div>
+          {% if shell.username %}
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="background:{{ shell.role_bg }};color:{{ shell.role_color }};
+                     padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700">
+          {{ shell.role }}
+        </span>
+        <span style="color:#a0b8d0;font-size:13px">👤 {{ shell.username }}</span>
+        <a href="/user/settings" style="color:var(--muted);font-size:12px" title="Zmień hasło">⚙️</a>
+        <form method="post" action="/logout" style="display:inline">
+          <button style="background:none;border:1px solid #34465b;color:#8ea2b8;padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer">Wyloguj</button>
+        </form>
+      </div>{% endif %}
+        </header>
+        <main>{% if shell.description %}<div style="background:linear-gradient(90deg,#0d1a2a,#0a1520);border-left:3px solid var(--blue);border-radius:0 8px 8px 0;padding:10px 16px;margin-bottom:16px;display:flex;gap:12px;align-items:center"><div><div style="font-weight:700;color:white;font-size:13px">{{ shell.description[0] }}</div><div style="color:var(--muted);font-size:12px;margin-top:2px;line-height:1.5">{{ shell.description[1] }}</div></div></div>{% endif %}{% block content %}{% endblock %}</main>
+      </div>
+    </div>
+<script src="/static/js/i18n.js"></script>
+    </body></html>

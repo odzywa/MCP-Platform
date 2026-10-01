@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+{% block content %}
+{% macro status_badge(status) -%}
+<span class="badge {{ {'done': 'running', 'failed': 'failed', 'pending': 'deploying', 'running': 'deploying', 'builtin': 'running'}.get(status, '') }}" style="font-size:11px">{{ {'builtin': '✅ wbudowany', 'done': '✅ gotowy', 'pending': '⏳ w kolejce', 'running': '🔨 buduje się', 'failed': '❌ błąd'}.get(status, status) }}</span>
+{%- endmacro %}
+<style>
+.img-step { border:1px solid var(--line); border-radius:10px; padding:16px 18px; background:var(--panel-2); margin-bottom:12px; }
+.img-step-title { font-weight:800; color:white; font-size:14px; margin-bottom:4px; }
+.img-step-num { display:inline-block; width:22px; height:22px; line-height:22px; text-align:center; border-radius:50%; background:var(--blue); color:white; font-size:12px; margin-right:8px; }
+.img-chips { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
+.preset-btn.on { border-color:var(--blue); color:white; background:#0d3a55; }
+</style>
+
+{% if ok %}<div class="success">{{ ok }}</div>{% endif %}
+{% if error %}<div class="alert">{{ error }}</div>{% endif %}
+
+<div class="cards">
+  <div class="card" style="text-align:center">
+    <div class="metric">{{ len(builds) + len(builtin_rows) }}</div>
+    <div style="font-weight:700;color:white">Wszystkie obrazy</div>
+  </div>
+  <div class="card" style="text-align:center;border-color:#1a5a38;background:#0e2e1e">
+    <div class="metric" style="color:#5ce89a">{{ stats_done + len(builtin_rows) }}</div>
+    <div style="font-weight:700;color:white">✅ Gotowe</div>
+  </div>
+  <div class="card" style="text-align:center;border-color:#5a420f;background:#2c2008">
+    <div class="metric" style="color:#f4c163">{{ stats_running }}</div>
+    <div style="font-weight:700;color:white">🔨 W trakcie</div>
+  </div>
+  <div class="card" style="text-align:center;border-color:#5a2025;background:#2c0e10">
+    <div class="metric" style="color:#f47a80">{{ stats_failed }}</div>
+    <div style="font-weight:700;color:white">❌ Nieudane</div>
+  </div>
+</div>
+
+{% if is_admin %}
+<section id="builder">
+  <h2>🔨 Zbuduj nowy obraz</h2>
+  <p class="muted" style="margin:0 0 14px">Nowy obraz to wybrany <b>obraz bazowy</b> z <b>doinstalowanymi narzędziami</b>. Runtime MCP z obrazu bazowego zostaje bez zmian, więc gotowy obraz od razu nadaje się na serwer MCP.</p>
+  <form method="post" action="/api/runtime-images/build" id="img-form">
+
+    <div class="img-step">
+      <div class="img-step-title"><span class="img-step-num">1</span>Obraz bazowy</div>
+      <div class="muted" style="margin-bottom:8px">Od czego zaczynamy — obraz platformy albo Twój wcześniej zbudowany obraz.</div>
+      <select name="base_image" id="img-base">
+        {% for group in base_image_groups %}<optgroup label="{{ group.label }}">
+          {% for option in group.options %}<option value="{{ option.image }}" data-family="{{ option.family }}" data-exec="{{ option.execution_types|join(' ') }}" data-contains="{{ option.contains }}">{{ option.label }}</option>
+          {% endfor %}</optgroup>
+        {% endfor %}<option value="{{ custom_base }}" data-family="" data-exec="" data-contains="">Inny obraz (zaawansowane)…</option>
+      </select>
+      <div id="img-base-custom-box" style="display:none;margin-top:8px">
+        <input name="base_image_custom" id="img-base-custom" placeholder="registry.example.com/moj-runtime:1.0">
+        <div class="hint">⚠️ Obraz musi już zawierać runtime MCP platformy — builder tylko doinstalowuje narzędzia, nie dodaje serwera.</div>
+      </div>
+      <div class="hint" id="img-base-info"></div>
+    </div>
+
+    <div class="img-step">
+      <div class="img-step-title"><span class="img-step-num">2</span>Narzędzia do doinstalowania</div>
+      <div class="muted">Kliknij podpowiedź albo wpisz nazwy pakietów oddzielone spacją.</div>
+
+      <label style="margin-top:12px">Pakiety systemowe</label>
+      <div class="img-chips" id="img-sys-chips">
+        {% for tool in system_presets %}<button type="button" class="preset-btn" data-rhel="{{ tool.packages.rhel }}" data-debian="{{ tool.packages.debian }}" data-alpine="{{ tool.packages.alpine }}">{{ tool.label }}</button>
+        {% endfor %}
+      </div>
+      <input name="apt_packages" id="img-sys" placeholder="np. git postgresql bind-utils">
+      <div class="hint">Instalowane menedżerem pakietów obrazu bazowego (<span id="img-family">microdnf — UBI9</span>). Nazwy pakietów różnią się między dystrybucjami.</div>
+
+      <label style="margin-top:14px">Pakiety Python (pip)</label>
+      <div class="img-chips" id="img-pip-chips">
+        {% for tool in pip_presets %}<button type="button" class="preset-btn" data-package="{{ tool.package }}">{{ tool.label }}</button>
+        {% endfor %}
+      </div>
+      <input name="pip_packages" id="img-pip" placeholder="np. awscli ansible-core">
+    </div>
+
+    <div class="img-step">
+      <div class="img-step-title"><span class="img-step-num">3</span>Nazwa nowego obrazu</div>
+      <input name="image" id="img-tag" value="mcp-runtime-custom:latest" required>
+      <div class="hint">Pod tą nazwą obraz pojawi się jako środowisko do wyboru w kreatorach serwerów (typ środowiska: <code id="img-class-hint">mcp-runtime-custom</code>).</div>
+    </div>
+
+    <details style="margin-bottom:12px">
+      <summary>⚙️ Zaawansowane</summary>
+      <div class="grid3" style="margin-bottom:12px">
+        <div><label>Nazwa typu środowiska</label><input name="runtime_class" id="img-class" placeholder="domyślnie z nazwy obrazu"></div>
+        <div><label>Silniki wykonania</label><input name="allowed_execution_types" id="img-exec" placeholder="dziedziczone z obrazu bazowego"></div>
+        <div><label>Ryzyko</label><select name="risk_level"><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></div>
+      </div>
+      <label>Security profile</label>
+      <input name="security_profile" value="restricted" style="margin-bottom:12px">
+      <label>Dodatkowy fragment Dockerfile</label>
+      <textarea name="extra_dockerfile" id="img-extra" placeholder="RUN curl -fsSL https://example.com/tool -o /usr/local/bin/tool &amp;&amp; chmod +x /usr/local/bin/tool" style="min-height:80px"></textarea>
+      <div class="hint">Dla narzędzi spoza repozytoriów pakietów (np. pojedyncze binarki). Wykonywany jako root, po instalacji pakietów.</div>
+    </details>
+
+    <details open style="margin-bottom:14px">
+      <summary>📄 Podgląd Dockerfile</summary>
+      <pre id="img-preview" style="margin:0;min-height:60px">…</pre>
+    </details>
+
+    <button>🔨 Zbuduj obraz</button>
+    <span class="muted" style="margin-left:10px">Budowanie wykonuje operator — zwykle trwa od kilkudziesięciu sekund do kilku minut.</span>
+  </form>
+</section>
+{% else %}
+<div class="alert">🔒 Budowanie i usuwanie obrazów jest dostępne tylko dla administratora.</div>
+{% endif %}
+
+<section id="builds">
+  <h2>🐳 Obrazy ({{ len(builds) + len(builtin_rows) }})</h2>
+  <table>
+    <thead><tr><th>Obraz</th><th>Obraz bazowy</th><th>Typ środowiska</th><th>Status</th><th>Błąd</th><th>Data</th><th></th></tr></thead>
+    <tbody>
+      {% for item in builds %}
+      <tr>
+        <td>
+          <div style="font-weight:700;font-size:13px">{{ item['image'] }}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">{{ item['id'] }}</div>
+          <details style="margin-top:6px;padding:6px 8px"><summary style="font-size:11px;margin-bottom:0">Dockerfile</summary><pre style="font-size:11px;margin:6px 0 0">{{ item['dockerfile'] }}</pre></details>
+        </td>
+        <td style="font-size:12px">{{ item['base_image'] }}</td>
+        <td style="font-size:12px">{{ item['runtime_class'] or '—' }}</td>
+        <td data-build-status="{{ item['id'] }}" data-status="{{ item['status'] }}">{{ status_badge(item['status']) }}</td>
+        <td data-build-error="{{ item['id'] }}" style="font-size:11px;color:#f47a80;max-width:260px;word-break:break-word">{% if item['error'] %}{{ item['error'][:300] }}{% else %}<span style="color:var(--muted)">—</span>{% endif %}</td>
+        <td style="font-size:11px;color:var(--muted);white-space:nowrap">{{ item['created_at'][:16].replace('T', ' ') }}</td>
+        <td>{% if is_admin %}<button type="button" onclick="delBuild('{{ item['id'] }}','{{ item['image'] }}')" style="background:#3a1010;border:1px solid #6a2020;color:#f47a80;padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer">🗑️ Usuń</button>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      {% for item in builtin_rows %}
+      <tr>
+        <td>
+          <div style="font-weight:700;font-size:13px">{{ item['image'] }}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">bazowy obraz platformy</div>
+        </td>
+        <td style="font-size:12px">{{ item['base_image'] }}</td>
+        <td style="font-size:12px">{{ item['runtime_class'] }}</td>
+        <td>{{ status_badge('builtin') }}</td>
+        <td><span style="color:var(--muted)">—</span></td>
+        <td style="font-size:11px;color:var(--muted)">—</td>
+        <td></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<script>
+(function() {
+  var form = document.getElementById('img-form');
+  var STATUS = {
+    done: ['running', '✅ gotowy'], failed: ['failed', '❌ błąd'],
+    pending: ['deploying', '⏳ w kolejce'], running: ['deploying', '🔨 buduje się']
+  };
+
+  // ---- build status polling (only while something is being built) ----
+  function inProgress() {
+    return document.querySelectorAll('[data-status="pending"],[data-status="running"]').length > 0;
+  }
+  function pollBuilds() {
+    fetch('/api/runtime-image-builds', {credentials: 'same-origin'})
+      .then(function(r) { return r.ok ? r.json() : []; })
+      .then(function(rows) {
+        rows.forEach(function(row) {
+          var cell = document.querySelector('[data-build-status="' + row.id + '"]');
+          if (!cell || cell.getAttribute('data-status') === row.status) return;
+          var s = STATUS[row.status] || ['', row.status];
+          cell.setAttribute('data-status', row.status);
+          cell.innerHTML = '<span class="badge ' + s[0] + '" style="font-size:11px"></span>';
+          cell.firstChild.textContent = s[1];
+          var err = document.querySelector('[data-build-error="' + row.id + '"]');
+          if (err && row.error) err.textContent = String(row.error).slice(0, 300);
+        });
+        if (inProgress()) setTimeout(pollBuilds, 4000);
+      })
+      .catch(function() { setTimeout(pollBuilds, 8000); });
+  }
+  if (inProgress()) setTimeout(pollBuilds, 4000);
+
+  window.delBuild = function(id, img) {
+    if (!confirm('Usunąć obraz ' + img + '?\nObraz zostanie usunięty z Docker i z listy.')) return;
+    fetch('/api/runtime-image-builds/' + encodeURIComponent(id), {
+      method: 'DELETE', credentials: 'same-origin', headers: {'Accept': 'application/json'}
+    })
+    .then(function(r) {
+      if (r.status === 403) { alert('Brak uprawnień — wymagana rola admin'); return null; }
+      if (!r.ok) { alert('Błąd serwera: ' + r.status); return null; }
+      return r.json();
+    })
+    .then(function(d) {
+      if (!d) return;
+      if (d.ok) location.href = '/runtime-images#builds';
+      else alert('Błąd: ' + (d.detail || d.error || 'nieznany'));
+    })
+    .catch(function(e) { alert('Błąd połączenia: ' + e); });
+  };
+
+  if (!form) return;
+  var base = document.getElementById('img-base');
+  var customBox = document.getElementById('img-base-custom-box');
+  var custom = document.getElementById('img-base-custom');
+  var sys = document.getElementById('img-sys');
+  var pip = document.getElementById('img-pip');
+  var tag = document.getElementById('img-tag');
+  var exec = document.getElementById('img-exec');
+  var preview = document.getElementById('img-preview');
+  var FAMILY_LABEL = {rhel: 'microdnf / dnf — UBI9, RHEL', debian: 'apt-get — Debian, Ubuntu', alpine: 'apk — Alpine'};
+
+  function words(input) { return input.value.split(/[\s,]+/).filter(Boolean); }
+  function isCustom() { return base.value === '{{ custom_base }}'; }
+  function family() {
+    var f = base.options[base.selectedIndex].getAttribute('data-family');
+    if (f) return f;
+    var name = custom.value.toLowerCase();
+    if (name.indexOf('alpine') !== -1) return 'alpine';
+    if (/debian|ubuntu|-slim|bookworm|bullseye/.test(name)) return 'debian';
+    return 'rhel';
+  }
+  function chipPackage(chip) { return chip.getAttribute('data-package') || chip.getAttribute('data-' + family()); }
+  function refreshChips() {
+    [['img-sys-chips', sys], ['img-pip-chips', pip]].forEach(function(pair) {
+      var have = words(pair[1]);
+      document.querySelectorAll('#' + pair[0] + ' .preset-btn').forEach(function(chip) {
+        chip.classList.toggle('on', have.indexOf(chipPackage(chip)) !== -1);
+      });
+    });
+  }
+  function toggleChip(chip, input) {
+    var pkg = chipPackage(chip), list = words(input), at = list.indexOf(pkg);
+    if (at === -1) list.push(pkg); else list.splice(at, 1);
+    input.value = list.join(' ');
+    refreshChips(); schedulePreview();
+  }
+  document.querySelectorAll('#img-sys-chips .preset-btn').forEach(function(c) { c.onclick = function() { toggleChip(c, sys); }; });
+  document.querySelectorAll('#img-pip-chips .preset-btn').forEach(function(c) { c.onclick = function() { toggleChip(c, pip); }; });
+
+  function onBaseChange() {
+    var opt = base.options[base.selectedIndex];
+    customBox.style.display = isCustom() ? 'block' : 'none';
+    var contains = opt.getAttribute('data-contains');
+    document.getElementById('img-base-info').textContent = contains ? 'Już w obrazie: ' + contains : '';
+    document.getElementById('img-family').textContent = FAMILY_LABEL[family()];
+    exec.placeholder = opt.getAttribute('data-exec') ? 'dziedziczone: ' + opt.getAttribute('data-exec') : 'np. shell';
+    refreshChips(); schedulePreview();
+  }
+  function onTagChange() {
+    var name = tag.value.split('/').pop().split(':')[0].toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
+    document.getElementById('img-class-hint').textContent = document.getElementById('img-class').value || name || 'runtime';
+  }
+
+  var timer = null;
+  function schedulePreview() { clearTimeout(timer); timer = setTimeout(loadPreview, 350); }
+  function loadPreview() {
+    fetch('/api/runtime-images/preview', {method: 'POST', credentials: 'same-origin', body: new URLSearchParams(new FormData(form))})
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        preview.style.color = d.ok ? '' : '#f47a80';
+        preview.textContent = d.ok ? d.dockerfile : '⚠️ ' + (d.detail || 'Nie można wygenerować Dockerfile');
+      })
+      .catch(function() { preview.textContent = 'Podgląd niedostępny'; });
+  }
+
+  base.onchange = onBaseChange;
+  form.addEventListener('input', function(e) {
+    if (e.target === sys || e.target === pip) refreshChips();
+    if (e.target === custom) { document.getElementById('img-family').textContent = FAMILY_LABEL[family()]; refreshChips(); }
+    onTagChange(); schedulePreview();
+  });
+  onBaseChange(); onTagChange();
+})();
+</script>
+{% endblock %}

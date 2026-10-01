@@ -1,0 +1,809 @@
+{% set _tool_config_preview %}{% for t in payload['tools'][:5] %}<div style="margin-bottom:12px;padding:10px;background:#060e18;border-radius:6px"><div style="font-weight:700;color:var(--blue);margin-bottom:4px">{{ t['name'] }}</div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">{{ t['description'][:80] }}</div><pre style="font-size:11px;color:#8ea2b8;margin:0">{{ t['config_json'][:300] }}</pre></div>{% else %}<p class="muted">Brak toolów.</p>{% endfor %}{% endset %}
+
+    <!doctype html><html><head><title>{{ payload['name'] }} — MCP Platform</title>{{ _FAVICON_TAG }}<style>
+    :root { --blue:#1f9bd1; --blue-dark:#157aa8; --line:#2b394a; --text:#dce7f3; --muted:#8ea2b8; --bg:#111820; --panel:#182230; --panel-2:#1d2a3a; --field:#101722; --danger:#d0343f; --warn:#b96521; }
+    body { font-family: Arial, system-ui, sans-serif; margin:0; background:var(--bg); color:var(--text); font-size:14px; }
+    header { background:#0f1722; color:var(--text); padding:18px 28px; border-bottom:1px solid var(--line); }
+    header h1 { margin:0 0 18px; font-size:28px; }
+    main { padding:24px; display:grid; gap:18px; }
+    section { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:18px; box-shadow:0 1px 2px rgba(0,0,0,.25); }
+    input,select,textarea { width:100%; box-sizing:border-box; padding:9px; border:1px solid #34465b; border-radius:6px; background:var(--field); color:var(--text); }
+    textarea { min-height:84px; }
+    button { padding:8px 12px; border:0; border-radius:6px; background:var(--blue-dark); color:white; font-weight:600; cursor:pointer; }
+    button:hover { background:var(--blue); }
+    button.delete { background:var(--danger); }
+    button.stop { background:var(--warn); }
+    button.health, button.logs { background:#475569; }
+    .actions { display:flex; flex-wrap:wrap; gap:8px; }
+    .actions form { display:inline; }
+    table { width:100%; border-collapse:collapse; }
+    th,td { text-align:left; border-bottom:1px solid var(--line); padding:10px; font-size:14px; }
+    th { color:#c6d7e8; background:#162232; text-transform:uppercase; font-size:12px; }
+    details { border:1px solid var(--line); border-radius:8px; padding:12px; background:var(--panel-2); }
+    summary { cursor:pointer; font-weight:700; margin-bottom:12px; }
+    .muted { color:var(--muted); font-size:14px; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+    pre { background:#0b1420; color:#dce7f3; border:1px solid var(--line); padding:12px; border-radius:6px; overflow:auto; }
+    a { color:#5db7ee; text-decoration:none; }
+    a:hover { text-decoration:underline; }
+    @media (max-width:900px) { .grid { grid-template-columns:1fr; } }
+    </style></head><body>
+    <header><h1>{{ payload['name'] }}</h1><div>{{ payload['status'] }} | {{ payload['runtime_class'] }} | {{ (payload['endpoint_url'] or 'no endpoint yet') }}</div></header>
+    <main>
+      <p><a href="/">← Powrót do dashboardu</a></p>
+      {% if welcome %}
+      <div style="background:linear-gradient(135deg,#0d2a1a,#0d1a2a);border:2px solid #2a8a4a;border-radius:12px;padding:20px 24px;display:flex;gap:20px;align-items:flex-start">
+        <div style="font-size:36px">🎉</div>
+        <div>
+          <div style="font-size:18px;font-weight:800;color:white;margin-bottom:6px">Serwer MCP gotowy!</div>
+          <div style="color:#a0c8b0;font-size:14px;margin-bottom:12px">Za chwilę uruchomi się automatycznie. Gdy status zmieni się na <b>running</b>, skopiuj adres endpointu i wklej do Continue lub OpenWebUI.</div>
+          <div style="font-size:13px;color:#7ab0c0">
+            💡 <b>Następny krok:</b> Znajdź pole <b>Endpoint</b> poniżej → skopiuj URL → wklej do konfiguracji AI jako <code style="background:#0d1a2a;padding:2px 6px;border-radius:4px">mcpServers</code>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if tool_added %}<div style="background:linear-gradient(135deg,#1a1a00,#1a0d00);border:2px solid #8a7a00;border-radius:12px;padding:16px 20px;display:flex;gap:16px;align-items:flex-start;margin-bottom:16px" id="tool-added-banner"><div style="font-size:28px">🔧</div><div style="flex:1"><div style="font-size:15px;font-weight:800;color:white;margin-bottom:6px">Tool dodany — sprawdź politykę</div><div style="color:#e0c060;font-size:13px;margin-bottom:10px">{% if tool_added == 'shell' %}Dodałeś <b>shell tool</b>. Upewnij się że binarka jest w <b>Polityka &rarr; Dozwolone binarki</b> (teraz: <code style="background:#0d0d00;padding:1px 5px;border-radius:3px">{{ (payload['policy'].get('allowed_binaries') or [])|join(', ') or 'brak' }}</code>), inaczej tool będzie blokowany przez policy.{% else %}Dodałeś <b>HTTP tool</b>. Sprawdź URL i metodę w konfiguracji.{% endif %}</div><div style="display:flex;gap:8px;flex-wrap:wrap"><a href="#" onclick="rtTab('security');return false;" style="background:#4a3a00;border:1px solid #8a7a00;color:#e0c060;padding:5px 12px;border-radius:6px;font-size:12px;text-decoration:none">🔒 Otwórz Politykę</a><a href="#" onclick="rtTab('tools');return false;" style="background:#1a2a1a;border:1px solid #2a5a2a;color:#80c880;padding:5px 12px;border-radius:6px;font-size:12px;text-decoration:none">🔧 Narzędzia</a><button onclick="document.getElementById('tool-added-banner').remove()" style="background:none;border:1px solid #4a4a00;color:#8a8a40;padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer">✕</button></div></div></div>{% endif %}
+
+      <section>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+          <div>
+            <h2 style="margin:0 0 4px">Zarządzanie serwerem</h2>
+            <div class="muted" style="font-size:12px">
+              Kontener: <code id="rt-container">{{ str((payload['container_name'] or '—')) }}</code>
+              &nbsp;·&nbsp; Endpoint: <code id="rt-endpoint" style="color:#3ab8f5">{{ str((payload['endpoint_url'] or '—')) }}</code>
+              {% if payload.get('last_error') %}&nbsp;·&nbsp; <span style='color:#f47a80'>⚠️ {{ str(payload['last_error'])[:80] }}</span>{% endif %}
+            </div>
+          </div>
+          <a href="/api/runtimes/{{ runtime_id }}/export-package" style="padding:6px 12px;background:#263548;border-radius:6px;color:#dce7f3;font-size:12px;font-weight:600;white-space:nowrap">⬇ Export JSON</a>
+        </div>
+        {{ action_forms(runtime_id) }}
+      </section>
+
+      <!-- TAB NAV -->
+      <div style="display:flex;gap:4px;flex-wrap:wrap;border-bottom:2px solid var(--line);margin-bottom:20px;padding-bottom:0">
+        <button class="rt-tab rt-tab-active" onclick="rtTab('connect')" id="tab-connect">🔌 Podłącz</button>
+        <button class="rt-tab" onclick="rtTab('tools')" id="tab-tools">🔧 Narzędzia ({{ len(payload['tools']) }})</button>
+        <button class="rt-tab" onclick="rtTab('policy')" id="tab-policy">🔒 Polityka</button>
+        <button class="rt-tab" onclick="rtTab('auth')" id="tab-auth">🔐 Auth {% if payload.get('mcp_auth_token') %}<span style="background:#0a2a14;color:#22c55e;font-size:10px;padding:1px 5px;border-radius:999px;margin-left:4px">ON</span>{% endif %}</button>
+        <button class="rt-tab" onclick="rtTab('creds')" id="tab-creds">🔑 Sekrety ({{ len(credentials) }})</button>
+        <button class="rt-tab" onclick="rtTab('adapters')" id="tab-adapters">⚙️ Silniki ({{ len(runtime_adapters) }})</button>
+        <button class="rt-tab" onclick="rtTab('logs')" id="tab-logs">📋 Logi</button>
+        <button class="rt-tab" onclick="rtTab('audit')" id="tab-audit">🤖 Wywołania ({{ len(runtime_tool_calls) }})</button>
+        <button class="rt-tab" onclick="rtTab('test')" id="tab-test">🧪 Test</button>
+        <button class="rt-tab" onclick="rtTab('clone')" id="tab-clone">🔁 Klonuj</button>
+      </div>
+<style>
+.rt-tab{background:none;border:none;border-bottom:3px solid transparent;padding:8px 14px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;margin-bottom:-2px;transition:.15s;border-radius:6px 6px 0 0}
+.rt-tab:hover{color:var(--text);background:var(--panel-2)}
+.rt-tab.rt-tab-active{color:white;border-bottom-color:var(--blue);background:var(--panel-2)}
+.rt-pane{display:none}.rt-pane.active{display:block}
+</style>
+
+      <!-- PANE: Podłącz -->
+      <div class="rt-pane active" id="pane-connect">
+      <details id="sec-connect" style="border-radius:12px;border-color:#1a4a6a;background:linear-gradient(135deg,#0d1e2e,#0a1a2a)" open>
+        <summary style="font-size:16px;font-weight:800;padding:4px 0;color:#7dd3fc">
+          🔌 Jak podłączyć do klienta AI?
+          {% if payload.get('endpoint_url') %}<code style="font-size:12px;background:#0b1520;padding:3px 10px;border-radius:5px;color:#3ab8f5;cursor:pointer;border:1px solid #1a3a50;margin-left:12px;font-weight:400" onclick="event.stopPropagation();navigator.clipboard.writeText(this.textContent).then(()=>{this.style.background='#0d2a1a';setTimeout(()=>this.style.background='',1500)})" title="Kliknij żeby skopiować">{{ payload['endpoint_url'] }}</code><span style="margin-left:10px;font-size:11px;font-weight:400;color:var(--muted)">OpenWebUI: </span><code style="font-size:12px;background:#060e06;padding:3px 10px;border-radius:5px;color:#4ac86a;cursor:pointer;border:1px solid #1a5a2a;font-weight:400" onclick="event.stopPropagation();navigator.clipboard.writeText(this.textContent).then(()=>{this.style.background='#0d2a1a';setTimeout(()=>this.style.background='',1500)})" title="Kliknij żeby skopiować">{{ _base_url }}/openwebui</code>{% else %}<span class="muted" style="font-size:13px;font-weight:400;margin-left:10px">— uruchom serwer żeby zobaczyć endpoint</span>{% endif %}
+        </summary>
+        <div style="margin-top:16px">
+        {% if payload.get('endpoint_url') %}
+        <!-- OpenWebUI Tool Server -->
+        <div style="background:#0b1e10;border:2px solid #1a5a2a;border-radius:10px;padding:14px;margin-bottom:12px">
+          <div style="font-weight:800;color:white;margin-bottom:3px;font-size:13px">🌐 OpenWebUI <span style="color:#4ac86a;font-size:11px;font-weight:400">— Tool Server URL</span></div>
+          <div class="muted" style="font-size:11px;margin-bottom:8px">Admin Panel → Settings → Tools → wklej poniższy URL</div>
+          <pre style="font-size:12px;margin:0 0 6px;cursor:pointer;border-color:#1a5a2a;background:#060e06" onclick="copySnippet(this)" title="Kliknij żeby skopiować">{{ _base_url }}/openwebui</pre>
+          <div style="font-size:11px;color:#4ac86a;margin-bottom:10px">✅ OpenWebUI automatycznie doda <code>/openapi.json</code></div>
+          <div style="border-top:1px solid #1a5a2a;padding-top:10px">
+            <div style="font-weight:700;color:#a0d8b0;font-size:11px;margin-bottom:6px">📥 Albo importuj jako Python tool (Workspace → Narzędzia → Importuj z linku):</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <code style="font-size:11px;background:#060e06;border:1px solid #2a5a3a;border-radius:5px;padding:4px 8px;color:#5ce89a;flex:1;word-break:break-all;cursor:pointer"
+                    onclick="navigator.clipboard.writeText(this.textContent).then(()=>{this.style.background='#0d2a1a';setTimeout(()=>this.style.background='',1500)})"
+                    title="Kliknij żeby skopiować">{{ _platform_base }}/api/runtimes/{{ payload['id'] }}/openwebui-tool.py</code>
+              <a href="/api/runtimes/{{ payload['id'] }}/openwebui-tool.py" download
+                 style="background:#1a5a2a;color:#5ce89a;border:1px solid #2a7a3a;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;text-decoration:none;flex-shrink:0;white-space:nowrap">
+                ⬇ Pobierz .py
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- MCP JSON snippets: Streamable-HTTP + SSE -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div style="background:#0b1520;border:2px solid #1a5a6a;border-radius:10px;padding:14px">
+            <div style="font-weight:800;color:#3ab8f5;margin-bottom:3px;font-size:14px">⚡ Streamable-HTTP <span style="font-size:11px;font-weight:400;color:#4ac86a">(zalecane)</span></div>
+            <div class="muted" style="font-size:11px;margin-bottom:8px">Continue, Cline, Claude Code, Claude Desktop, OpenChamber i inne klienty MCP</div>
+            <pre style="font-size:12px;margin:0;cursor:pointer;border-color:#1a5a6a" onclick="copySnippet(this)" title="Kliknij żeby skopiować">{
+  "mcpServers": {
+    "{{ payload['name'].lower().replace(' ', '-') }}": {
+      "url": "{{ payload['endpoint_url'] }}",
+      "transport": "streamable-http"
+    }
+  }
+}</pre>
+          </div>
+          <div style="background:#0b1520;border:1px solid #3a3a50;border-radius:10px;padding:14px">
+            <div style="font-weight:800;color:#b0a0d0;margin-bottom:3px;font-size:14px">📡 SSE</div>
+            <div class="muted" style="font-size:11px;margin-bottom:8px">Starsze klienty lub gdy streamable-http nie działa</div>
+            <pre style="font-size:12px;margin:0;cursor:pointer;border-color:#3a3a50" onclick="copySnippet(this)" title="Kliknij żeby skopiować">{
+  "mcpServers": {
+    "{{ payload['name'].lower().replace(' ', '-') }}": {
+      "url": "{{ payload['endpoint_url'] }}",
+      "transport": "sse"
+    }
+  }
+}</pre>
+          </div>
+        </div>
+        <details style="margin-top:10px;background:rgba(0,0,0,.2);border-color:#1a3a50">
+          <summary style="font-size:12px;color:#7ab8d8">🔧 Pełny przykład .continue/config.json</summary>
+          <pre style="font-size:11px;margin-top:8px;cursor:pointer" onclick="copySnippet(this)" title="Kliknij żeby skopiować">{
+  "models": [ ... ],
+  "mcpServers": {
+    "{{ payload['name'].lower().replace(' ', '-') }}": {
+      "transport": "streamable-http",
+      "url": "{{ payload['endpoint_url'] }}"
+    }
+  }
+}</pre>
+        </details>
+        {% else %}
+        <div style="display:flex;align-items:center;gap:14px;padding:8px 0">
+          <div style="font-size:28px">🔌</div>
+          <div>
+            <div style="font-weight:700;color:#607083;margin-bottom:3px">Endpoint pojawi się po uruchomieniu</div>
+            <div class="muted" style="font-size:12px">Kliknij <b>Deploy</b> → status zmieni się na <b>running</b> → tutaj pojawi się config dla Continue i OpenWebUI</div>
+          </div>
+        </div>
+        {% endif %}
+        </div>
+      </details>
+      </div><!-- /pane-connect -->
+
+      <!-- PANE: Narzędzia -->
+      <div class="rt-pane" id="pane-tools">
+      <details id="sec-tools" style="border-radius:12px" open>
+        <summary style="font-size:16px;font-weight:800;padding:4px 0">🔧 Narzędzia (Tools) <span class="muted" style="font-size:13px;font-weight:400">— {{ len(payload['tools']) }} zdefiniowanych</span></summary>
+        <div style="margin-top:16px;display:grid;gap:14px">
+          <section style="margin:0">
+            <h2>Lista tools</h2>
+            <table><tr><th>Nazwa</th><th>Silnik</th><th>Status</th><th>Ryzyko</th><th>Tryb</th><th></th>{% if _is_admin %}<th>Usuń</th>{% endif %}</tr>{% for t in payload['tools'] %}<tr>
+          <td><b>{{ t['name'] }}</b></td>
+          <td style="font-size:12px">{{ t['execution_type'] }}</td>
+          <td><span class="badge {% if t['enabled'] %}running{% else %}failed{% endif %}" style="font-size:11px">{% if t['enabled'] %}enabled{% else %}disabled{% endif %}</span></td>
+          <td style="font-size:12px">{{ t['risk_level'] }}</td>
+          <td style="font-size:12px">{{ t['mode'] }}</td>
+          <td><a href="#tool-{{ t['id'] }}" style="font-size:12px">✏️ Edytuj</a></td>
+          {% if _is_admin %}<td><form method="post" action="/api/runtimes/{{ runtime_id }}/tools/{{ str(t['id']) }}/delete" onsubmit="return confirm('Usunąć tool {{ t['name'] }}? Operacja jest nieodwracalna.')"><button style="background:#3a1010;border:1px solid #6a2020;color:#f47a80;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">🗑️ Usuń</button></form></td>{% else %}<td></td>{% endif %}
+        </tr>{% endfor %}</table>
+          </section>
+          {% for tool in payload['tools'] %}<section id="tool-{{ tool['id'] }}"><h3>✏️ Edytuj tool</h3>{{ tool_edit_form(runtime_id, tool) }}</section>{% endfor %}
+          <details style="border-radius:8px">
+            <summary style="font-weight:700">➕ Dodaj nowe narzędzie</summary>
+            <div style="margin-top:14px">
+              <!-- Type selector -->
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+                <button type="button" id="nt-http-btn" onclick="ntSetType('http')"
+                  style="background:#0d2a40;border:2px solid var(--blue);border-radius:8px;padding:12px;cursor:pointer;color:white;text-align:left">
+                  <div style="font-size:16px;margin-bottom:4px">🌐</div>
+                  <div style="font-weight:700;font-size:13px">HTTP Request</div>
+                  <div style="color:var(--muted);font-size:11px">Wywołuje REST API — GitLab, Jira, własny serwis</div>
+                </button>
+                <button type="button" id="nt-shell-btn" onclick="ntSetType('shell')"
+                  style="background:#0d1822;border:2px solid var(--line);border-radius:8px;padding:12px;cursor:pointer;color:white;text-align:left">
+                  <div style="font-size:16px;margin-bottom:4px">⌨️</div>
+                  <div style="font-weight:700;font-size:13px">Shell</div>
+                  <div style="color:var(--muted);font-size:11px">Wykonuje komendy — psql, curl, oc, kubectl, własne CLI</div>
+                </button>
+              </div>
+
+              <form method="post" action="/api/runtimes/{{ runtime_id }}/tools" id="nt-form">
+                <input type="hidden" name="execution_type" id="nt-exec-type" value="http_request">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+                  <div>
+                    <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Nazwa toola</label>
+                    <input name="name" placeholder="psql_query / call_api / get_pods" style="width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:13px">
+                  </div>
+                  <div>
+                    <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Status</label>
+                    <select name="enabled" style="width:100%;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:13px">
+                      <option value="true">✅ Aktywny</option>
+                      <option value="false">⏸ Wyłączony</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style="margin-bottom:12px">
+                  <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Opis (dla AI)</label>
+                  <input name="description" placeholder="Wykonuje zapytanie SQL / Pobiera dane z API / Listuje zasoby" style="width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:13px">
+                </div>
+
+                <!-- HTTP fields -->
+                <div id="nt-http-fields">
+                  <div style="display:grid;grid-template-columns:1fr auto;gap:10px;margin-bottom:12px">
+                    <div>
+                      <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">URL endpointu</label>
+                      <input name="url" placeholder="https://api.example.com/v1/search" style="width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:13px">
+                    </div>
+                    <div>
+                      <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Metoda</label>
+                      <select name="method" style="padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:13px">
+                        <option>POST</option><option>GET</option><option>PUT</option><option>DELETE</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Body JSON (parametry)</label>
+                    <textarea name="body_json" rows="3" style="width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:12px;font-family:monospace;resize:vertical">{"query":"${query}"}</textarea>
+                    <div style="font-size:11px;color:var(--muted);margin-top:4px">Użyj <code>${zmienna}</code> dla parametrów które AI będzie podawać</div>
+                  </div>
+                  <div style="margin-top:10px">
+                    <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Headers JSON (opcjonalnie)</label>
+                    <textarea name="headers_json" rows="2" style="width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:12px;font-family:monospace;resize:vertical" placeholder='{"Authorization": "Bearer ${API_TOKEN}"}'></textarea>
+                    <div style="font-size:11px;color:var(--muted);margin-top:4px">Wartości <code>${ZMIENNA}</code> podstawiane z ENV kontenera (zakładka 🔑 Sekrety) — np. tokeny API</div>
+                  </div>
+                </div>
+
+                <!-- Shell fields -->
+                <div id="nt-shell-fields" style="display:none">
+                  <div style="margin-bottom:12px">
+                    <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Komenda</label>
+                    <input id="nt-cmd" name="cmd" placeholder='psql -h ${host} -U ${user} -d ${database} -c "${query}"'
+                      style="width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:13px;font-family:monospace">
+                    <div style="font-size:11px;color:var(--muted);margin-top:4px"><code>${zmienna}</code> = jeden parametr &nbsp;|&nbsp; <code>${*args}</code> = wiele argumentów naraz</div>
+                  </div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+                    <div>
+                      <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Timeout (s)</label>
+                      <input name="timeout_seconds" type="number" value="30" min="5" max="300" style="width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:13px">
+                    </div>
+                    <div>
+                      <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Ryzyko</label>
+                      <select name="risk_level" style="width:100%;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:13px">
+                        <option value="low">niski</option><option value="medium">średni</option><option value="high">wysoki</option>
+                      </select>
+                    </div>
+                  </div>
+                  <!-- Quick presets for shell -->
+                  <div style="margin-bottom:10px">
+                    <div style="font-size:11px;color:#7dd3fc;font-weight:700;margin-bottom:6px">⚡ Szybkie wzorce:</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px">
+                      <button type="button" onclick="ntPreset('psql -h ${host} -U ${user} -d ${database} -c "${query}"','Wykonaj zapytanie SQL na bazie PostgreSQL')" class="preset-btn">🐘 psql query</button>
+                      <button type="button" onclick="ntPreset('psql ${*args}','Wykonaj dowolne polecenie psql')" class="preset-btn">🐘 psql (pełny)</button>
+                      <button type="button" onclick="ntPreset('curl -s ${*args}','Wykonaj dowolną komendę curl')" class="preset-btn">🌐 curl</button>
+                      <button type="button" onclick="ntPreset('oc get ${*args}','Pobierz zasoby OpenShift — AI podaje zasób i flagi')" class="preset-btn">🔴 oc get</button>
+                      <button type="button" onclick="ntPreset('kubectl get ${*args}','Pobierz zasoby Kubernetes — AI podaje zasób i flagi')" class="preset-btn">☸️ kubectl get</button>
+                    </div>
+                  </div>
+                </div>
+
+                <button type="submit" style="background:var(--blue);border:none;color:white;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;margin-top:8px">➕ Dodaj narzędzie</button>
+              </form>
+            </div>
+
+<script>
+function ntSetType(t) {
+  var isShell = t === 'shell';
+  document.getElementById('nt-exec-type').value = isShell ? 'shell' : 'http_request';
+  document.getElementById('nt-http-fields').style.display = isShell ? 'none' : 'block';
+  document.getElementById('nt-shell-fields').style.display = isShell ? 'block' : 'none';
+  document.getElementById('nt-http-btn').style.background = isShell ? '#0d1822' : '#0d2a40';
+  document.getElementById('nt-http-btn').style.borderColor = isShell ? 'var(--line)' : 'var(--blue)';
+  document.getElementById('nt-shell-btn').style.background = isShell ? '#0d2a40' : '#0d1822';
+  document.getElementById('nt-shell-btn').style.borderColor = isShell ? 'var(--blue)' : 'var(--line)';
+}
+function ntPreset(cmd, desc) {
+  document.getElementById('nt-cmd').value = cmd;
+  var d = document.querySelector('#nt-form input[name="description"]');
+  if (d && !d.value) d.value = desc;
+}
+</script>
+          </details>
+        </div>
+      </details>
+
+      </div><!-- /pane-tools -->
+
+      <!-- PANE: Silniki -->
+      <div class="rt-pane" id="pane-adapters">
+      <details id="sec-adapters" style="border-radius:12px" open>
+        <summary style="font-size:16px;font-weight:800;padding:4px 0">⚙️ Silniki wykonania <span class="muted" style="font-size:13px;font-weight:400">— {{ len(runtime_adapters) }} aktywnych</span></summary>
+        <div style="margin-top:16px">
+          <p class="muted"><b>shell</b> = komendy CLI &nbsp;|&nbsp; <b>http_request</b> = HTTP calls. Po redeploy runtime załaduje nową konfigurację.</p>
+          {% if runtime_adapters %}<table><tr><th>Adapter</th><th>Konfiguracja</th><th>Polityka</th><th>Status</th><th></th></tr>{% for item in runtime_adapters %}
+        <tr>
+          <td><b>{{ item['adapter_name'] }}</b></td>
+          <td><pre style="font-size:11px;max-height:80px;overflow:auto">{{ json.dumps(json.loads((item['config_json'] or '{}')), indent=2) }}</pre></td>
+          <td><pre style="font-size:11px;max-height:80px;overflow:auto">{{ json.dumps(json.loads((item['policy_json'] or '{}')), indent=2) }}</pre></td>
+          <td>{% if item['enabled'] %}enabled{% else %}disabled{% endif %}</td>
+          <td>
+            <form method="post" action="/api/runtimes/{{ runtime_id }}/adapters/{{ item['adapter_name'] }}/unbind"
+                  onsubmit="return confirm('Usunąć adapter?')">
+              <button class="delete" style="font-size:11px;padding:4px 8px">Usuń</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}</table>{% else %}<p class="muted">Brak adapterów — dodaj poniżej.</p>{% endif %}
+          {% if available_adapters %}
+    <details style="margin-top:14px">
+      <summary style="cursor:pointer;font-weight:700;color:var(--blue)">+ Dodaj adapter do tego runtime</summary>
+      <form method="post" action="/api/runtimes/{{ runtime_id }}/adapters" style="margin-top:12px">
+        <label>Adapter
+          <select name="adapter_name" id="bind-adapter-sel" onchange="
+            document.querySelectorAll('.bind-adapter-section').forEach(function(el){el.style.display='none'});
+            var v=this.value; if(v) document.getElementById('bind-form-'+v).style.display='';
+          ">
+            <option value="">— wybierz adapter —</option>
+            {% for a in available_adapters %}<option value="{{ a['name'] }}">{{ (adapter_contract(a['name']).get('display_name') or a['name']) }}</option>{% endfor %}
+          </select>
+        </label>
+        {% for adp in available_adapters %}{% set contract = adapter_contract(adp['name']) %}{% set cfg_form = schema_form((contract.get('config_schema') or {}), 'adapter_config') %}{% set pol_form = schema_form((contract.get('policy_schema') or {}), 'adapter_policy') %}
+        <div id="bind-form-{{ adp['name'] }}" class="bind-adapter-section" style="display:none;margin-top:12px">
+          <p class="muted" style="font-size:13px">{{ adp['description'] }}</p>
+          <h4>Config</h4>{{ cfg_form }}
+          <h4>Policy</h4>{{ pol_form }}
+        </div>
+        {% endfor %}
+        <div class="actions" style="margin-top:12px">
+          <button>Dodaj adapter</button>
+        </div>
+      </form>
+    </details>
+    {% else %}<p class="muted" style="margin-top:8px">Wszystkie dostępne adaptery są już dodane do tego runtime.</p>{% endif %}
+        </div>
+      </details>
+
+      </div><!-- /pane-adapters -->
+
+      <!-- PANE: Auth -->
+      <div class="rt-pane" id="pane-auth">
+        <h2>🔐 Bearer Token Authentication</h2>
+        <p class="muted">Włącz uwierzytelnianie Bearer Token, aby wymagać klucza API od klientów AI (Claude Desktop, Cline, Continue). Po wygenerowaniu tokenu podaj go jako nagłówek <code>Authorization: Bearer &lt;token&gt;</code> lub <code>X-API-Key: &lt;token&gt;</code>.</p>
+
+        {% if payload.get('mcp_auth_token') %}<div style="background:#0a2a14;border:1px solid #155228;border-radius:10px;padding:20px;margin-bottom:20px">{% else %}<div style="background:#1a1000;border:1px solid #3a2800;border-radius:10px;padding:20px;margin-bottom:20px">{% endif %}
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+            {% if payload.get('mcp_auth_token') %}<span style="background:#155228;color:#4ade80;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700">● AKTYWNE</span>{% else %}<span style="background:#2a1800;color:#a06020;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700">○ WYŁĄCZONE</span>{% endif %}
+            <span style="color:var(--muted);font-size:13px">{% if payload.get('mcp_auth_token') %}Token wygenerowany — uwierzytelnianie włączone{% else %}Brak tokenu — serwer MCP jest otwarty dla wszystkich klientów{% endif %}</span>
+          </div>
+          {% if payload.get('mcp_auth_token') %}<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><code id="auth-token-display" data-secret="{{ payload.get('mcp_auth_token', '') }}" style="flex:1;padding:9px 12px;background:#0d1a0d;border:1px solid #1a5f2e;border-radius:6px;font-size:13px;color:#4ade80;letter-spacing:1px">••••••••••••••••••••••••</code><button onclick="toggleSecret(this.previousElementSibling)" title="Pokaż/ukryj" style="background:none;border:1px solid #1a5f2e;color:#4ade80;padding:7px 12px;border-radius:6px;cursor:pointer">👁</button><button onclick="navigator.clipboard.writeText(document.getElementById('auth-token-display').dataset.secret).then(()=>{{ '{' }}{let b=event.target;let t=b.textContent;b.textContent='✓';setTimeout(()=>b.textContent=t,1500)}})" style="background:#155228;border:1px solid #1a5f2e;color:#4ade80;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:13px">Kopiuj</button></div>{% endif %}
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <form method="post" action="/api/runtimes/{{ runtime_id }}/generate-mcp-token" style="display:inline">
+              <button type="submit" style="background:#1f6b35;border:1px solid #27a147;color:#d1fae5;padding:8px 18px;border-radius:7px;cursor:pointer;font-size:13px">{% if payload.get('mcp_auth_token') %}↻ Regeneruj token{% else %}+ Generuj token{% endif %}</button>
+            </form>
+            {% if payload.get('mcp_auth_token') %}<form method="post" action="/api/runtimes/{{ runtime_id }}/revoke-mcp-token" style="display:inline" onsubmit="return confirm('Usunąć token? Klienci z obecnym tokenem stracą dostęp.')"><button type="submit" style="background:#3a1010;border:1px solid #6a2020;color:#f47a80;padding:8px 18px;border-radius:7px;cursor:pointer;font-size:13px">✕ Usuń token</button></form>{% endif %}
+          </div>
+        </div>
+
+        {% if payload.get('mcp_auth_token') %}<div style="background:#0d1117;border:1px solid #30363d;border-radius:10px;padding:20px"><h3 style="margin-top:0;font-size:15px;color:var(--text)">Konfiguracja klientów</h3><p class="muted" style="font-size:13px">Skopiuj poniższe konfiguracje do swojego klienta AI.</p><div style="margin-bottom:18px"><div style="font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.5px;margin-bottom:6px">CLAUDE DESKTOP (~/.claude.json)</div><pre style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:14px;margin:0;overflow-x:auto;font-size:12px;color:#e6edf3">{'{'}
+  "mcpServers": {'{'}
+    "{{ payload.get('name', 'runtime') }}": {'{'}
+      "type": "http",
+      "url": "{{ (payload.get('endpoint_url') or '') }}/mcp",
+      "headers": {'{'}
+        "Authorization": "Bearer <TWÓJ_TOKEN>"
+      {'}'}
+    {'}'}
+  {'}'}
+{'}'}</pre></div><div style="margin-bottom:18px"><div style="font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.5px;margin-bottom:6px">CLINE / CONTINUE (settings.json)</div><pre style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:14px;margin:0;overflow-x:auto;font-size:12px;color:#e6edf3">{'{'}
+  "mcp.servers": [{'{'}
+    "name": "{{ payload.get('name', 'runtime') }}",
+    "transport": "streamable-http",
+    "url": "{{ (payload.get('endpoint_url') or '') }}/mcp",
+    "headers": {'{'}
+      "Authorization": "Bearer <TWÓJ_TOKEN>"
+    {'}'}
+  {'}'}]
+{'}'}</pre></div><div><div style="font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.5px;margin-bottom:6px">CURL (testowanie)</div><pre style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:14px;margin:0;overflow-x:auto;font-size:12px;color:#e6edf3">curl -H "Authorization: Bearer &lt;TWÓJ_TOKEN&gt;" {{ (payload.get('endpoint_url') or '') }}/health</pre></div></div>{% endif %}
+
+      </div><!-- /pane-auth -->
+
+      <!-- PANE: Sekrety -->
+      <div class="rt-pane" id="pane-creds">
+
+        <!-- ENV VARS section -->
+        <h2>🔑 Zmienne środowiskowe (ENV)</h2>
+        <p class="muted">Zmienne są wstrzykiwane do kontenera przy następnym deploy. Po zmianie kliknij <b>Redeploy</b>.</p>
+        <div style="background:#1a1200;border:1px solid #3a2800;border-radius:8px;padding:14px;margin-bottom:16px">
+          <div id="env-rows" style="display:grid;gap:6px;margin-bottom:10px">
+            {% for k, v in _env_vars.items() %}<div id="env-row-{{ k }}" style="display:grid;grid-template-columns:160px 1fr auto auto auto;gap:8px;align-items:center">
+              <code style="padding:6px 10px;background:#0d1000;border:1px solid #3a2800;border-radius:6px;font-size:12px;color:#d4a820">{{ k }}</code>
+              <span id="env-display-{{ k }}" data-secret="{{ v }}" style="padding:6px 10px;background:#0d1000;border:1px solid #3a2800;border-radius:6px;font-size:12px;color:var(--muted)">{% if v %}{{ ('*' * min(len(v), 8)) }}{% else %}(puste){% endif %}</span>
+              <button onclick="toggleSecret(this)" data-target="env-display-{{ k }}" title="Pokaż/ukryj" style="background:none;border:1px solid #3a2800;color:var(--muted);padding:4px 8px;border-radius:6px;font-size:13px;cursor:pointer">👁</button>
+              <button onclick="startEditEnv('{{ runtime_id }}','{{ k }}')" title="Edytuj wartość" style="background:none;border:1px solid #1a3a5a;color:#5a9fd4;padding:4px 8px;border-radius:6px;font-size:13px;cursor:pointer">✏️</button>
+              <button onclick="delEnvVar('{{ runtime_id }}','{{ k }}')" title="Usuń" style="background:#3a1010;border:1px solid #6a2020;color:#f47a80;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">✕</button>
+            </div>{% else %}<p class="muted" style="margin:0">Brak zmiennych ENV — dodaj poniżej.</p>{% endfor %}
+          </div>
+          <div style="display:grid;grid-template-columns:160px 1fr auto auto auto;gap:8px;align-items:center">
+            <input id="new-env-key" placeholder="NAZWA_ZMIENNEJ" style="padding:7px 10px;border:1px solid #3a2800;border-radius:6px;background:#0d1000;color:var(--text);font-size:12px;font-family:monospace">
+            <input id="new-env-val" type="password" placeholder="wartość / token" style="padding:7px 10px;border:1px solid #3a2800;border-radius:6px;background:#0d1000;color:var(--text);font-size:12px">
+            <button onclick="var i=document.getElementById('new-env-val');i.type=i.type==='password'?'text':'password'" title="Pokaż/ukryj" style="background:none;border:1px solid #3a2800;color:var(--muted);padding:7px 8px;border-radius:6px;font-size:13px;cursor:pointer">👁</button>
+            <button onclick="addEnvVar('{{ runtime_id }}')" style="background:#1a2800;border:1px solid #3a5000;color:#8ac840;padding:7px 12px;border-radius:6px;font-size:12px;cursor:pointer">+ Dodaj</button>
+            <span></span>
+          </div>
+        </div>
+
+        <!-- Sekrety (pliki/montowania) -->
+        <details style="border-radius:8px;border:1px solid var(--line);margin-top:8px">
+          <summary style="font-size:14px;font-weight:700;padding:10px 14px;cursor:pointer">📁 Sekrety zaawansowane (pliki, mounty) — {{ len(credentials) }} wpisów</summary>
+          <div style="padding:14px">
+            <p class="muted" style="font-size:12px"><b>env</b> = zmienna środowiskowa &nbsp;|&nbsp; <b>file</b> = plik montowany w kontenerze</p>
+            <form method="post" action="/api/runtimes/{{ runtime_id }}/credentials" style="margin-bottom:14px">
+              <div class="grid">
+                <label>Kind<select name="kind"><option value="env">env</option><option value="file">file</option></select></label>
+                <label>Name<input name="name" placeholder="OC_TOKEN"></label>
+                <label>Env name<input name="env_name" placeholder="opcjonalne"></label>
+                <label>Mount path<input name="mount_path" placeholder="/config/secrets/kubeconfig"></label>
+              </div>
+              <label>Value<textarea name="value" placeholder="secret value, kubeconfig, token"></textarea></label>
+              <button>Dodaj sekret</button>
+            </form>
+            <table><tr><th>Typ</th><th>Nazwa</th><th>Zmienna env</th><th>Ścieżka mount</th><th>Wartość</th><th>Akcja</th></tr>{% for item in credentials %}
+        <tr>
+          <td>{{ item['kind'] }}</td>
+          <td>{{ item['name'] }}</td>
+          <td>{{ (item['env_name'] or '-') }}</td>
+          <td>{{ (item['mount_path'] or '-') }}</td>
+          <td>{{ masked_secret(item['value']) }}</td>
+          <td>
+            <form method="post" action="/api/runtimes/{{ runtime_id }}/credentials/{{ item['id'] }}/delete">
+              <button class="delete">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}</table>
+          </div>
+        </details>
+
+      </div><!-- /pane-creds -->
+
+      <!-- PANE: Polityka -->
+      <div class="rt-pane" id="pane-policy">
+      <details id="sec-policy" style="border-radius:12px" open>
+        <summary style="font-size:16px;font-weight:800;padding:4px 0">🔒 Polityka bezpieczeństwa</summary>
+        <div style="margin-top:16px;display:grid;gap:14px">
+          <form id="shell-policy-form" method="post" action="/api/runtimes/{{ runtime_id }}/policy/shell-preset">
+            <div class="grid">
+              <label>Dozwolone binarki<input name="allowed_binaries" value="{{ ((payload['policy'].get('allowed_binaries') or [])|join(' ')) }}" placeholder="oc kubectl jq"></label>
+              <label>Zablokowane tokeny<input name="blocked_commands" value="{{ ((payload['policy'].get('blocked_commands') or [])|join(' ')) }}" placeholder="delete apply patch"></label>
+              <label>Dozwolone prefixy (jeden/linię)<textarea name="allowed_command_prefixes" placeholder="oc get&#10;oc describe&#10;oc logs">{{ chr(10).join((payload['policy'].get('allowed_command_prefixes') or [])) }}</textarea></label>
+              <label>Zablokowane prefixy (jeden/linię)<textarea name="blocked_command_prefixes" placeholder="oc delete&#10;oc apply&#10;oc patch">{{ chr(10).join((payload['policy'].get('blocked_command_prefixes') or [])) }}</textarea></label>
+            </div>
+          </form>
+          <details style="border-radius:6px;border:1px solid var(--line);padding:14px;margin-top:4px" {% if payload['policy'].get('require_approval_for') %}open{% endif %}>
+            <summary style="font-size:14px;font-weight:700;cursor:pointer;color:var(--text)">✅ Zatwierdzenia (Human-in-the-Loop)</summary>
+            <div style="margin-top:14px;display:grid;gap:12px">
+              <p class="muted" style="font-size:12px;margin:0">Gdy AI wywoła narzędzie wymagające zatwierdzenia, narzędzie zwraca komunikat z prośbą o potwierdzenie. AI pyta użytkownika w chacie — po odpowiedzi "tak" wywołuje narzędzie ponownie z <code>__confirm="yes"</code>.</p>
+              <label style="display:grid;gap:6px;font-size:13px;font-weight:600">
+                Wymagaj zatwierdzenia dla
+                <select name="require_approval_for" form="shell-policy-form" style="padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel-2);color:var(--text);font-size:13px">
+                  <option value="" {% if not payload['policy'].get('require_approval_for') %}selected{% endif %}>Wyłączone — brak zatwierdzeń</option>
+                  <option value="auto" {% if payload['policy'].get('require_approval_for') == 'auto' %}selected{% endif %}>Auto — narzędzia write/destructive + słowa kluczowe (delete, create, apply…)</option>
+                  <option value="destructive" {% if (payload['policy'].get('require_approval_for') == ['destructive']) or (payload['policy'].get('require_approval_for') == 'destructive') %}selected{% endif %}>Tylko destructive (delete, destroy, purge…)</option>
+                  <option value="write_destructive" {% if payload['policy'].get('require_approval_for') in [['write', 'destructive'], ['destructive', 'write']] %}selected{% endif %}>Write + Destructive (create, apply, delete…)</option>
+                </select>
+              </label>
+              <label style="display:grid;gap:6px;font-size:13px;font-weight:600">
+                Prefiksy wymagające zatwierdzenia (jeden/linię)
+                <textarea name="require_approval_for_prefixes" form="shell-policy-form" placeholder="oc delete&#10;oc apply&#10;kubectl delete" style="min-height:80px;font-family:monospace;font-size:12px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel-2);color:var(--text)">{{ chr(10).join((payload['policy'].get('require_approval_for_prefixes') or [])) }}</textarea>
+                <span style="font-size:11px;color:var(--muted)">Komendy pasujące do tych prefiksów zatrzymają się i poczekają na zatwierdzenie. <strong>Nie dodawaj ich do Zablokowanych prefiksów</strong> — zatwierdzenie działa zamiast blokady.</span>
+              </label>
+              <label style="display:grid;gap:6px;font-size:13px;font-weight:600">
+                Limit czasu zatwierdzenia (sekundy)
+                <input type="number" name="approval_timeout_seconds" form="shell-policy-form" min="30" max="3600" value="{{ payload['policy'].get('approval_timeout_seconds', 300) }}" style="padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel-2);color:var(--text);font-size:13px;width:140px">
+              </label>
+            </div>
+          </details>
+          <div style="padding:8px 0">
+            <button type="submit" form="shell-policy-form" style="background:#1a7a3f;padding:9px 20px;font-size:13px;font-weight:700;border-radius:8px;border:none;color:#fff;cursor:pointer">💾 Zapisz politykę shell</button>
+          </div>
+          <details style="border-radius:6px">
+            <summary style="font-size:13px;color:var(--muted)">Zaawansowane: edytuj policy JSON bezpośrednio</summary>
+            <form method="post" action="/api/runtimes/{{ runtime_id }}/policy/update" style="margin-top:10px">
+              <label>Policy JSON<textarea name="policy_json">{{ policy_json }}</textarea></label>
+              <div class="actions"><button>Zapisz JSON</button></div>
+            </form>
+          </details>
+          <p class="muted" style="font-size:12px">Po zmianie polityki kliknij <b>Reload Config</b> (nie trzeba redeploy).</p>
+        </div>
+      </details>
+
+      </div><!-- /pane-policy -->
+
+      <!-- PANE: Logi -->
+      <div class="rt-pane" id="pane-logs">
+        <div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+          <h2 style="margin:0">📋 Logi kontenera</h2>
+          <button onclick="doAct('{{ runtime_id }}','logs')" style="background:#263548;border:1px solid #34465b;color:#c9d7e6;padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer">🔄 Odśwież logi</button>
+        </div>
+        <pre style="max-height:600px;overflow:auto;background:#060e18;border:1px solid #1a2e45;border-radius:8px;padding:14px;font-size:12px;line-height:1.7">{% if logs_text %}{{ logs_text }}{% else %}<span style="color:var(--muted)">Brak logów — uruchom serwer i odśwież.</span>{% endif %}</pre>
+      </div>
+
+      <!-- PANE: Wywołania AI -->
+      <div class="rt-pane" id="pane-audit">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <h2 style="margin:0">🤖 Wywołania narzędzi przez AI</h2>
+          <span class="muted" style="font-size:12px">{{ len(runtime_tool_calls) }} ostatnich wywołań</span>
+        </div>
+        <div id="tc-live-container" style="display:grid;gap:4px">
+          {% for tc in runtime_tool_calls %}<div style="display:grid;grid-template-columns:140px 150px 60px 65px 110px 120px 1fr;gap:8px;align-items:center;padding:8px 12px;background:var(--panel-2);border-radius:8px;border:1px solid var(--line);font-size:12px">
+            <span style="color:var(--muted);white-space:nowrap">{{ tc['created_at'][:19].replace('T', ' ') }}</span>
+            <span style="font-weight:700;color:var(--blue)">{{ tc['tool_name'] }}</span>
+            <span class="badge {% if tc['result_ok'] %}running{% else %}failed{% endif %}" style="font-size:11px;padding:2px 7px">{% if tc['result_ok'] %}OK{% else %}ERR{% endif %}</span>
+            <span style="color:var(--muted)">{{ tc['duration_ms'] }} ms</span>
+            <span style="color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ tc.get('caller_ip', '') }}">{{ (tc.get('caller_ip', '') or '—') }}</span>
+            <span style="color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ tc.get('model', '') }}">{{ (tc.get('model', '') or '—')[:18] }}</span>
+            <span style="color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ tc['arguments_json'] }}">{{ tc['arguments_json'][:120] }}</span>
+          </div>{% else %}<p class="muted" id="tc-empty-msg">Brak wywołań — AI jeszcze nie używał tego serwera.</p>{% endfor %}
+        </div>
+        <details style="margin-top:20px;border-top:1px solid var(--line);padding-top:12px">
+          <summary style="font-size:12px;color:var(--muted);cursor:pointer">📋 Historia operacji adminów ({{ len(runtime_audit) }})</summary>
+          <div style="display:grid;gap:4px;margin-top:8px">
+            {% for a in runtime_audit %}<div style="display:flex;gap:10px;align-items:center;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:11px"><span style="color:var(--muted);white-space:nowrap">{{ a['created_at'][:16].replace('T', ' ') }}</span><span class="badge" style="font-size:10px;padding:1px 6px">{{ a['actor'] }}</span><span>{{ a['action'] }}</span><span style="color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ a['details_json'][:60] }}</span></div>{% else %}<p class="muted">Brak.</p>{% endfor %}
+          </div>
+        </details>
+      </div>
+
+      <!-- PANE: Test -->
+      <div class="rt-pane" id="pane-test">
+        <h2>🧪 Testuj tool</h2>
+
+        {% if payload['status'] == 'running' %}{% else %}
+        <!-- Pre-deploy dry-run mode -->
+        <div style="background:#1a1000;border:1px solid #3a2800;border-radius:8px;padding:12px 16px;margin-bottom:16px">
+          <div style="font-weight:700;color:#d4a820;margin-bottom:6px">⚠️ Serwer nie jest uruchomiony (status: {{ payload['status'] }})</div>
+          <p class="muted" style="font-size:12px;margin:0">Tryb <b>dry-run</b>: możesz sprawdzić konfigurację toola lub wywołać go przez własny endpoint.</p>
+        </div>
+        <details style="margin-bottom:16px;border:1px solid var(--line);border-radius:8px">
+          <summary style="padding:10px 14px;cursor:pointer;font-weight:700;font-size:13px">🔍 Podgląd konfiguracji toolów</summary>
+          <div style="padding:14px">
+            {{ _tool_config_preview }}
+          </div>
+        </details>
+        <div style="background:#0a1520;border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:16px">
+          <div style="font-weight:700;font-size:13px;margin-bottom:8px">🌐 Test przez własny endpoint</div>
+          <div class="grid" style="grid-template-columns:1fr auto;gap:8px;margin-bottom:8px">
+            <input id="tt-ext-url" placeholder="http://localhost:8080/tools/my_tool" style="padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:#0d1420;color:var(--text);font-size:13px">
+            <button onclick="runExtTest()" style="background:var(--blue);border:none;color:white;padding:8px 14px;border-radius:6px;font-size:13px;cursor:pointer">Test</button>
+          </div>
+          <label style="font-size:12px">Payload JSON<textarea id="tt-ext-body" style="width:100%;box-sizing:border-box;min-height:60px;font-family:monospace;font-size:12px;padding:8px;border:1px solid var(--line);border-radius:6px;background:#0d1420;color:var(--text)">{}</textarea></label>
+        </div>
+        {% endif %}
+
+        <p class="muted" style="font-size:12px">{% if payload['status'] == 'running' %}Wywołaj tool przez platformę — serwer odpowie bezpośrednio.{% else %}Wdróż serwer żeby używać poniższego testera.{% endif %}</p>
+        <div class="grid">
+          <label>Tool<select id="tt-tool" {% if payload['status'] != 'running' %}disabled{% endif %}>
+            {% for t in payload['tools'] if t['enabled'] %}<option value="{{ t['name'] }}">{{ t['name'] }}</option>{% endfor %}
+          </select></label>
+          <label>Arguments JSON<textarea id="tt-args" style="min-height:56px;font-family:monospace;font-size:13px">{}</textarea></label>
+        </div>
+        <div class="actions" style="margin-top:8px">
+          <button type="button" onclick="runTest()" {% if payload['status'] != 'running' %}disabled{% endif %}>▶ Run Tool</button>
+          <span class="muted" id="tt-status" style="margin-left:8px"></span>
+        </div>
+        <pre id="tt-result" style="min-height:48px;margin-top:10px"></pre>
+      </div><!-- /pane-test -->
+
+      <!-- PANE: Klonuj -->
+      <div class="rt-pane" id="pane-clone">
+        <h2>🔁 Klonuj serwer</h2>
+        <p class="muted">Tworzy kopię z tymi samymi toolami, polityką i silnikami. Sekrety trzeba dodać osobno.</p>
+        <form method="post" action="/api/runtimes/{{ runtime_id }}/clone" class="inline" style="grid-template-columns:1fr auto">
+          <label>Nowa nazwa<input name="name" placeholder="{{ payload['name'] }}-copy"></label>
+          <button style="align-self:end">Klonuj</button>
+        </form>
+      </div><!-- /pane-clone -->
+
+    </main>
+    <script>
+    (function() {
+      const TRANSITIONAL = new Set(['deploying','building','starting','stopping','restarting','deleting','checking','syncing_logs','draft']);
+      const rid = '{{ runtime_id }}';
+      let currentStatus = '{{ payload['status'] }}';
+
+      var _tcMaxId = {{ (runtime_tool_calls[0]['id'] if runtime_tool_calls else 0) }};
+      var _tcPollTimer = null;
+
+      function renderToolCall(tc) {
+        var ok = tc.result_ok;
+        var args = tc.arguments_json || '{}';
+        if (args.length > 120) args = args.substring(0, 120) + '…';
+        var ip = tc.caller_ip || '—';
+        var model = (tc.model || '—').substring(0, 18);
+        return '<div style="display:grid;grid-template-columns:140px 150px 60px 65px 110px 120px 1fr;gap:8px;align-items:center;padding:8px 12px;background:var(--panel-2);border-radius:8px;border:1px solid var(--line);font-size:12px">' +
+          '<span style="color:var(--muted);white-space:nowrap">' + tc.created_at.substring(0,19).replace('T',' ') + '</span>' +
+          '<span style="font-weight:700;color:var(--blue)">' + tc.tool_name + '</span>' +
+          '<span class="badge ' + (ok?'running':'failed') + '" style="font-size:11px;padding:2px 7px">' + (ok?'OK':'ERR') + '</span>' +
+          '<span style="color:var(--muted)">' + tc.duration_ms + ' ms</span>' +
+          '<span style="color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + ip + '">' + ip + '</span>' +
+          '<span style="color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + (tc.model||'') + '">' + model + '</span>' +
+          '<span style="color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + args + '">' + args + '</span></div>';
+      }
+
+      function pollToolCalls() {
+        fetch('/api/runtimes/' + rid + '/tool-calls?since_id=' + _tcMaxId)
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            if (d.calls && d.calls.length > 0) {
+              _tcMaxId = d.max_id;
+              var container = document.getElementById('tc-live-container');
+              if (container) {
+                var html = d.calls.map(renderToolCall).join('');
+                container.insertAdjacentHTML('afterbegin', html);
+                var tabEl = document.getElementById('tab-audit');
+                if (tabEl) {
+                  var m = tabEl.textContent.match(/\((\d+)\)/);
+                  var cur = m ? parseInt(m[1]) : 0;
+                  tabEl.textContent = tabEl.textContent.replace(/\(\d+\)/, '(' + (cur + d.calls.length) + ')');
+                }
+              }
+            }
+          })
+          .catch(function() {});
+      }
+
+      window.rtTab = function(name) {
+        document.querySelectorAll('.rt-pane').forEach(function(p) { p.classList.remove('active'); });
+        document.querySelectorAll('.rt-tab').forEach(function(t) { t.classList.remove('rt-tab-active'); });
+        var pane = document.getElementById('pane-' + name);
+        if (pane) pane.classList.add('active');
+        var tab = document.getElementById('tab-' + name);
+        if (tab) tab.classList.add('rt-tab-active');
+        try { localStorage.setItem('rt_tab_' + rid, name); } catch(e) {}
+        // Start/stop live polling for Wywołania tab
+        if (_tcPollTimer) { clearInterval(_tcPollTimer); _tcPollTimer = null; }
+        if (name === 'audit') {
+          _tcPollTimer = setInterval(pollToolCalls, 5000);
+        }
+      };
+      var savedTab = 'connect';
+      try { savedTab = localStorage.getItem('rt_tab_' + rid) || 'connect'; } catch(e) {}
+      var _urlParams = new URLSearchParams(window.location.search);
+      if (_urlParams.get('tool_added')) savedTab = 'tools';
+      else if (_urlParams.get('tab')) savedTab = _urlParams.get('tab');
+      else if (window.location.hash === '#pane-tools') savedTab = 'tools';
+      rtTab(savedTab);
+
+      function poll() {
+        fetch('/api/runtimes/' + rid + '/status')
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            if (d.status !== currentStatus) { location.reload(); return; }
+            if (TRANSITIONAL.has(d.status)) setTimeout(poll, 2500);
+          })
+          .catch(function() { if (TRANSITIONAL.has(currentStatus)) setTimeout(poll, 5000); });
+      }
+      if (TRANSITIONAL.has(currentStatus)) setTimeout(poll, 2000);
+
+      window.runExtTest = function() {
+        var url = (document.getElementById('tt-ext-url')||{}).value;
+        var body = (document.getElementById('tt-ext-body')||{}).value || '{}';
+        var result = document.getElementById('tt-result');
+        var status = document.getElementById('tt-status');
+        if (!url) return;
+        status.textContent = 'Calling…';
+        result.textContent = '';
+        try { body = JSON.parse(body); } catch(e) { result.textContent = 'Invalid JSON'; return; }
+        fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
+          .then(function(r) { return r.json(); })
+          .then(function(d) { result.textContent = JSON.stringify(d, null, 2); status.textContent = '✅ OK'; })
+          .catch(function(e) { result.textContent = String(e); status.textContent = '❌ Error'; });
+      };
+
+      window.runTest = function() {
+        const name = document.getElementById('tt-tool').value;
+        const args = document.getElementById('tt-args').value;
+        const status = document.getElementById('tt-status');
+        const result = document.getElementById('tt-result');
+        if (!name) { result.textContent = 'Wybierz tool.'; return; }
+        status.textContent = 'Running…';
+        result.textContent = '';
+        fetch('/api/runtimes/' + rid + '/test-tool', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({tool_name: name, args_json: args})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          result.textContent = JSON.stringify(d, null, 2);
+          status.textContent = d.ok ? 'OK (' + (d.status_code || 200) + ')' : 'Error';
+        })
+        .catch(function(e) { result.textContent = String(e); status.textContent = ''; });
+      };
+      window.toggleSecret = function(btn) {
+        var span = btn.parentElement.querySelector('[data-secret]');
+        if (!span) return;
+        if (span.dataset.revealed === '1') {
+          span.textContent = '*'.repeat(Math.min(span.dataset.secret.length, 8)) || '(puste)';
+          span.dataset.revealed = '0';
+        } else {
+          span.textContent = span.dataset.secret;
+          span.dataset.revealed = '1';
+        }
+      };
+      window.addEnvVar = function(rid) {
+        var k = document.getElementById('new-env-key').value.trim();
+        var v = document.getElementById('new-env-val').value;
+        if (!k) { document.getElementById('new-env-key').focus(); return; }
+        fetch('/api/runtimes/' + rid + '/env', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({key: k, value: v})
+        }).then(function(r) { if(r.ok) location.reload(); else r.text().then(function(t){ alert('Błąd: ' + t); }); });
+      };
+      window.delEnvVar = function(rid, key) {
+        if (!confirm('Usunąć zmienną ' + key + '?')) return;
+        fetch('/api/runtimes/' + rid + '/env/' + encodeURIComponent(key), {method:'DELETE'})
+          .then(function(r) { if(r.ok) location.reload(); });
+      };
+
+      window.startEditEnv = function(rid, key) {
+        var row = document.getElementById('env-row-' + key);
+        if (!row) return;
+        var spanEl  = row.children[1];
+        var toggleEl = row.children[2];
+        var editEl  = row.children[3];
+        var delEl   = row.children[4];
+        var currentValue = spanEl.dataset.secret || '';
+
+        var inp = document.createElement('input');
+        inp.id = 'env-edit-input-' + key;
+        inp.type = 'password';
+        inp.value = currentValue;
+        inp.style.cssText = 'padding:6px 10px;border:1px solid #1a3a5a;border-radius:6px;background:#0d1a2a;color:var(--text);font-size:12px;width:100%;box-sizing:border-box';
+        inp.onkeydown = function(e) { if (e.key === 'Enter') window.saveEnvVar(rid, key); };
+        spanEl.replaceWith(inp);
+
+        var toggleBtn = document.createElement('button');
+        toggleBtn.textContent = '👁';
+        toggleBtn.title = 'Pokaż/ukryj';
+        toggleBtn.style.cssText = 'background:none;border:1px solid #3a2800;color:var(--muted);padding:4px 8px;border-radius:6px;font-size:13px;cursor:pointer';
+        toggleBtn.onclick = function() { inp.type = inp.type === 'password' ? 'text' : 'password'; };
+        toggleEl.replaceWith(toggleBtn);
+
+        var saveBtn = document.createElement('button');
+        saveBtn.textContent = '💾';
+        saveBtn.title = 'Zapisz';
+        saveBtn.style.cssText = 'background:#0d2a0d;border:1px solid #1a5a1a;color:#4ade80;padding:4px 8px;border-radius:6px;font-size:13px;cursor:pointer';
+        saveBtn.onclick = function() { window.saveEnvVar(rid, key); };
+        editEl.replaceWith(saveBtn);
+
+        var cancelBtn = document.createElement('button');
+        cancelBtn.textContent = '✕';
+        cancelBtn.title = 'Anuluj';
+        cancelBtn.style.cssText = 'background:none;border:1px solid #4a2800;color:#8a6040;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer';
+        cancelBtn.onclick = function() { location.reload(); };
+        delEl.replaceWith(cancelBtn);
+
+        inp.focus();
+        inp.select();
+      };
+
+      window.saveEnvVar = function(rid, key) {
+        var inp = document.getElementById('env-edit-input-' + key);
+        if (!inp) return;
+        fetch('/api/runtimes/' + rid + '/env', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({key: key, value: inp.value})
+        }).then(function(r) {
+          if (r.ok) location.reload();
+          else r.text().then(function(t) { alert('Błąd zapisu: ' + t); });
+        });
+      };
+
+      window.copySnippet = function(el) {
+        var text = el.textContent || el.innerText;
+        navigator.clipboard.writeText(text).then(function() {
+          var orig = el.style.background;
+          el.style.background = '#0d2a1a';
+          el.title = '✅ Skopiowano!';
+          setTimeout(function() { el.style.background = orig; el.title = 'Kliknij żeby skopiować'; }, 1500);
+        });
+      };
+    })();
+    </script>
+    <script src="/api/lang.js"></script>
+    </body></html>
+    

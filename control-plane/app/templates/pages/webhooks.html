@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+      {% if ok %}<div class="success">{{ ok }}</div>{% endif %}
+      <section>
+        <h2>🔔 Webhooki powiadomień</h2>
+        <p class="muted">Platforma wysyła POST do podanego URL gdy zajdzie zdarzenie. Payload: JSON z polem <code>event</code>, <code>runtime_id</code>, <code>timestamp</code>, <code>details</code>.</p>
+        <form method="post" action="/api/webhooks" style="margin-bottom:20px">
+          <div class="grid" style="grid-template-columns:1fr 2fr 1fr">
+            <label>Nazwa<input name="name" placeholder="Slack alert" required></label>
+            <label>URL<input name="url" placeholder="https://hooks.slack.com/..." required></label>
+            <label>Serwer (opcjonalnie)
+              <select name="runtime_id"><option value="">— wszystkie —</option>{% for r in runtimes %}<option value="{{ r['id'] }}">{{ r['name'] }}</option>{% endfor %}</select>
+            </label>
+          </div>
+          <div style="margin-bottom:10px">
+            <div style="font-size:12px;font-weight:700;margin-bottom:6px">Zdarzenia:</div>
+            <div style="display:flex;gap:16px;flex-wrap:wrap">
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" name="ev_runtime_failed" value="1" checked> Serwer padł (runtime_failed)</label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" name="ev_health_failed" value="1" checked> Health check fail (health_failed)</label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" name="ev_tool_error" value="1"> Tool zwrócił błąd (tool_error)</label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" name="ev_deploy_done" value="1"> Deploy gotowy (deploy_done)</label>
+            </div>
+          </div>
+          <button>+ Dodaj webhook</button>
+        </form>
+        <table>
+          <thead><tr><th>Nazwa</th><th>URL</th><th>Serwer</th><th>Zdarzenia</th><th>Status</th><th>Ostatnie wywołanie</th><th>Akcja</th></tr></thead>
+          <tbody>{% for wh in webhooks %}<tr>
+          <td style="font-weight:700">{{ wh['name'] }}</td>
+          <td style="font-size:12px;font-family:monospace;color:#7dd3fc;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ wh['url'] }}</td>
+          <td style="font-size:11px">{{ (wh['runtime_id'] or 'wszystkie') }}</td>
+          <td style="font-size:11px">{{ json.loads((wh['events_json'] or '[]'))|join(', ') }}</td>
+          <td><span class="badge {% if wh['enabled'] %}running{% else %}failed{% endif %}" style="font-size:11px">{% if wh['enabled'] %}aktywny{% else %}wyłączony{% endif %}</span></td>
+          <td style="font-size:11px;color:var(--muted)">{{ (wh['last_fired_at'] or '')[:16].replace('T', ' ') }} {% if wh['last_status'] %}{% if wh['last_status'] and (200 <= int(wh['last_status']) < 300) %}✅{% else %}❌{% endif %}{% endif %}</td>
+          <td><form method="post" action="/api/webhooks/{{ wh['id'] }}/delete" onsubmit="return confirm('Usunąć webhook?')">
+            <button style="background:#3a1010;border:1px solid #6a2020;color:#f47a80;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">🗑️</button>
+          </form></td>
+        </tr>{% else %}<tr><td colspan="7" class="muted" style="text-align:center">Brak webhoków.</td></tr>{% endfor %}</tbody>
+        </table>
+      </section>{% endblock %}

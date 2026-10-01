@@ -1,0 +1,372 @@
+{
+  "id": "platform-manager",
+  "name": "MCP Platform Manager",
+  "description": "Meta-MCP: lokalny LLM (Qwen, Llama, Mistral…) może samodzielnie tworzyć, konfigurować i zarządzać serwerami MCP na platformie bez interwencji człowieka. Wywołaj get_instructions → list_packages → create_mcp_server → deploy_server. Wymaga zmiennych PLATFORM_URL i PLATFORM_TOKEN w Runtime Credentials (PLATFORM_TOKEN musi być równy MCP_PLATFORM_API_TOKEN control-plane).",
+  "category": "other",
+  "risk_level": "high",
+  "runtime_class": {
+    "name": "shell-readwrite",
+    "runtime_image": "mcp-runtime-shell:latest",
+    "allowed_execution_types": [
+      "shell"
+    ],
+    "security_profile": "restricted"
+  },
+  "policy": {
+    "allowed_binaries": [
+      "curl",
+      "jq"
+    ],
+    "require_read_only": false,
+    "timeout_seconds": 30,
+    "require_approval_for": "auto"
+  },
+  "credentials_hint": {
+    "PLATFORM_URL": "URL platformy, np. http://mcp-platform:8080 lub https://mcp-platform.apps.cluster.dom"
+  },
+  "tools": [
+    {
+      "name": "get_instructions",
+      "description": "Pobiera instrukcję tworzenia serwerów MCP. ZAWSZE wywołaj jako PIERWSZE narzędzie przed create_mcp_server.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": [
+          "curl",
+          "-s",
+          "${PLATFORM_URL}/api/platform-docs"
+        ],
+        "timeout_seconds": 10
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "list_packages",
+      "description": "Lista gotowych paczek narzędzi do wyboru przy tworzeniu serwera.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": [
+          "curl",
+          "-s",
+          "${PLATFORM_URL}/api/tool-packages"
+        ],
+        "timeout_seconds": 10
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "list_servers",
+      "description": "Lista serwerów MCP — id, nazwy, statusy, endpointy MCP.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": [
+          "curl",
+          "-s",
+          "-H",
+          "X-API-Key: ${PLATFORM_TOKEN}",
+          "${PLATFORM_URL}/api/runtimes"
+        ],
+        "timeout_seconds": 10
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "server_details",
+      "description": "Szczegóły serwera MCP — tools, policy, status, endpoint.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": [
+          "curl",
+          "-s",
+          "-H",
+          "X-API-Key: ${PLATFORM_TOKEN}",
+          "${PLATFORM_URL}/api/runtimes/${runtime_id}"
+        ],
+        "timeout_seconds": 10
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "runtime_id": {
+            "type": "string",
+            "description": "ID serwera (z list_servers)"
+          }
+        },
+        "required": [
+          "runtime_id"
+        ]
+      }
+    },
+    {
+      "name": "server_status",
+      "description": "Status serwera MCP — running/stopped/failed/deploying oraz endpoint URL.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": [
+          "curl",
+          "-s",
+          "-H",
+          "X-API-Key: ${PLATFORM_TOKEN}",
+          "${PLATFORM_URL}/api/runtimes/${runtime_id}/status"
+        ],
+        "timeout_seconds": 10
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "runtime_id": {
+            "type": "string",
+            "description": "ID serwera"
+          }
+        },
+        "required": [
+          "runtime_id"
+        ]
+      }
+    },
+    {
+      "name": "server_logs",
+      "description": "Ostatnie logi kontenera serwera MCP — przydatne do diagnostyki błędów startowych.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "other",
+      "config": {
+        "command": [
+          "curl",
+          "-s",
+          "-H",
+          "X-API-Key: ${PLATFORM_TOKEN}",
+          "${PLATFORM_URL}/api/runtimes/${runtime_id}/logs"
+        ],
+        "timeout_seconds": 15
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "runtime_id": {
+            "type": "string",
+            "description": "ID serwera"
+          }
+        },
+        "required": [
+          "runtime_id"
+        ]
+      }
+    },
+    {
+      "name": "create_mcp_server",
+      "description": "Tworzy nowy serwer MCP z paczki JSON. NAJPIERW wywołaj get_instructions i list_packages.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "high",
+      "mode": "write",
+      "category": "other",
+      "config": {
+        "command": [
+          "curl",
+          "-s",
+          "-X",
+          "POST",
+          "-H",
+          "Content-Type: application/json",
+          "-H",
+          "X-API-Key: ${PLATFORM_TOKEN}",
+          "${PLATFORM_URL}/api/auto-create",
+          "-d",
+          "${payload}"
+        ],
+        "timeout_seconds": 30
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "payload": {
+            "type": "string",
+            "description": "JSON string: {\"package\": {...}, \"name\": \"moj-serwer\", \"credentials\": {\"KEY\": \"val\"}, \"deploy\": true}"
+          }
+        },
+        "required": [
+          "payload"
+        ]
+      }
+    },
+    {
+      "name": "deploy_server",
+      "description": "Deployuje (uruchamia) serwer MCP. Użyj po create_mcp_server lub gdy serwer jest w statusie stopped/draft.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "medium",
+      "mode": "write",
+      "category": "other",
+      "config": {
+        "command": [
+          "curl",
+          "-s",
+          "-X",
+          "POST",
+          "-H",
+          "Content-Type: application/json",
+          "-H",
+          "X-API-Key: ${PLATFORM_TOKEN}",
+          "${PLATFORM_URL}/api/runtimes/${runtime_id}/action",
+          "-d",
+          "{\"action\":\"deploy\"}"
+        ],
+        "timeout_seconds": 15
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "runtime_id": {
+            "type": "string",
+            "description": "ID serwera do wdrożenia"
+          }
+        },
+        "required": [
+          "runtime_id"
+        ]
+      }
+    },
+    {
+      "name": "restart_server",
+      "description": "Restartuje działający serwer MCP — kontener jest zatrzymywany i uruchamiany ponownie.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "medium",
+      "mode": "write",
+      "category": "other",
+      "config": {
+        "command": [
+          "curl",
+          "-s",
+          "-X",
+          "POST",
+          "-H",
+          "Content-Type: application/json",
+          "-H",
+          "X-API-Key: ${PLATFORM_TOKEN}",
+          "${PLATFORM_URL}/api/runtimes/${runtime_id}/action",
+          "-d",
+          "{\"action\":\"restart\"}"
+        ],
+        "timeout_seconds": 15
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "runtime_id": {
+            "type": "string",
+            "description": "ID serwera do restartu"
+          }
+        },
+        "required": [
+          "runtime_id"
+        ]
+      }
+    },
+    {
+      "name": "stop_server",
+      "description": "Zatrzymuje serwer MCP.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "medium",
+      "mode": "write",
+      "category": "other",
+      "config": {
+        "command": [
+          "curl",
+          "-s",
+          "-X",
+          "POST",
+          "-H",
+          "Content-Type: application/json",
+          "-H",
+          "X-API-Key: ${PLATFORM_TOKEN}",
+          "${PLATFORM_URL}/api/runtimes/${runtime_id}/action",
+          "-d",
+          "{\"action\":\"stop\"}"
+        ],
+        "timeout_seconds": 15
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "runtime_id": {
+            "type": "string",
+            "description": "ID serwera do zatrzymania"
+          }
+        },
+        "required": [
+          "runtime_id"
+        ]
+      }
+    },
+    {
+      "name": "delete_server",
+      "description": "Usuwa serwer MCP i jego kontener. Operacja nieodwracalna — usuwa runtime, tools i policy z bazy.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "high",
+      "mode": "destructive",
+      "category": "other",
+      "config": {
+        "command": [
+          "curl",
+          "-s",
+          "-X",
+          "POST",
+          "-H",
+          "Content-Type: application/json",
+          "-H",
+          "X-API-Key: ${PLATFORM_TOKEN}",
+          "${PLATFORM_URL}/api/runtimes/${runtime_id}/action",
+          "-d",
+          "{\"action\":\"delete\"}"
+        ],
+        "timeout_seconds": 15
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "runtime_id": {
+            "type": "string",
+            "description": "ID serwera do usunięcia"
+          }
+        },
+        "required": [
+          "runtime_id"
+        ]
+      }
+    }
+  ]
+}

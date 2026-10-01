@@ -1,0 +1,797 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.doc-flow { display:grid; gap:6px; max-width:700px; margin:0 auto; }
+.doc-step { background:var(--panel-2); border:1px solid var(--line); border-radius:10px; padding:16px 18px; }
+.doc-arrow { text-align:center; font-size:18px; color:var(--blue); line-height:1; }
+.doc-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.doc-grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+.doc-card { background:var(--panel-2); border:1px solid var(--line); border-radius:10px; padding:16px 18px; }
+.doc-card h3 { margin:0 0 8px; font-size:14px; font-weight:800; }
+.doc-scenario { background:#0b1a10; border:1px solid #1a4a20; border-radius:10px; padding:16px 18px; }
+.doc-scenario.shell { background:#0a1520; border-color:#1a3a50; }
+.doc-scenario.ext { background:#1a1020; border-color:#3a2050; }
+.qa-item { border-bottom:1px solid var(--line); padding:14px 0; }
+.qa-item:last-child { border-bottom:none; }
+.qa-q { font-weight:800; color:white; margin-bottom:6px; font-size:14px; }
+.qa-a { color:var(--muted); font-size:13px; line-height:1.7; }
+.role-card { border-radius:10px; padding:16px 18px; }
+</style>
+
+<!-- Hero -->
+<div style="background:linear-gradient(135deg,#0d1e2e,#0a1a0a);border:1px solid #1a4a3a;border-radius:14px;padding:28px 32px;margin-bottom:4px">
+  <div style="font-size:15px;color:#7dd3fc;font-weight:700;margin-bottom:6px">Jedna odpowiedź na pytanie:</div>
+  <div style="font-size:24px;font-weight:800;color:white;line-height:1.3;margin-bottom:14px">
+    Jak AI (Claude, ChatGPT, Copilot) może wywoływać Twoje narzędzia,<br>API i komendy — bez dostępu do całego systemu?
+  </div>
+  <div style="color:#a0c8b0;font-size:14px;line-height:1.7">
+    MCP Platform tworzy <b>izolowane kontenery</b> z dokładnie tymi narzędziami które chcesz udostępnić.
+    AI pyta kontener, kontener wykonuje operację, AI dostaje odpowiedź. Nic więcej nie jest dostępne.
+  </div>
+</div>
+
+<!-- Section: Przepływ -->
+<section>
+  <h2>🔄 Jak to działa — cały przepływ w 5 krokach</h2>
+  <div class="doc-flow">
+    <div class="doc-step" style="border-color:#1a4a6a">
+      <div style="font-size:11px;font-weight:800;color:#7dd3fc;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Krok 1</div>
+      <div style="font-weight:700;color:white;margin-bottom:4px">📦 Definiujesz narzędzia</div>
+      <div class="muted">Opisujesz CO AI ma robić — np. "wykonaj komendę oc get" albo "wywołaj to API". Robisz to w <b>Szybkim starcie</b>, <b>Kreatorze zaawansowanym</b> lub <b>Package Generator</b>.</div>
+    </div>
+    <div class="doc-arrow">↓</div>
+    <div class="doc-step" style="border-color:#1a3a1a">
+      <div style="font-size:11px;font-weight:800;color:#5ce89a;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Krok 2</div>
+      <div style="font-weight:700;color:white;margin-bottom:4px">🖥️ Platforma generuje konfigurację</div>
+      <div class="muted">Control plane tworzy pliki: <code>tools.json</code>, <code>policy.json</code>, <code>runtime-config.json</code>. Opisują co wolno uruchamiać i jak.</div>
+    </div>
+    <div class="doc-arrow">↓</div>
+    <div class="doc-step" style="border-color:#2a2a0a">
+      <div style="font-size:11px;font-weight:800;color:#f4c163;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Krok 3</div>
+      <div style="font-weight:700;color:white;margin-bottom:4px">🐳 Operator uruchamia kontener Docker</div>
+      <div class="muted">Kontener jest <b>rootless</b> (user 1000:1000), <b>read-only filesystem</b>, z limitem 512MB RAM i 1 CPU, odciętymi uprawnieniami (<code>cap_drop: ALL</code>) i izolacją sieciową.</div>
+    </div>
+    <div class="doc-arrow">↓</div>
+    <div class="doc-step" style="border-color:#2a1a2a">
+      <div style="font-size:11px;font-weight:800;color:#c084fc;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Krok 4</div>
+      <div style="font-weight:700;color:white;margin-bottom:4px">🔌 Serwer MCP nasłuchuje</div>
+      <div class="muted">Kontener wystawia endpoint np. <code>http://mcp.dom:19500/mcp</code> — wklejasz go do Continue, OpenWebUI lub innego klienta AI.</div>
+    </div>
+    <div class="doc-arrow">↓</div>
+    <div class="doc-step" style="border-color:#1a3a4a">
+      <div style="font-size:11px;font-weight:800;color:#7dd3fc;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Krok 5</div>
+      <div style="font-weight:700;color:white;margin-bottom:4px">🤖 AI korzysta z narzędzi</div>
+      <div class="muted">Gdy AI chce np. pobrać dane z API, wysyła zapytanie do endpointu MCP. Kontener wykonuje operację i zwraca wynik. AI widzi tylko wynik — nic więcej.</div>
+    </div>
+  </div>
+</section>
+
+<!-- Section: Sposoby tworzenia -->
+<section>
+  <h2>🛤️ Sposoby tworzenia serwera MCP</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+    <div style="background:#0a1e10;border:2px solid #1a5a20;border-radius:12px;padding:18px">
+      <div style="font-size:24px;margin-bottom:8px">⚡</div>
+      <div style="font-weight:800;color:white;margin-bottom:6px">Szybki start</div>
+      <div class="muted" style="font-size:13px;line-height:1.7;margin-bottom:12px">
+        Wypełnij 2-3 pola — serwer gotowy w 30 sekund. Dla osób które chcą szybko działającego serwera bez konfigurowania szczegółów.
+      </div>
+      <div style="font-size:12px;color:#5ce89a;line-height:1.8">
+        ✅ REST API → wpisz URL<br>
+        ✅ Komenda → wpisz np. <code>oc get ${'{'}*args{'}'}</code><br>
+        ✅ Gotowy zestaw → wybierz z katalogu<br>
+        ✅ Import z JSON/URL/Git
+      </div>
+      <a href="/quick-start" style="display:block;margin-top:14px;background:#1a7a3f;color:white;text-align:center;padding:8px;border-radius:6px;font-weight:700;font-size:13px;text-decoration:none">Otwórz →</a>
+    </div>
+
+    <div style="background:#0a1520;border:2px solid #1a3a50;border-radius:12px;padding:18px">
+      <div style="font-size:24px;margin-bottom:8px">🛠️</div>
+      <div style="font-weight:800;color:white;margin-bottom:6px">Kreator zaawansowany</div>
+      <div class="muted" style="font-size:13px;line-height:1.7;margin-bottom:12px">
+        4-krokowy wizard z pełną kontrolą. Wybierz silnik (HTTP, Shell lub OpenAPI), paczkę lub zbuduj od zera — z własnym środowiskiem Docker i polityką.
+      </div>
+      <div style="font-size:12px;color:#7dd3fc;line-height:1.8">
+        ✅ Wybór paczki tools<br>
+        ✅ Własny obraz Docker (APT packages)<br>
+        ✅ Silnik OpenAPI — auto-tools z dowolnego REST API<br>
+        ✅ Pełna konfiguracja polityki
+      </div>
+      <a href="/create" style="display:block;margin-top:14px;background:#1a3a6a;color:white;text-align:center;padding:8px;border-radius:6px;font-weight:700;font-size:13px;text-decoration:none">Otwórz →</a>
+    </div>
+
+    <div style="background:#1a1020;border:2px solid #3a2050;border-radius:12px;padding:18px">
+      <div style="font-size:24px;margin-bottom:8px">✨</div>
+      <div style="font-weight:800;color:white;margin-bottom:6px">Package Generator</div>
+      <div class="muted" style="font-size:13px;line-height:1.7;margin-bottom:12px">
+        Wizard do tworzenia paczek tools wielokrotnego użytku. Definiujesz tools, politykę i środowisko — generuje Package JSON gotowy do instalacji.
+      </div>
+      <div style="font-size:12px;color:#c084fc;line-height:1.8">
+        ✅ Wizualny kreator z podglądem JSON<br>
+        ✅ Shell + HTTP tools w jednej paczce<br>
+        ✅ Własna baza obrazu Docker<br>
+        ✅ Eksport / import / share
+      </div>
+      <a href="/tool-packages/generate" style="display:block;margin-top:14px;background:#3a1060;color:white;text-align:center;padding:8px;border-radius:6px;font-weight:700;font-size:13px;text-decoration:none">Otwórz →</a>
+    </div>
+
+    <div style="background:#0a1a10;border:2px solid #1a5040;border-radius:12px;padding:18px">
+      <div style="font-size:24px;margin-bottom:8px">📄</div>
+      <div style="font-weight:800;color:white;margin-bottom:6px">OpenAPI Auto-MCP <span style="font-size:11px;background:#1a4a30;color:#5ce89a;border-radius:4px;padding:2px 6px;margin-left:6px;vertical-align:middle">nowość</span></div>
+      <div class="muted" style="font-size:13px;line-height:1.7;margin-bottom:12px">
+        Masz serwis z dokumentacją REST (openapi.json)? Podaj URL — platforma automatycznie generuje osobny tool dla każdego endpointu. Zero definiowania narzędzi.
+      </div>
+      <div style="font-size:12px;color:#5ce89a;line-height:1.8">
+        ✅ Każdy endpoint REST = osobny tool MCP<br>
+        ✅ Nazwy i opisy z dokumentacji spec<br>
+        ✅ Wsparcie dla Bearer token / custom header<br>
+        ✅ Dostępne w Kreatorze zaawansowanym
+      </div>
+      <a href="/create" style="display:block;margin-top:14px;background:#1a5040;color:white;text-align:center;padding:8px;border-radius:6px;font-weight:700;font-size:13px;text-decoration:none">Kreator zaawansowany →</a>
+    </div>
+
+  </div>
+</section>
+
+<!-- Section: Szybki start vs Kreator zaawansowany -->
+<section>
+  <h2>⚡ vs 🛠️ Kiedy użyć Szybkiego startu, a kiedy Kreatora zaawansowanego?</h2>
+
+  <div style="background:#0a1a2a;border:1px solid #1a3a50;border-radius:12px;padding:20px 24px;margin-bottom:16px">
+    <div style="font-size:13px;color:var(--muted);line-height:1.8">
+      Oba kreatory robią to samo — tworzą serwer MCP i uruchamiają kontener Docker.<br>
+      Różnica jest w tym <b style="color:white">ile możesz skonfigurować</b> i <b style="color:white">ile czasu to zajmuje</b>.
+    </div>
+  </div>
+
+  <div class="doc-grid2" style="gap:0;border:1px solid var(--line);border-radius:12px;overflow:hidden">
+
+    <!-- Header -->
+    <div style="background:#0a1e10;border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:14px 20px">
+      <div style="font-size:22px;margin-bottom:4px">⚡</div>
+      <div style="font-weight:800;color:white;font-size:16px">Szybki start</div>
+      <div style="color:#5ce89a;font-size:12px;margin-top:4px">Gotowy serwer w 30 sekund</div>
+    </div>
+    <div style="background:#0a1520;border-bottom:1px solid var(--line);padding:14px 20px">
+      <div style="font-size:22px;margin-bottom:4px">🛠️</div>
+      <div style="font-weight:800;color:white;font-size:16px">Kreator zaawansowany</div>
+      <div style="color:#7dd3fc;font-size:12px;margin-top:4px">Pełna kontrola, 4 kroki</div>
+    </div>
+
+    <!-- Dla kogo -->
+    <div style="background:#0d1822;border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:14px 20px">
+      <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Dla kogo</div>
+      <div style="font-size:13px;color:var(--text);line-height:1.7">
+        Dla każdego. Nie musisz rozumieć jak działa platforma — wypełniasz formularz i klikasz <b>Uruchom</b>.
+      </div>
+    </div>
+    <div style="background:#0d1822;border-bottom:1px solid var(--line);padding:14px 20px">
+      <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Dla kogo</div>
+      <div style="font-size:13px;color:var(--text);line-height:1.7">
+        Dla osób które chcą dobrać środowisko, politykę bezpieczeństwa i silnik wykonania ręcznie.
+      </div>
+    </div>
+
+    <!-- Typy serwerów -->
+    <div style="background:#0d1822;border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:14px 20px">
+      <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Typy serwerów</div>
+      <div style="font-size:13px;color:var(--text);line-height:1.9">
+        🌐 REST API — wpisz URL i metodę<br>
+        🐚 Komenda shell — wpisz komendę<br>
+        📦 Gotowy zestaw — wybierz z katalogu<br>
+        📥 Import — z URL / pliku JSON / Gita
+      </div>
+    </div>
+    <div style="background:#0d1822;border-bottom:1px solid var(--line);padding:14px 20px">
+      <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Typy serwerów</div>
+      <div style="font-size:13px;color:var(--text);line-height:1.9">
+        📦 Gotowa paczka — instaluje wszystkie tools z katalogu<br>
+        🔧 Od zera — sam definiujesz tools po uruchomieniu<br>
+        <span style="color:var(--muted)">+ pełny wybór silnika i obrazu Docker</span>
+      </div>
+    </div>
+
+    <!-- Środowisko Docker -->
+    <div style="background:#0d1822;border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:14px 20px">
+      <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Środowisko Docker</div>
+      <div style="font-size:13px;line-height:1.7">
+        <span style="color:#f4c163">⚠️ Automatyczne</span> — platforma dobiera obraz domyślny dla wybranego typu. Nie możesz zmienić bazy obrazu w tym widoku.
+      </div>
+    </div>
+    <div style="background:#0d1822;border-bottom:1px solid var(--line);padding:14px 20px">
+      <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Środowisko Docker</div>
+      <div style="font-size:13px;line-height:1.7">
+        <span style="color:#5ce89a">✅ Pełny wybór</span> — wybierasz obraz bazowy (np. z <code>postgresql-client</code>, <code>curl</code>, <code>jq</code>), możesz też zbudować własny przez Runtime Image Builder.
+      </div>
+    </div>
+
+    <!-- Polityka bezpieczeństwa -->
+    <div style="background:#0d1822;border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:14px 20px">
+      <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Polityka bezpieczeństwa</div>
+      <div style="font-size:13px;line-height:1.7">
+        <span style="color:#f4c163">⚠️ Uproszczona</span> — tylko denylist komend (co ma być zablokowane). Resztę ustawiasz później w widoku serwera.
+      </div>
+    </div>
+    <div style="background:#0d1822;border-bottom:1px solid var(--line);padding:14px 20px">
+      <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Polityka bezpieczeństwa</div>
+      <div style="font-size:13px;line-height:1.7">
+        <span style="color:#5ce89a">✅ Pełna konfiguracja</span> — allowed binaries, blocked commands, limity payloadu, tryb read-only — wszystko w kroku 3 kreatora.
+      </div>
+    </div>
+
+    <!-- Czas -->
+    <div style="background:#0d1822;border-right:1px solid var(--line);padding:14px 20px">
+      <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Czas tworzenia</div>
+      <div style="font-size:13px;color:#5ce89a;font-weight:700">~30 sekund</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">2-3 pola do wypełnienia</div>
+    </div>
+    <div style="background:#0d1822;padding:14px 20px">
+      <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Czas tworzenia</div>
+      <div style="font-size:13px;color:#f4c163;font-weight:700">~2-5 minut</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">4 kroki z pełną konfiguracją</div>
+    </div>
+
+  </div>
+
+  <div style="background:#0b1505;border:1px solid #1a4a10;border-radius:10px;padding:14px 18px;margin-top:12px">
+    <div style="font-weight:800;color:#5ce89a;margin-bottom:6px;font-size:13px">💡 Wskazówka</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.7">
+      Zacznij od <b style="color:white">Szybkiego startu</b> — jeśli serwer działa i chcesz zmienić obraz Docker lub politykę, zawsze możesz wejść w szczegóły serwera i zmienić ustawienia.<br>
+      <b style="color:white">Kreator zaawansowany</b> używaj wtedy gdy wiesz z góry że potrzebujesz niestandardowego środowiska (np. własny obraz z <code>psql</code>) albo ścisłej polityki bezpieczeństwa od początku.
+    </div>
+  </div>
+
+</section>
+
+<!-- Section: OpenAPI Auto-MCP -->
+<section>
+  <h2>📄 OpenAPI Auto-MCP — MCP z dokumentacji REST API</h2>
+
+  <div style="background:#061810;border:1px solid #1a4a30;border-radius:12px;padding:18px 22px;margin-bottom:16px">
+    <div style="font-size:13px;color:var(--muted);line-height:1.9">
+      <b style="color:white">Jak to działa?</b><br>
+      Zamiast ręcznie definiować tools, podajesz URL serwisu który ma dokumentację OpenAPI (<code>openapi.json</code>).
+      Platforma uruchamia kontener z silnikiem <b style="color:#5ce89a">FastMCP.from_openapi()</b> który:<br>
+      <span style="margin-left:16px">1. Pobiera spec z <code>BACKEND_BASE_URL/openapi.json</code> lub <code>OPENAPI_SPEC_URL</code></span><br>
+      <span style="margin-left:16px">2. Automatycznie tworzy osobny tool MCP dla każdego endpointu REST</span><br>
+      <span style="margin-left:16px">3. Kieruje wywołania narzędzi bezpośrednio do serwisu backendowego</span><br>
+      Żadna ręczna konfiguracja tools nie jest wymagana — nazwy, opisy i parametry pochodzi z dokumentacji spec.
+    </div>
+  </div>
+
+  <div class="doc-grid2" style="gap:14px;margin-bottom:16px">
+
+    <div class="doc-card" style="background:#0a1a10;border-color:#1a4a20">
+      <h3 style="color:#5ce89a">Kiedy używać?</h3>
+      <div class="muted" style="font-size:13px;line-height:1.8">
+        ✅ Serwis ma gotową dokumentację <code>openapi.json</code> / <code>swagger.json</code><br>
+        ✅ Chcesz udostępnić <b>wiele endpointów</b> bez pisania każdego ręcznie<br>
+        ✅ API zmienia się często — spec auto-odświeża tools przy restarcie<br>
+        ✅ Zewnętrzne serwisy z publicznym spec (GitLab, Jira, własne API)<br><br>
+        ❌ Serwis nie ma dokumentacji OpenAPI → użyj HTTP Gateway lub Shell
+      </div>
+    </div>
+
+    <div class="doc-card" style="background:#0a1520;border-color:#1a3a50">
+      <h3 style="color:#7dd3fc">Jak uruchomić?</h3>
+      <div class="muted" style="font-size:13px;line-height:1.8">
+        1. Idź do <a href="/create" style="color:#7dd3fc">Kreator zaawansowany</a><br>
+        2. Krok 1 — wybierz silnik <b>📄 OpenAPI Spec</b><br>
+        3. Wpisz <b>URL serwisu</b> (np. <code>http://moja-api:8000</code>)<br>
+        4. Opcjonalnie: URL do spec, token autoryzacji<br>
+        5. Krok 2 → 3 → 4 — reszta jak zwykle<br><br>
+        Kontener startuje z obrazem <code>mcp-runtime-openapi:latest</code>.
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Env vars table -->
+  <div style="font-weight:700;color:white;margin-bottom:10px;font-size:14px">⚙️ Zmienne środowiskowe (konfiguracja kontenera)</div>
+  <div style="background:#060e18;border:1px solid #1a2e45;border-radius:10px;overflow:hidden;font-size:13px">
+    <div style="display:grid;grid-template-columns:220px 1fr 120px;background:#0a1830;padding:8px 14px;font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px">
+      <div>Zmienna</div><div>Opis</div><div>Wymagana</div>
+    </div>
+    <div style="display:grid;grid-template-columns:220px 1fr 120px;padding:10px 14px;border-top:1px solid #1a2e45">
+      <code style="color:#5ce89a">BACKEND_BASE_URL</code>
+      <div style="color:var(--muted);padding-left:12px">Bazowy URL serwisu backendowego (np. <code>http://moja-api:8000</code>). Używany do kierowania wywołań narzędzi.</div>
+      <div style="color:#f4c163;padding-left:8px">✅ wymagana</div>
+    </div>
+    <div style="display:grid;grid-template-columns:220px 1fr 120px;padding:10px 14px;border-top:1px solid #1a2e45;background:#080e18">
+      <code style="color:#7dd3fc">OPENAPI_SPEC_URL</code>
+      <div style="color:var(--muted);padding-left:12px">Pełny URL do pliku <code>openapi.json</code>. Domyślnie: <code>BACKEND_BASE_URL/openapi.json</code></div>
+      <div style="color:var(--muted);padding-left:8px">opcjonalna</div>
+    </div>
+    <div style="display:grid;grid-template-columns:220px 1fr 120px;padding:10px 14px;border-top:1px solid #1a2e45">
+      <code style="color:#7dd3fc">OPENAPI_SPEC_FILE</code>
+      <div style="color:var(--muted);padding-left:12px">Ścieżka do lokalnego pliku spec (nadpisuje URL). Przydatne gdy spec jest zamontowany jako plik.</div>
+      <div style="color:var(--muted);padding-left:8px">opcjonalna</div>
+    </div>
+    <div style="display:grid;grid-template-columns:220px 1fr 120px;padding:10px 14px;border-top:1px solid #1a2e45;background:#080e18">
+      <code style="color:#7dd3fc">BACKEND_AUTH_TOKEN</code>
+      <div style="color:var(--muted);padding-left:12px">Token autoryzacji do serwisu (Bearer token lub inny). Bezpiecznie przechowywany tylko w kontenerze.</div>
+      <div style="color:var(--muted);padding-left:8px">opcjonalna</div>
+    </div>
+    <div style="display:grid;grid-template-columns:220px 1fr 120px;padding:10px 14px;border-top:1px solid #1a2e45">
+      <code style="color:#7dd3fc">BACKEND_AUTH_HEADER</code>
+      <div style="color:var(--muted);padding-left:12px">Nazwa nagłówka autoryzacji. Domyślnie: <code>Authorization</code></div>
+      <div style="color:var(--muted);padding-left:8px">opcjonalna</div>
+    </div>
+    <div style="display:grid;grid-template-columns:220px 1fr 120px;padding:10px 14px;border-top:1px solid #1a2e45;background:#080e18">
+      <code style="color:#7dd3fc">BACKEND_AUTH_PREFIX</code>
+      <div style="color:var(--muted);padding-left:12px">Prefix wartości nagłówka autoryzacji. Domyślnie: <code>Bearer</code></div>
+      <div style="color:var(--muted);padding-left:8px">opcjonalna</div>
+    </div>
+    <div style="display:grid;grid-template-columns:220px 1fr 120px;padding:10px 14px;border-top:1px solid #1a2e45">
+      <code style="color:#7dd3fc">SERVER_NAME</code>
+      <div style="color:var(--muted);padding-left:12px">Nazwa serwera MCP widoczna dla klientów AI. Domyślnie: <code>openapi-mcp</code></div>
+      <div style="color:var(--muted);padding-left:8px">opcjonalna</div>
+    </div>
+  </div>
+
+  <div style="background:#0a1a10;border:1px solid #1a4a20;border-radius:8px;padding:12px 16px;margin-top:14px;font-size:13px">
+    💡 <b style="color:#5ce89a">Auto-detekcja spec:</b> Jeśli serwis to runtime tej platformy, kontener najpierw próbuje pobrać spec z <code>/openwebui/openapi.json</code> (tylko user-defined tools, czyste nazwy). Jeśli nie ma — pobiera standardowy <code>/openapi.json</code>. Dotyczy to scenariusza "MCP z MCP" — czyli gdy AI używa OpenAPI Auto-MCP do sterowania innym serwerem MCP z tej platformy.
+  </div>
+
+</section>
+
+<!-- Section: Schemat architektury -->
+<section>
+  <h2>🏗️ Schemat — jak platforma działa pod spodem</h2>
+
+  <div style="background:#060e18;border:1px solid #1a2e45;border-radius:14px;padding:28px 24px;overflow-x:auto">
+
+    <!-- Row 1: AI Clients -->
+    <div style="text-align:center;margin-bottom:6px">
+      <div style="display:inline-flex;gap:10px;flex-wrap:wrap;justify-content:center">
+        <div style="background:#1a1030;border:1px solid #3a2060;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;color:#c084fc">🤖 Claude / ChatGPT</div>
+        <div style="background:#1a1030;border:1px solid #3a2060;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;color:#c084fc">💬 Continue.dev</div>
+        <div style="background:#1a1030;border:1px solid #3a2060;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;color:#c084fc">🌐 OpenWebUI</div>
+        <div style="background:#1a1030;border:1px solid #3a2060;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;color:#c084fc">⚙️ Dowolny klient MCP</div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px">Klienci AI — wklejasz tam adres endpointu MCP</div>
+    </div>
+
+    <!-- Arrow down -->
+    <div style="text-align:center;font-size:22px;color:#3a5a7a;margin:4px 0">↓ <span style="font-size:11px;color:var(--muted);vertical-align:middle">JSON-RPC 2.0 / HTTP</span></div>
+
+    <!-- Row 2: MCP Containers -->
+    <div style="border:2px solid #1a3a5a;border-radius:12px;padding:16px;margin-bottom:4px">
+      <div style="font-size:11px;font-weight:800;color:#7dd3fc;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;text-align:center">
+        🐳 Kontenery Docker — MCP Runtime
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+
+        <div style="background:#0a1a2a;border:1px solid #1a3a4a;border-radius:8px;padding:12px">
+          <div style="font-size:11px;font-weight:800;color:#5ce89a;margin-bottom:6px">HTTP Gateway Runtime</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.7">
+            Wywołuje zewnętrzne API<br>
+            <code style="color:#7dd3fc">http_request</code> adapter<br>
+            Port: 8080 → <code>/mcp</code>
+          </div>
+          <div style="margin-top:8px;font-size:10px;background:#061018;border-radius:4px;padding:4px 7px;color:#3a7a5a">
+            🔒 read-only FS · cap_drop ALL<br>
+            user 1000:1000 · 512MB RAM
+          </div>
+        </div>
+
+        <div style="background:#0a1a2a;border:1px solid #1a3a4a;border-radius:8px;padding:12px">
+          <div style="font-size:11px;font-weight:800;color:#f4c163;margin-bottom:6px">Shell Runtime</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.7">
+            Wykonuje komendy shell<br>
+            <code style="color:#7dd3fc">shell</code> adapter<br>
+            Port: 8080 → <code>/mcp</code>
+          </div>
+          <div style="margin-top:8px;font-size:10px;background:#061018;border-radius:4px;padding:4px 7px;color:#3a7a5a">
+            🔒 read-only FS · cap_drop ALL<br>
+            policy check przed exec
+          </div>
+        </div>
+
+        <div style="background:#061810;border:1px solid #1a4a30;border-radius:8px;padding:12px">
+          <div style="font-size:11px;font-weight:800;color:#34d399;margin-bottom:6px">OpenAPI Runtime</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.7">
+            Auto-tools z OpenAPI spec<br>
+            <code style="color:#7dd3fc">FastMCP.from_openapi()</code><br>
+            Port: 8080 → <code>/mcp</code>
+          </div>
+          <div style="margin-top:8px;font-size:10px;background:#061018;border-radius:4px;padding:4px 7px;color:#3a7a5a">
+            🔒 read-only FS · cap_drop ALL<br>
+            spec → tools przy starcie
+          </div>
+        </div>
+
+        <div style="background:#0a1a2a;border:1px dashed #2a3a4a;border-radius:8px;padding:12px">
+          <div style="font-size:11px;font-weight:800;color:var(--muted);margin-bottom:6px">Własny Runtime</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.7">
+            Zbudowany przez Runtime<br>
+            Image Builder (APT + pip)<br>
+            <span style="color:#7dd3fc">np. z psql, awscli...</span>
+          </div>
+          <div style="margin-top:8px;font-size:10px;background:#061018;border-radius:4px;padding:4px 7px;color:#3a7a5a">
+            🔒 Te same ograniczenia<br>
+            + własne narzędzia
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Config files injected -->
+      <div style="margin-top:10px;border-top:1px solid #1a2e40;padding-top:10px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <div style="font-size:11px;color:var(--muted)">📁 Konfiguracja wstrzykiwana do kontenera:</div>
+        <code style="font-size:11px;background:#0d1a2a;padding:2px 7px;border-radius:4px;color:#7dd3fc">tools.json</code>
+        <code style="font-size:11px;background:#0d1a2a;padding:2px 7px;border-radius:4px;color:#7dd3fc">policy.json</code>
+        <code style="font-size:11px;background:#0d1a2a;padding:2px 7px;border-radius:4px;color:#7dd3fc">runtime-config.json</code>
+      </div>
+    </div>
+
+    <!-- Arrow up from operator -->
+    <div style="text-align:center;font-size:22px;color:#3a5a7a;margin:4px 0">↑ <span style="font-size:11px;color:var(--muted);vertical-align:middle">docker run / stop / inspect</span></div>
+
+    <!-- Row 3: Control Plane + Operator -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:4px">
+
+      <div style="background:#0a1a10;border:2px solid #1a4a20;border-radius:12px;padding:16px">
+        <div style="font-size:11px;font-weight:800;color:#5ce89a;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">🖥️ Control Plane (FastAPI)</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.9">
+          • UI — kreatory, widoki serwerów<br>
+          • REST API — zarządzanie runtimeami<br>
+          • Zapis konfiguracji do <code>tools.json</code><br>
+          • Kolejka <code>deployment_requests</code><br>
+          • RBAC — sesje, role, rejestracja<br>
+          • Audit log każdej operacji
+        </div>
+      </div>
+
+      <div style="background:#1a0a10;border:2px solid #4a1a20;border-radius:12px;padding:16px">
+        <div style="font-size:11px;font-weight:800;color:#f47a80;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">⚙️ Operator (reconciler)</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.9">
+          • Polling co 5s — szuka nowych zadań<br>
+          • Docker SDK — uruchamia kontenery<br>
+          • Bezpieczeństwo baseline:<br>
+          &nbsp;&nbsp;<code style="font-size:11px">read_only=True</code> · <code style="font-size:11px">cap_drop=ALL</code><br>
+          &nbsp;&nbsp;<code style="font-size:11px">mem_limit=512m</code> · <code style="font-size:11px">user=1000</code><br>
+          • Raportuje status z powrotem do DB
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Arrow down to DB -->
+    <div style="text-align:center;font-size:22px;color:#3a5a7a;margin:4px 0">↕ <span style="font-size:11px;color:var(--muted);vertical-align:middle">SQLite WAL</span></div>
+
+    <!-- Row 4: Storage -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+
+      <div style="background:#0d1420;border:1px solid #1a2a40;border-radius:10px;padding:12px">
+        <div style="font-size:11px;font-weight:800;color:#7dd3fc;margin-bottom:6px">🗄️ SQLite — mcp_platform.db</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.8">
+          runtimes · tools · policies<br>
+          deployment_requests · audit_log<br>
+          users · sessions · tool_packages
+        </div>
+      </div>
+
+      <div style="background:#0d1420;border:1px solid #1a2a40;border-radius:10px;padding:12px">
+        <div style="font-size:11px;font-weight:800;color:#7dd3fc;margin-bottom:6px">📂 /data/configs/</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.8">
+          Po jednym katalogu na runtime<br>
+          <code>tools.json</code> · <code>policy.json</code><br>
+          Montowane jako volume do kontenera
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Legend -->
+  <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;padding:10px 14px;background:var(--panel-2);border-radius:8px;font-size:11px;color:var(--muted)">
+    <span>🟣 Klient AI — inicjuje zapytanie</span>
+    <span>🔵 Kontener Docker — izolowane środowisko wykonania</span>
+    <span>🟢 Control Plane — mózg platformy</span>
+    <span>🔴 Operator — ręce platformy (Docker API)</span>
+  </div>
+
+</section>
+
+<!-- Section: Bezpieczeństwo w kreatorach -->
+<section>
+  <h2>🔒 Bezpieczeństwo — co możesz kontrolować i gdzie</h2>
+
+  <div style="background:#060e18;border:1px solid #1a2e45;border-radius:12px;overflow:hidden;margin-bottom:12px">
+
+    <!-- Header row -->
+    <div style="display:grid;grid-template-columns:1.8fr 1fr 1fr 1fr;background:#0a1a28;border-bottom:1px solid #1a2e45">
+      <div style="padding:10px 16px;font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Zabezpieczenie</div>
+      <div style="padding:10px 16px;font-size:11px;font-weight:800;color:#5ce89a;text-transform:uppercase;letter-spacing:1px;text-align:center">⚡ Szybki start</div>
+      <div style="padding:10px 16px;font-size:11px;font-weight:800;color:#7dd3fc;text-transform:uppercase;letter-spacing:1px;text-align:center">🛠️ Kreator</div>
+      <div style="padding:10px 16px;font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;text-align:center">Widok serwera</div>
+    </div>
+
+    <!-- Rows -->
+    <div style="display:grid;grid-template-columns:1.8fr 1fr 1fr 1fr;border-bottom:1px solid #111e2c">
+      <div style="padding:10px 16px;font-size:12px;color:white;font-weight:600">Allowed binaries<div style="font-size:11px;color:var(--muted);font-weight:400;margin-top:2px">tylko ta binarka może być uruchamiana</div></div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#f4c163">auto z komendy</div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#5ce89a">✅ ręczna lista</div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#5ce89a">✅ edytor</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1.8fr 1fr 1fr 1fr;border-bottom:1px solid #111e2c">
+      <div style="padding:10px 16px;font-size:12px;color:white;font-weight:600">Allowed prefix<div style="font-size:11px;color:var(--muted);font-weight:400;margin-top:2px">AI może tylko oc get ..., nie oc delete</div></div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#5ce89a">✅ jedno pole</div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#5ce89a">✅ pełna lista</div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#5ce89a">✅ edytor</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1.8fr 1fr 1fr 1fr;border-bottom:1px solid #111e2c">
+      <div style="padding:10px 16px;font-size:12px;color:white;font-weight:600">Blocked commands / denylist<div style="font-size:11px;color:var(--muted);font-weight:400;margin-top:2px">konkretne komendy zawsze zablokowane</div></div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#5ce89a">✅ wieloliniowy</div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#5ce89a">✅ pełna lista</div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#5ce89a">✅ edytor</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1.8fr 1fr 1fr 1fr;border-bottom:1px solid #111e2c">
+      <div style="padding:10px 16px;font-size:12px;color:white;font-weight:600">Tryb read-only<div style="font-size:11px;color:var(--muted);font-weight:400;margin-top:2px">blokuje wszystkie narzędzia write/destructive</div></div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#5ce89a">✅ checkbox</div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#5ce89a">✅ checkbox</div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#5ce89a">✅ toggle</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1.8fr 1fr 1fr 1fr;border-bottom:1px solid #111e2c">
+      <div style="padding:10px 16px;font-size:12px;color:white;font-weight:600">Limit czasu (timeout)<div style="font-size:11px;color:var(--muted);font-weight:400;margin-top:2px">max ile sekund może działać komenda</div></div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#5ce89a">✅ pole (s)</div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#5ce89a">✅ pole (s)</div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#5ce89a">✅ edytor</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1.8fr 1fr 1fr 1fr;border-bottom:1px solid #111e2c">
+      <div style="padding:10px 16px;font-size:12px;color:white;font-weight:600">Max rozmiar odpowiedzi<div style="font-size:11px;color:var(--muted);font-weight:400;margin-top:2px">ile KB/MB AI może dostać</div></div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#5ce89a">✅ pole (KB)</div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#5ce89a">✅ pole (KB)</div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#5ce89a">✅ edytor</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1.8fr 1fr 1fr 1fr;border-bottom:1px solid #111e2c">
+      <div style="padding:10px 16px;font-size:12px;color:white;font-weight:600">Max payload (request)<div style="font-size:11px;color:var(--muted);font-weight:400;margin-top:2px">max rozmiar danych wejściowych od AI</div></div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#3a9aba">— (256KB auto)</div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#5ce89a">✅ konfigurowalne</div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#5ce89a">✅ edytor</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1.8fr 1fr 1fr 1fr;border-bottom:1px solid #111e2c">
+      <div style="padding:10px 16px;font-size:12px;color:white;font-weight:600">Block write tools<div style="font-size:11px;color:var(--muted);font-weight:400;margin-top:2px">blokuje narzędzia w trybie write</div></div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#3a9aba">— (przez read-only)</div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#5ce89a">✅ osobny checkbox</div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#5ce89a">✅ edytor</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1.8fr 1fr 1fr 1fr">
+      <div style="padding:10px 16px;font-size:12px;color:white;font-weight:600">Bezpieczeństwo kontenera<div style="font-size:11px;color:var(--muted);font-weight:400;margin-top:2px">read-only FS, cap_drop ALL, user 1000, 512MB</div></div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#5ce89a">✅ zawsze</div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#5ce89a">✅ zawsze</div>
+      <div style="padding:10px 16px;font-size:12px;text-align:center;color:#5ce89a">✅ zawsze</div>
+    </div>
+
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+
+    <div style="background:#0a1505;border:1px solid #1a4a10;border-radius:10px;padding:14px 16px">
+      <div style="font-weight:800;color:#5ce89a;font-size:13px;margin-bottom:8px">💡 Jak działa Allowed Prefix?</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.8">
+        Wpisujesz prefix np. <code style="color:#7dd3fc">oc get</code><br>
+        → AI może wywołać <code>oc get pods -n prod</code> ✅<br>
+        → AI <b>nie może</b> wywołać <code>oc delete pod xyz</code> ❌<br>
+        → AI <b>nie może</b> wywołać <code>oc exec</code> ❌<br><br>
+        Działa nawet gdy komenda ma <code>${'{'}*args{'}'}</code> — platforma sprawdza prefix <b>po</b> podstawieniu argumentów.
+      </div>
+    </div>
+
+    <div style="background:#150a05;border:1px solid #4a2a10;border-radius:10px;padding:14px 16px">
+      <div style="font-weight:800;color:#f4c163;font-size:13px;margin-bottom:8px">⚠️ Bezpieczeństwo kontenera jest zawsze włączone</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.8">
+        Niezależnie od tego co skonfigurujesz w polityce, <b>każdy</b> kontener uruchamia się z:<br>
+        🔒 <code>read_only=True</code> — filesystem tylko do odczytu<br>
+        🔒 <code>cap_drop=ALL</code> — zero uprawnień systemowych<br>
+        🔒 <code>user=1000:1000</code> — nie jako root<br>
+        🔒 <code>mem_limit=512MB</code> — limit pamięci<br>
+        🔒 <code>no-new-privileges</code> — nie może eskalować uprawnień
+      </div>
+    </div>
+
+  </div>
+
+</section>
+
+<!-- Section: Przykłady -->
+<section>
+  <h2>💡 Przykłady zastosowań</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div class="doc-scenario">
+      <div style="font-size:22px;margin-bottom:8px">🌐</div>
+      <div style="font-weight:800;color:white;margin-bottom:6px">REST API firmy</div>
+      <div class="muted" style="font-size:13px;line-height:1.7">Masz wewnętrzne API (<code>api.firma.pl</code>). Tworzysz serwer MCP → AI może pytać "znajdź umowy z 2024" → kontener wywołuje API → AI dostaje wyniki. Token jest tylko w kontenerze, AI go nie widzi.</div>
+    </div>
+    <div class="doc-scenario shell">
+      <div style="font-size:22px;margin-bottom:8px">🔴</div>
+      <div style="font-weight:800;color:white;margin-bottom:6px">OpenShift / Kubernetes</div>
+      <div class="muted" style="font-size:13px;line-height:1.7">Tool: <code>oc get ${'{'}*args{'}'}</code> z prefixem <code>oc get</code> → AI może zapytać "jakie pody działają w prod?" → wykonuje <code>oc get pods -n production</code>. Nie może <code>oc delete</code> — zablokowane policy.</div>
+    </div>
+    <div class="doc-scenario ext">
+      <div style="font-size:22px;margin-bottom:8px">🗄️</div>
+      <div style="font-weight:800;color:white;margin-bottom:6px">Baza danych (psql)</div>
+      <div class="muted" style="font-size:13px;line-height:1.7">Budujesz własny obraz z <code>postgresql-client</code> (Runtime Image Builder) → tool: <code>psql -h db.firma.pl -U user -c "${'{'}query{'}'}"</code> → AI może czytać dane z DB bez dostępu do hosta.</div>
+    </div>
+    <div class="doc-scenario" style="background:#061810;border-color:#1a4a30">
+      <div style="font-size:22px;margin-bottom:8px">📄</div>
+      <div style="font-weight:800;color:white;margin-bottom:6px">OpenAPI Auto-MCP (GitLab / Jira / własne API)</div>
+      <div class="muted" style="font-size:13px;line-height:1.7">
+        Masz serwis z <code>openapi.json</code> (np. GitLab CE, Jira, własne FastAPI). Kreator zaawansowany → silnik <b>OpenAPI Spec</b> → wpisz URL → platforma automatycznie tworzy tool dla każdego endpointu. AI może od razu pytać o zasoby — zero ręcznej konfiguracji tools.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Section: Typy zmiennych -->
+<section>
+  <h2>⌨️ Jak pisać komendy shell — zmienne</h2>
+  <div class="doc-grid2" style="gap:14px">
+    <div class="doc-card" style="background:#0a1520;border-color:#1a3a50">
+      <h3 style="color:#7dd3fc">${'{'}zmienna{'}'} — jeden parametr</h3>
+      <div class="muted" style="font-size:13px;line-height:1.8">
+        Każde <code>${'{'}var{'}'}</code> = jeden argument. AI podaje konkretną wartość.<br><br>
+        <b style="color:white">Przykład:</b><br>
+        Tool: <code>oc get pods -n ${'{'}namespace{'}'}</code><br>
+        AI wywołuje: <code>namespace = "production"</code><br>
+        Wynik: <code>oc get pods -n production</code>
+      </div>
+    </div>
+    <div class="doc-card" style="background:#1a1000;border-color:#3a2a00">
+      <h3 style="color:#f4c163">${'{'}*args{'}'} — pełny dostęp (multi-arg)</h3>
+      <div class="muted" style="font-size:13px;line-height:1.8">
+        <code>${'{'}*args{'}'}</code> = AI podaje wszystkie argumenty naraz. Runtime rozdziela je przez <code>shlex.split</code>.<br><br>
+        <b style="color:white">Przykład:</b><br>
+        Tool: <code>oc get ${'{'}*args{'}'}</code><br>
+        AI wywołuje: <code>args = "pods -n production -o json"</code><br>
+        Wynik: <code>oc get pods -n production -o json</code>
+      </div>
+    </div>
+  </div>
+  <div style="background:#0a1a0a;border:1px solid #1a4a1a;border-radius:8px;padding:12px 14px;margin-top:12px;font-size:13px">
+    🛡️ <b style="color:#5ce89a">Bezpieczeństwo:</b> Runtime używa <code>subprocess.run()</code> bez <code>shell=True</code> — żadna iniekcja przez znaki specjalne nie przejdzie. Dodatkowo policy sprawdza prefix komendy przed wykonaniem.
+  </div>
+</section>
+
+<!-- Section: RBAC -->
+<section>
+  <h2>👥 Role użytkowników (RBAC)</h2>
+  <div class="doc-grid3">
+    <div class="role-card" style="background:#1e252e;border:1px solid #2b394a">
+      <div style="font-weight:800;color:#7a92a8;font-size:15px;margin-bottom:8px">👁️ read_only</div>
+      <div style="font-size:13px;color:var(--muted);line-height:1.8">
+        ✅ Podgląd dashboard<br>
+        ✅ Lista serwerów MCP<br>
+        ✅ Audit i logi<br>
+        ✅ Bezpieczeństwo (widok)<br>
+        ❌ Tworzenie serwerów<br>
+        ❌ Deploy / modyfikacje
+      </div>
+    </div>
+    <div class="role-card" style="background:#0e2e1e;border:1px solid #1a5a38">
+      <div style="font-weight:800;color:#5ce89a;font-size:15px;margin-bottom:8px">✏️ read_write</div>
+      <div style="font-size:13px;color:var(--muted);line-height:1.8">
+        ✅ Wszystko z read_only<br>
+        ✅ Szybki start<br>
+        ✅ Kreator zaawansowany<br>
+        ✅ Deploy / stop / restart<br>
+        ❌ Package Generator<br>
+        ❌ Image Builder<br>
+        ❌ Silniki / Typy środowisk
+      </div>
+    </div>
+    <div class="role-card" style="background:#2a1040;border:1px solid #5a2a80">
+      <div style="font-weight:800;color:#c084fc;font-size:15px;margin-bottom:8px">👑 admin</div>
+      <div style="font-size:13px;color:var(--muted);line-height:1.8">
+        ✅ Pełny dostęp<br>
+        ✅ Package Generator<br>
+        ✅ Runtime Image Builder<br>
+        ✅ Silniki / Typy środowisk<br>
+        ✅ Panel użytkowników<br>
+        ✅ Akceptacja rejestracji
+      </div>
+    </div>
+  </div>
+  <div style="background:#0d1e2e;border:1px solid #1a3a50;border-radius:8px;padding:12px 14px;margin-top:12px;font-size:13px;color:#7ab8d8">
+    ℹ️ <b>Rejestracja:</b> Użytkownik zgłasza konto przez <code>/register</code> → admin akceptuje w <a href="/admin/users">Panelu użytkowników</a> i nadaje rolę. Pierwsze konto: login <code>admin</code>, hasło <code>admin</code> — zmień po pierwszym logowaniu.
+  </div>
+</section>
+
+<!-- Section: Środowiska Docker -->
+<section>
+  <h2>🐳 Środowiska wykonania (obrazy Docker)</h2>
+  <div class="doc-grid2">
+    <div class="doc-card">
+      <h3>🐚 mcp-runtime-shell:latest</h3>
+      <div class="muted" style="font-size:13px;line-height:1.8">
+        Baza: <code>ubi9/python-312-minimal</code> (RHEL 9)<br>
+        Zawiera: <code>oc</code> <code>kubectl</code> <code>curl</code> <code>jq</code> <code>bash</code> <code>grep</code> <code>sed</code> <code>awk</code><br>
+        Użyj gdy: komendy CLI — OpenShift, Kubernetes, HTTP przez curl
+      </div>
+    </div>
+    <div class="doc-card">
+      <h3>🌐 mcp-runtime-http-gateway:latest</h3>
+      <div class="muted" style="font-size:13px;line-height:1.8">
+        Baza: <code>ubi9/python-312-minimal</code> (RHEL 9)<br>
+        Zawiera: runtime HTTP do wywoływania REST API<br>
+        Użyj gdy: wywołania REST API (GitLab, Jira, własny serwis)
+      </div>
+    </div>
+    <div class="doc-card" style="background:#061810;border-color:#1a4a30">
+      <h3 style="color:#34d399">📄 mcp-runtime-openapi:latest</h3>
+      <div class="muted" style="font-size:13px;line-height:1.8">
+        Baza: <code>ubi9/python-312-minimal</code> (RHEL 9)<br>
+        Zawiera: <code>fastmcp</code>, <code>httpx</code>, <code>uvicorn</code> — auto-MCP z OpenAPI spec<br>
+        Użyj gdy: silnik OpenAPI w Kreatorze zaawansowanym — podajesz URL serwisu i dostajesz tools automatycznie
+      </div>
+    </div>
+    <div class="doc-card" style="grid-column:1/-1;background:#1a1000;border-color:#3a2a00">
+      <h3 style="color:#f4c163">🛠️ Własny obraz (Runtime Image Builder)</h3>
+      <div class="muted" style="font-size:13px;line-height:1.8">
+        Potrzebujesz <code>psql</code>, <code>terraform</code>, <code>awscli</code> lub innych narzędzi? Idź do zakładki <b><a href="/runtime-images">Budowanie obrazów</a></b> lub do <b>Szybki start → Komenda → Własne narzędzia</b>.<br>
+        Wybierasz obraz bazowy i wpisujesz pakiety do doinstalowania (np. <code>postgresql</code>) → platforma buduje obraz (~2-5 min) → nowy obraz dostępny jako opcja przy tworzeniu serwera.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Section: FAQ -->
+<section>
+  <h2>❓ Najczęstsze pytania</h2>
+  <div>
+    <div class="qa-item">
+      <div class="qa-q">Wpisałem <code>postgres-client</code> w Image Builder i dostałem błąd 100.</div>
+      <div class="qa-a">Błąd 100 z apt-get = paczka nie istnieje. Na Debianie prawidłowa nazwa to <code>postgresql-client</code> (nie postgres-client). Zawsze sprawdzaj nazwy na <code>packages.debian.org</code>.</div>
+    </div>
+    <div class="qa-item">
+      <div class="qa-q">Mam repo GitHub z gotowym serwerem MCP w C# / Node.js — czy mogę go zaimportować?</div>
+      <div class="qa-a">Nie bezpośrednio. <b>Import JSON</b> w Szybkim starcie działa tylko z Package JSON tej platformy (format z polami <code>tools</code>, <code>runtime_class</code>, <code>policy</code>). Dla zewnętrznych serwerów MCP: uruchom go osobno i zarejestruj endpoint w <b>Zewnętrzne MCP</b>. Jeśli repo ma Dockerfile, użyj Runtime Image Builder.</div>
+    </div>
+    <div class="qa-item">
+      <div class="qa-q">Jak dać AI dostęp do pełnego <code>oc get</code> bez definiowania 20 komend?</div>
+      <div class="qa-a">Użyj składni <code>oc get ${'{'}*args{'}'}</code> — AI podaje wszystkie argumenty naraz (np. <code>"pods -n production -o json"</code>). W kroku bezpieczeństwa ustaw <b>Dozwolony prefix: oc get</b> — AI może TYLKO wykonywać <code>oc get ...</code>, nie <code>oc delete</code> ani inne komendy.</div>
+    </div>
+    <div class="qa-item">
+      <div class="qa-q">Czy AI może zrobić cokolwiek chce na moim serwerze?</div>
+      <div class="qa-a">Nie. Trzy warstwy ochrony: (1) <b>Policy</b> — sprawdza prefix komendy i dozwolone binarki; (2) <b>subprocess bez shell=True</b> — żadna iniekcja; (3) <b>Hardening kontenera</b> — rootless, read-only FS, cap_drop ALL, izolacja sieciowa.</div>
+    </div>
+    <div class="qa-item">
+      <div class="qa-q">Jak zmienić tools bez restartu serwera?</div>
+      <div class="qa-a">Edytuj tool na stronie serwera → kliknij <b>♻️ Reload Config</b>. Kontener przeładuje <code>tools.json</code> i <code>policy.json</code> bez restartu — zmiana zajmuje sekundy.</div>
+    </div>
+    <div class="qa-item">
+      <div class="qa-q">Jak podłączyć serwer MCP do Continue lub OpenWebUI?</div>
+      <div class="qa-a">Na stronie uruchomionego serwera (Moje serwery → kliknij serwer) znajdziesz sekcję <b>🔌 Jak podłączyć do klienta AI?</b> z gotowymi snippetami dla Continue, OpenWebUI i innych klientów. Każdy snippet jest klikalny — kopiuje się do schowka.</div>
+    </div>
+    <div class="qa-item">
+      <div class="qa-q">Jak zarejestrować nowe konto?</div>
+      <div class="qa-a">Idź na <a href="/register">/register</a>, wpisz login, hasło i żądaną rolę. Konto jest nieaktywne do momentu akceptacji przez administratora. Admin akceptuje w <b>👥 Użytkownicy</b> i nadaje rolę.</div>
+    </div>
+  </div>
+</section>
+
+<!-- Section: Gdzie zacząć -->
+<section style="background:linear-gradient(135deg,#0d1e2e,#0d2a1a);border-color:#1a5a3a">
+  <h2 style="color:#5ce89a">🚀 Gdzie zacząć?</h2>
+  <div class="doc-grid3" style="gap:12px">
+    <a href="/quick-start" style="display:flex;flex-direction:column;gap:8px;background:#0a1e10;border:1px solid #1a5a20;border-radius:10px;padding:16px;text-decoration:none">
+      <div style="font-size:26px">⚡</div>
+      <div style="font-weight:800;color:white">Szybki start</div>
+      <div class="muted" style="font-size:12px">Wypełnij 2-3 pola → serwer gotowy w 30 sekund</div>
+    </a>
+    <a href="/tool-packages/generate" style="display:flex;flex-direction:column;gap:8px;background:#0a1520;border:1px solid #1a3a50;border-radius:10px;padding:16px;text-decoration:none">
+      <div style="font-size:26px">✨</div>
+      <div style="font-weight:800;color:white">Package Generator</div>
+      <div class="muted" style="font-size:12px">Wizard do tworzenia paczek tools wielokrotnego użytku</div>
+    </a>
+    <a href="/external-mcp" style="display:flex;flex-direction:column;gap:8px;background:#1a1020;border:1px solid #3a2050;border-radius:10px;padding:16px;text-decoration:none">
+      <div style="font-size:26px">🔗</div>
+      <div style="font-weight:800;color:white">Zewnętrzne MCP</div>
+      <div class="muted" style="font-size:12px">Masz gotowy serwer MCP? Zarejestruj endpoint i monitoruj</div>
+    </a>
+  </div>
+</section>
+{% endblock %}

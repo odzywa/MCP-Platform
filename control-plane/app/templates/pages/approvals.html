@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+      {% if ok %}<div class="success">{{ ok }}</div>{% endif %}
+      <section>
+        <h2>🛡️ Zatwierdzenia wywołań narzędzi</h2>
+        <p class="muted">
+          Serwery MCP z włączoną polityką zatwierdzeń wstrzymują wywołania write/destructive
+          i czekają tutaj na decyzję człowieka. Wywołujący jest zablokowany do upływu
+          <code>approval_timeout_seconds</code> — po tym czasie żądanie przepada jako odrzucone.
+          Politykę ustawisz na stronie serwera → Policy.
+        </p>
+        <h3 style="margin-top:18px">Oczekujące ({{ len(pending) }})</h3>
+        {% if pending %}<table><thead><tr><th>Czas</th><th>Serwer</th><th>Narzędzie</th><th>Tryb</th><th>Komenda / argumenty</th><th>IP</th><th>Model</th><th>Decyzja</th></tr></thead><tbody>{% for a in pending %}{% set cmd = _cmd_preview(a['arguments_json']) %}<tr>
+          <td style="font-size:12px;color:var(--muted);white-space:nowrap">{{ a['created_at'][:19].replace('T', ' ') }}</td>
+          <td style="font-size:12px;font-family:monospace;color:#7dd3fc">{{ names.get(a['runtime_id'], a['runtime_id']) }}</td>
+          <td style="font-weight:700;color:var(--blue)">{{ a['tool_name'] }}</td>
+          <td><span class="risk {% if a['mode'] in ('write', 'destructive') %}{{ a['mode'] }}{% else %}low{% endif %}" style="font-size:11px;padding:2px 7px">{{ a['mode'] }}</span></td>
+          <td style="max-width:340px">{% if cmd %}<code style="font-size:11px;color:#f0b429;word-break:break-all">{{ cmd }}</code>{% endif %}
+            <details style="padding:4px;border:none;background:transparent"><summary style="font-size:11px;color:var(--muted)">argumenty</summary><pre style="font-size:11px;max-height:120px;margin-top:4px">{{ a['arguments_json'] }}</pre></details>
+          </td>
+          <td style="font-size:11px;font-family:monospace;color:var(--muted)">{{ (a['caller_ip'] or '—') }}</td>
+          <td style="font-size:11px;color:var(--muted)">{{ (a['model'] or '—')[:22] }}</td>
+          <td style="white-space:nowrap">
+            <form method="post" action="/api/approval/{{ quote(a['id']) }}/approve" style="display:inline">
+              <button style="background:#0d2a1a;border:1px solid #1f6a3f;color:#5fd08a;padding:5px 12px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">✅ Zatwierdź</button>
+            </form>
+            <form method="post" action="/api/approval/{{ quote(a['id']) }}/reject" style="display:inline;margin-left:4px">
+              <input type="hidden" name="reason" value="Odrzucone z panelu zatwierdzeń">
+              <button style="background:#3a1010;border:1px solid #6a2020;color:#f47a80;padding:5px 12px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">⛔ Odrzuć</button>
+            </form>
+          </td>
+        </tr>{% endfor %}</tbody></table>{% else %}<p class="muted">Brak oczekujących zatwierdzeń.</p>{% endif %}
+        <h3 style="margin-top:26px">Historia decyzji</h3>
+        {% if decided %}<table><thead><tr><th>Czas</th><th>Serwer</th><th>Narzędzie</th><th>Status</th><th>Kto</th><th>Powód</th></tr></thead><tbody>{% for a in decided %}<tr>
+          <td style="font-size:12px;color:var(--muted);white-space:nowrap">{{ (a['decided_at'] or a['created_at'])[:19].replace('T', ' ') }}</td>
+          <td style="font-size:12px;font-family:monospace;color:#7dd3fc">{{ names.get(a['runtime_id'], a['runtime_id']) }}</td>
+          <td style="font-weight:700">{{ a['tool_name'] }}</td>
+          <td><span class="badge {% if a['status'] == 'approved' %}running{% else %}failed{% endif %}" style="font-size:11px">{{ a['status'] }}</span></td>
+          <td style="font-size:12px">{{ (a['decided_by'] or '—') }}</td>
+          <td style="font-size:11px;color:var(--muted)">{{ (a['reject_reason'] or '') }}</td>
+        </tr>{% endfor %}</tbody></table>{% else %}<p class="muted">Brak decyzji w historii.</p>{% endif %}
+      </section>
+      {% if pending %}<script>setTimeout(()=>location.reload(),5000)</script>{% endif %}
+    {% endblock %}

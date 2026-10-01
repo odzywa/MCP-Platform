@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+{% block content %}
+      {% if ok %}<div class="success" style="margin-bottom:0">✅ Polityka zapisana pomyślnie.</div>{% endif %}
+      <!-- Overview banner -->
+      <section style="background:linear-gradient(135deg,#0a1a2a,#0d2a1a);border-color:#1a4a3a">
+        <h2 style="margin-bottom:16px">🛡️ Hardening kontenerów (zawsze aktywne)</h2>
+        <div class="grid3">
+          <div style="text-align:center;padding:12px">
+            <div style="font-size:28px;margin-bottom:4px">👤</div>
+            <div style="font-weight:700;color:white">user 1000:1000</div>
+            <div class="muted" style="font-size:12px">żaden kontener nie działa jako root</div>
+          </div>
+          <div style="text-align:center;padding:12px">
+            <div style="font-size:28px;margin-bottom:4px">🔐</div>
+            <div style="font-weight:700;color:white">cap_drop: ALL</div>
+            <div class="muted" style="font-size:12px">brak wszystkich uprawnień systemowych</div>
+          </div>
+          <div style="text-align:center;padding:12px">
+            <div style="font-size:28px;margin-bottom:4px">📁</div>
+            <div style="font-weight:700;color:white">read_only filesystem</div>
+            <div class="muted" style="font-size:12px">kontener nie może zapisywać do dysku</div>
+          </div>
+          <div style="text-align:center;padding:12px">
+            <div style="font-size:28px;margin-bottom:4px">🚫</div>
+            <div style="font-weight:700;color:white">no-new-privileges</div>
+            <div class="muted" style="font-size:12px">blokada eskalacji uprawnień</div>
+          </div>
+          <div style="text-align:center;padding:12px">
+            <div style="font-size:28px;margin-bottom:4px">💾</div>
+            <div style="font-weight:700;color:white">512 MB RAM · 1 CPU</div>
+            <div class="muted" style="font-size:12px">limit zasobów na każdy kontener</div>
+          </div>
+          <div style="text-align:center;padding:12px">
+            <div style="font-size:28px;margin-bottom:4px">🌐</div>
+            <div style="font-weight:700;color:white">ai-net tylko</div>
+            <div class="muted" style="font-size:12px">izolacja sieciowa, brak dostępu do hosta</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Policy stats -->
+      <div class="grid3">
+        <div class="card" style="text-align:center;border-color:#1a5a38;background:#0e2e1e">
+          <div class="metric" style="color:#5ce89a">{{ strict_count }}</div>
+          <div style="font-weight:700;color:white">🔒 Ścisłe polityki</div>
+          <div class="muted">read-only + blokada zapisu</div>
+        </div>
+        <div class="card" style="text-align:center;border-color:#5a420f;background:#2c2008">
+          <div class="metric" style="color:#f4c163">{{ moderate_count }}</div>
+          <div style="font-weight:700;color:white">🔶 Częściowe polityki</div>
+          <div class="muted">tylko niektóre blokady</div>
+        </div>
+        <div class="card" style="text-align:center;border-color:#5a2025;background:#2c0e10">
+          <div class="metric" style="color:#f47a80">{{ loose_count }}</div>
+          <div style="font-weight:700;color:white">🔓 Luźne polityki</div>
+          <div class="muted">brak ograniczeń policy</div>
+        </div>
+      </div>
+
+      <!-- Runtime policies table -->
+      <section>
+        <h2>Polityki runtimeów ({{ total }})</h2>
+        {% if not runtimes %}<p class="muted">Brak runtime'ów.</p>{% else %}
+        <table>
+          <thead>
+            <tr>
+              <th>Serwer</th><th>Status</th><th>Poziom</th>
+              <th>Tylko odczyt</th><th>Blokuj zapis</th><th>Blokuj destruktywne</th>
+              <th>Timeout</th><th>Maks. odpowiedź</th><th>Dozwolone binarki</th>
+              <th>Credentials</th><th></th>
+            </tr>
+          </thead>
+          <tbody>{% for r in runtimes %}{% set pol = parse_policy(r.get('policy_json')) %}{% set level_cls, level_label = policy_level(pol) %}{% set timeout = pol.get('timeout_seconds', '—') %}{% set max_resp_kb = pol.get('max_response_bytes', 0) %}{% set binaries %}{% if (pol.get('allowed_binaries') or [])|join(', ') %}{{ (pol.get('allowed_binaries') or [])|join(', ') }}{% else %}wszystkie{% endif %}{% endset %}{% set creds = cred_by_rid.get(r['id'], 0) %}{% set bins_val = ((pol.get('allowed_binaries') or [])|join(' ')) %}{% set timeout_val = pol.get('timeout_seconds', 30) %}{% set max_kb_val = (((pol.get('max_response_bytes') or 0) // 1024) or 5120) %}{% set rid = r['id'] %}
+        <tr id="row-{{ rid }}">
+          <td>
+            <a href="/runtimes/{{ rid }}" style="font-weight:700;color:white">{{ r['name'] }}</a>
+            <div class="muted" style="font-size:11px">{{ r['runtime_class'] }}</div>
+          </td>
+          <td><span class="badge {{ r['status'] }}" style="font-size:11px">{{ r['status'] }}</span></td>
+          <td><span class="badge {{ level_cls }}" style="font-size:12px">{{ level_label }}</span></td>
+          <td style="font-size:12px;text-align:center">{% if pol.get('require_read_only') %}✅{% else %}❌{% endif %}</td>
+          <td style="font-size:12px;text-align:center">{% if pol.get('block_write_tools') %}✅{% else %}❌{% endif %}</td>
+          <td style="font-size:12px;text-align:center">{% if pol.get('block_destructive_tools') %}✅{% else %}❌{% endif %}</td>
+          <td style="font-size:12px;color:var(--muted)">{{ timeout_val }}s</td>
+          <td style="font-size:12px;color:var(--muted)">{% if max_resp_kb %}{{ (max_resp_kb // 1024) }} KB{% else %}—{% endif %}</td>
+          <td style="font-size:12px;color:var(--muted)">{{ binaries[:40] }}</td>
+          <td style="text-align:center">{% if creds %}🔑 {{ str(creds) }}{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td style="white-space:nowrap">
+            <button type="button" onclick="togglePolicyEditor('{{ rid }}')"
+                    style="font-size:11px;padding:4px 8px;background:#263548">✏️ Edytuj</button>
+          </td>
+        </tr>
+        <tr id="editor-{{ rid }}" style="display:none">
+          <td colspan="11" style="padding:0">
+            <div style="background:#0d1e2e;border-top:2px solid var(--blue);padding:18px 20px">
+              <div style="font-weight:800;color:#7dd3fc;margin-bottom:14px;font-size:13px">
+                ✏️ Edytujesz politykę: <b style="color:white">{{ r['name'] }}</b>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px">
+                <div>
+                  <div style="font-weight:700;font-size:12px;color:#a0b8d0;margin-bottom:10px">Flagi bezpieczeństwa</div>
+                  <div style="display:grid;gap:8px">
+                    <label style="display:flex;gap:10px;align-items:center;cursor:pointer;font-size:13px">
+                      <input type="checkbox" form="pol-{{ rid }}" name="require_read_only" value="1" {% if pol.get('require_read_only') %}checked{% endif %} style="width:auto">
+                      🔒 Tylko odczyt
+                    </label>
+                    <label style="display:flex;gap:10px;align-items:center;cursor:pointer;font-size:13px">
+                      <input type="checkbox" form="pol-{{ rid }}" name="block_write_tools" value="1" {% if pol.get('block_write_tools') %}checked{% endif %} style="width:auto">
+                      🚫 Blokuj zapis
+                    </label>
+                    <label style="display:flex;gap:10px;align-items:center;cursor:pointer;font-size:13px">
+                      <input type="checkbox" form="pol-{{ rid }}" name="block_destructive_tools" value="1" {% if pol.get('block_destructive_tools') %}checked{% endif %} style="width:auto">
+                      ⛔ Blokuj destruktywne
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <div style="font-weight:700;font-size:12px;color:#a0b8d0;margin-bottom:10px">Limity</div>
+                  <div style="display:grid;gap:8px">
+                    <label style="font-size:12px">Timeout (s)
+                      <input form="pol-{{ rid }}" name="timeout_seconds" type="number" value="{{ timeout_val }}" min="5" max="300" style="margin-top:4px;padding:6px 8px">
+                    </label>
+                    <label style="font-size:12px">Maks. odpowiedź (KB)
+                      <input form="pol-{{ rid }}" name="max_response_kb" type="number" value="{{ max_kb_val }}" min="64" max="51200" style="margin-top:4px;padding:6px 8px">
+                    </label>
+                    <label style="font-size:12px">Dozwolone binarki (spacja)
+                      <input form="pol-{{ rid }}" name="allowed_binaries" value="{{ bins_val }}" placeholder="curl jq oc kubectl" style="margin-top:4px;padding:6px 8px">
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <form id="pol-{{ rid }}" method="post" action="/api/security/policy/{{ rid }}" style="display:none"></form>
+                <button form="pol-{{ rid }}" type="submit" style="background:#1a7a3f;padding:7px 14px;font-size:12px">💾 Zapisz politykę</button>
+                <span style="color:var(--muted);font-size:12px">lub zastosuj szablon:</span>
+                <form method="post" action="/api/security/policy/{{ rid }}/apply-template" style="display:inline">
+                  <input type="hidden" name="template" value="strict">
+                  <button style="font-size:11px;padding:5px 10px;background:#0e2e1e;border:1px solid #1a5a38">🔒 Ścisła</button>
+                </form>
+                <form method="post" action="/api/security/policy/{{ rid }}/apply-template" style="display:inline">
+                  <input type="hidden" name="template" value="standard">
+                  <button style="font-size:11px;padding:5px 10px;background:#2c2008;border:1px solid #5a420f">🔶 Standardowa</button>
+                </form>
+                <form method="post" action="/api/security/policy/{{ rid }}/apply-template" style="display:inline">
+                  <input type="hidden" name="template" value="dev">
+                  <button style="font-size:11px;padding:5px 10px;background:#2c0e10;border:1px solid #5a2025">🧪 Deweloperska</button>
+                </form>
+                <button type="button" onclick="togglePolicyEditor('{{ rid }}')" style="font-size:11px;padding:5px 10px;background:#263548;margin-left:auto">✕ Zamknij</button>
+              </div>
+            </div>
+          </td>
+        </tr>{% endfor %}</tbody>
+        </table>{% endif %}
+      </section>
+
+      <!-- Policy templates -->
+      <section>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <h2 style="margin:0">Szablony polityk</h2>
+          <button onclick="document.getElementById('new-tpl-box').style.display=document.getElementById('new-tpl-box').style.display==='none'?'block':'none'"
+                  style="background:var(--blue);border:none;color:white;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
+            ➕ Nowy szablon
+          </button>
+        </div>
+        <p class="muted" style="margin-bottom:16px">Gotowe konfiguracje — zastosuj do dowolnego serwera przyciskiem w tabeli polityk powyżej.</p>
+
+        <!-- New template form -->
+        <div id="new-tpl-box" style="display:none;background:#0a1a2a;border:2px solid var(--blue);border-radius:12px;padding:20px 22px;margin-bottom:20px">
+          <div style="font-weight:800;color:white;font-size:15px;margin-bottom:16px">Nowy własny szablon</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+            <div>
+              <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:5px">Nazwa szablonu</label>
+              <input id="nt-name" placeholder="np. Produkcja API" style="width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:13px">
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:5px">Opis (opcjonalny)</label>
+              <input id="nt-desc" placeholder="Krótki opis zastosowania" style="width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:13px">
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+            <label style="display:flex;align-items:center;gap:8px;background:#0d1822;border:1px solid #1a3a50;border-radius:8px;padding:10px 12px;cursor:pointer;font-size:13px">
+              <input type="checkbox" id="nt-ro" style="width:16px;height:16px"> Tylko odczyt
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;background:#0d1822;border:1px solid #1a3a50;border-radius:8px;padding:10px 12px;cursor:pointer;font-size:13px">
+              <input type="checkbox" id="nt-bw" style="width:16px;height:16px"> Blokuj zapis
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;background:#0d1822;border:1px solid #1a3a50;border-radius:8px;padding:10px 12px;cursor:pointer;font-size:13px">
+              <input type="checkbox" id="nt-bd" style="width:16px;height:16px"> Blokuj destruktywne
+            </label>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+            <div>
+              <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:5px">Timeout (s)</label>
+              <input id="nt-timeout" type="number" value="30" min="5" max="300" style="width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:13px">
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:5px">Max odpowiedź (KB)</label>
+              <input id="nt-resp" type="number" value="5120" min="64" max="51200" style="width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:13px">
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:5px">Max payload (KB)</label>
+              <input id="nt-payload" type="number" value="256" min="16" max="10240" style="width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:13px">
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <button onclick="saveNewTpl()" style="background:var(--blue);border:none;color:white;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">💾 Zapisz szablon</button>
+            <button onclick="document.getElementById('new-tpl-box').style.display='none'" style="background:#263548;border:none;color:#c9d7e6;padding:10px 16px;border-radius:8px;font-size:13px;cursor:pointer">Anuluj</button>
+            <span id="nt-msg" style="font-size:13px"></span>
+          </div>
+        </div>
+
+        <div class="grid3" id="tpl-grid">{% for t in templates %}{% set pol = t['policy'] %}
+        <div style="background:{{ t['color'] }};border:1px solid {{ t['border'] }};border-radius:12px;padding:18px 20px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">wbudowany</div>
+          <div style="font-size:15px;font-weight:800;color:white;margin-bottom:6px">{{ t['name'] }}</div>
+          <div class="muted" style="margin-bottom:14px;font-size:13px">{{ t['desc'] }}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;margin-bottom:14px">
+            <div>{% if pol['require_read_only'] %}✅{% else %}❌{% endif %} Tylko odczyt</div>
+            <div>{% if pol['block_write_tools'] %}✅{% else %}❌{% endif %} Blokuj zapis</div>
+            <div>{% if pol['block_destructive_tools'] %}✅{% else %}❌{% endif %} Blokuj destruktywne</div>
+            <div>⏱️ Timeout: {{ pol['timeout_seconds'] }}s</div>
+          </div>
+          <details style="background:rgba(0,0,0,.3);border:none;padding:8px 10px;border-radius:6px">
+            <summary style="font-size:11px;color:var(--muted);margin-bottom:0">JSON policy</summary>
+            <pre style="margin-top:8px;font-size:11px;max-height:120px">{{ json.dumps(pol, indent=2) }}</pre>
+          </details>
+        </div>{% endfor %}{% for ct in custom_templates %}{% set pol = ct.get('policy', {}) %}{% set slug = ct.get('slug', '') %}
+        <div style="background:#0d1a2a;border:2px solid #1a4a6a;border-radius:12px;padding:18px 20px;position:relative">
+          <div style="font-size:11px;color:#7dd3fc;margin-bottom:4px">własny szablon</div>
+          <div style="font-size:15px;font-weight:800;color:white;margin-bottom:6px">{{ ct.get('name', '') }}</div>
+          <div class="muted" style="margin-bottom:14px;font-size:13px">{{ ct.get('desc', '') }}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;margin-bottom:14px">
+            <div>{% if pol.get('require_read_only') %}✅{% else %}❌{% endif %} Tylko odczyt</div>
+            <div>{% if pol.get('block_write_tools') %}✅{% else %}❌{% endif %} Blokuj zapis</div>
+            <div>{% if pol.get('block_destructive_tools') %}✅{% else %}❌{% endif %} Blokuj destruktywne</div>
+            <div>⏱️ Timeout: {{ pol.get('timeout_seconds', 30) }}s</div>
+            <div>📦 Max odpowiedź: {{ (pol.get('max_response_bytes', 5242880) // 1024) }}KB</div>
+            <div>📥 Max payload: {{ (pol.get('max_payload_bytes', 262144) // 1024) }}KB</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <details style="flex:1;background:rgba(0,0,0,.3);border:none;padding:8px 10px;border-radius:6px">
+              <summary style="font-size:11px;color:var(--muted);margin-bottom:0">JSON policy</summary>
+              <pre style="margin-top:8px;font-size:11px;max-height:120px">{{ json.dumps(pol, indent=2) }}</pre>
+            </details>
+            <button onclick="deleteTpl('{{ slug }}')" style="background:#4a1a1a;border:1px solid #8a2a2a;color:#f47a80;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;flex-shrink:0">🗑️ Usuń</button>
+          </div>
+        </div>{% endfor %}</div>
+      </section>
+
+      <!-- Info: what policy controls -->
+      <details>
+        <summary>📖 Jak działa policy? Co blokuje, a co nie?</summary>
+        <div style="margin-top:12px;display:grid;gap:12px;font-size:13px">
+          <div style="background:#0a1a2a;border:1px solid #1a3a50;border-radius:8px;padding:14px 16px">
+            <div style="font-weight:700;color:#7dd3fc;margin-bottom:8px">🔒 require_read_only</div>
+            <div class="muted">Wymusza żeby każdy tool miał <code>mode: read-only</code>. Jeśli tool ma <code>read-write</code>, runtime odrzuca wywołanie z błędem policy.</div>
+          </div>
+          <div style="background:#0a1a2a;border:1px solid #1a3a50;border-radius:8px;padding:14px 16px">
+            <div style="font-weight:700;color:#7dd3fc;margin-bottom:8px">🚫 block_write_tools / block_destructive_tools</div>
+            <div class="muted">Dodatkowe flagi sprawdzane przez runtime przed wykonaniem narzędzia. Można blokować klasy operacji bez edytowania każdego toola osobno.</div>
+          </div>
+          <div style="background:#0a1a2a;border:1px solid #1a3a50;border-radius:8px;padding:14px 16px">
+            <div style="font-weight:700;color:#7dd3fc;margin-bottom:8px">⌨️ allowed_binaries</div>
+            <div class="muted">Tylko dla shell tools. Lista dozwolonych binarek — np. <code>["curl", "jq"]</code>. Runtime odrzuca wywołania używające innych komend. Pusta lista = brak ograniczeń.</div>
+          </div>
+          <div style="background:#0a1a2a;border:1px solid #1a3a50;border-radius:8px;padding:14px 16px">
+            <div style="font-weight:700;color:#7dd3fc;margin-bottom:8px">⚠️ Co policy NIE kontroluje</div>
+            <div class="muted">Policy działa na poziomie aplikacji. Hardening kontenerów (rootless, cap_drop, read-only FS) to osobna warstwa i jest <b>zawsze aktywna</b> niezależnie od ustawień policy.</div>
+          </div>
+        </div>
+      </details>
+    
+<script>
+function togglePolicyEditor(rid) {
+  var row = document.getElementById('editor-' + rid);
+  if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
+}
+
+function saveNewTpl() {
+  var name = document.getElementById('nt-name').value.trim();
+  if (!name) { document.getElementById('nt-msg').textContent = '⚠️ Wpisz nazwę szablonu'; return; }
+  var policy = {
+    require_read_only: document.getElementById('nt-ro').checked,
+    block_write_tools: document.getElementById('nt-bw').checked,
+    block_destructive_tools: document.getElementById('nt-bd').checked,
+    timeout_seconds: parseInt(document.getElementById('nt-timeout').value) || 30,
+    max_response_bytes: (parseInt(document.getElementById('nt-resp').value) || 5120) * 1024,
+    max_payload_bytes: (parseInt(document.getElementById('nt-payload').value) || 256) * 1024,
+  };
+  var msg = document.getElementById('nt-msg');
+  msg.textContent = 'Zapisywanie...';
+  fetch('/api/security/templates', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name: name, desc: document.getElementById('nt-desc').value.trim(), policy: policy})})
+  .then(r => r.json()).then(d => {
+    if (d.ok) { msg.style.color='#5ce89a'; msg.textContent='✅ Zapisano — odświeżam...'; setTimeout(()=>location.reload(),800); }
+    else { msg.style.color='#f47a80'; msg.textContent='❌ ' + (d.error||'Błąd'); }
+  }).catch(()=>{ msg.style.color='#f47a80'; msg.textContent='❌ Błąd połączenia'; });
+}
+
+function deleteTpl(slug) {
+  if (!confirm('Usunąć ten szablon?')) return;
+  fetch('/api/security/templates/' + encodeURIComponent(slug), {method:'DELETE'})
+  .then(r=>r.json()).then(d=>{ if(d.ok) location.reload(); });
+}
+</script>{% endblock %}

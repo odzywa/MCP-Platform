@@ -132,7 +132,7 @@ What an upgrade covers:
 |---|---|
 | Control plane + operator | `oc rollout restart deployment/mcp-platform` (step 5) — both run in one pod |
 | Database schema | `init_db()` on startup — `CREATE TABLE IF NOT EXISTS` plus guarded `ALTER TABLE`, idempotent |
-| Seeded tool definitions | `seed_openshift_monitor()` patches `config_json` / `input_schema` of existing runtimes on every start |
+| Seeded tool definitions | `seed_example_runtimes()` (`control-plane/app/catalog/seed.py`) patches `config_json` / `input_schema` of existing `openshift-monitor` runtime on every start (`"on_existing": "sync_tools"`) |
 | **MCP runtimes** | `oc rollout restart` on every Deployment labelled `app.kubernetes.io/managed-by=mcp-platform` (step 7) |
 
 Step 7 matters more than it looks. Runtime Deployments are created by the operator,

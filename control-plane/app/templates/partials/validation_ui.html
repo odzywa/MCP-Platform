@@ -1,0 +1,21 @@
+{% if params %}
+    <div style="background:#0d1822;border:1px solid #1a3a50;border-radius:8px;padding:10px 12px">
+      <div style="font-weight:700;font-size:12px;color:#7dd3fc;margin-bottom:6px">🛡️ Walidacja wartości parametrów (Pydantic)</div>
+      <div class="muted" style="font-size:11px;margin-bottom:8px">Allow list = tylko te wartości przejdą | Block list = zabronione słowa | Pattern = regex | + blocked_commands z polityki</div>
+      <table style="width:100%;font-size:12px">
+        <thead><tr>
+          <th style="text-align:left;padding:4px;width:120px">Parametr</th>
+          <th style="text-align:left;padding:4px">Allow list</th>
+          <th style="text-align:left;padding:4px">Block list</th>
+          <th style="text-align:left;padding:4px;width:140px">Pattern (regex)</th>
+          <th style="text-align:left;padding:4px;width:90px">Max length</th>
+        </tr></thead>
+        <tbody>{% for p in params %}<tr>
+          <td style="font-weight:700;color:#7dd3fc;font-size:12px">{{ p.name }}</td>
+          <td><input name="val_allowed_{{ p.name }}" value="{{ p.allowed }}" placeholder="wartość1, wartość2" style="font-size:11px;padding:4px 8px;width:100%;box-sizing:border-box"></td>
+          <td><input name="val_blocked_{{ p.name }}" value="{{ p.blocked }}" placeholder="DROP, DELETE, rm" style="font-size:11px;padding:4px 8px;width:100%;box-sizing:border-box"></td>
+          <td><input name="val_pattern_{{ p.name }}" value="{{ p.pattern }}" placeholder="^[0-9]+$" style="font-size:11px;padding:4px 8px;width:100%;box-sizing:border-box;font-family:monospace"></td>
+          <td><input name="val_maxlen_{{ p.name }}" value="{{ p.max_len }}" type="number" min="0" placeholder="0" style="font-size:11px;padding:4px 8px;width:80px"></td>
+        </tr>{% endfor %}</tbody>
+      </table>
+    </div>{% else %}<p class="muted" style="font-size:11px">Brak parametrów — dodaj w Input Schema JSON wyżej.</p>{% endif %}

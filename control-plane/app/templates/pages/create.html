@@ -1,0 +1,773 @@
+{% extends "base.html" %}
+{% block content %}{% set _adv_base_opts %}{% for v, l in _adv_builtin %}<option value="{{ v }}"{% if v == 'mcp-runtime-shell:latest' %}selected{% endif %}>{{ l }}</option>{% endfor %}{% for r in _adv_custom_images %}<option value="{{ r['runtime_image'] }}">{{ r['runtime_image'] }} — własny zbudowany</option>{% endfor %}<option value="__custom__">⌨️ Inny — wpisz ręcznie (zaawansowane)</option>{% endset %}
+
+<style>
+.adv-wrap { max-width:740px; margin:0 auto; display:grid; gap:18px; }
+.adv-step { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:26px 28px; display:none; }
+.adv-step.active { display:block; }
+.adv-step h2 { margin:0 0 6px; font-size:20px; font-weight:800; }
+.adv-step .sub { color:var(--muted); font-size:14px; margin-bottom:20px; }
+.adv-field { margin-bottom:14px; }
+.adv-field label { display:block; font-weight:700; font-size:13px; color:#aac8e0; margin-bottom:5px; }
+.adv-field input, .adv-field select, .adv-field textarea { width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #34465b; border-radius:6px; background:#0d1420; color:var(--text); font-size:14px; }
+.adv-field .hint { color:var(--muted); font-size:12px; margin-top:4px; }
+.adv-big-btn { width:100%; padding:14px; font-size:16px; font-weight:800; border:none; border-radius:8px; background:var(--blue); color:white; cursor:pointer; margin-top:8px; }
+.adv-big-btn:hover { background:var(--blue-dark); }
+.adv-back { background:#263548; color:#c9d7e6; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-size:13px; margin-bottom:16px; }
+.adv-type-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.adv-type-btn { background:#0d1822; border:2px solid var(--line); border-radius:10px; padding:20px 16px; cursor:pointer; text-align:center; transition:.15s; color:var(--text); }
+.adv-type-btn:hover { border-color:var(--blue); background:#0d2a40; }
+.adv-type-btn .icon { font-size:34px; margin-bottom:10px; }
+.adv-type-btn .name { font-weight:800; font-size:15px; margin-bottom:6px; }
+.adv-type-btn .desc { color:var(--muted); font-size:12px; line-height:1.5; }
+.prog-bar { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:4px; }
+.prog-step { padding:10px; border-radius:8px; text-align:center; background:var(--panel-2); border:1px solid var(--line); font-size:12px; font-weight:700; color:var(--muted); transition:.2s; }
+.prog-step.done { background:#0e2e1e; color:#5ce89a; border-color:#1a5a38; }
+.prog-step.current { background:#0d3a55; color:white; border-color:var(--blue); }
+.qs-pkg-card { display:block; cursor:pointer; margin-bottom:8px; }
+.qs-pkg-inner { background:#0d1822; border:2px solid var(--line); border-radius:8px; padding:12px 16px; transition:.15s; }
+.qs-pkg-inner:hover { border-color:var(--blue); }
+.qs-pkg-card input:checked + .qs-pkg-inner { border-color:var(--blue); background:rgba(0,120,212,0.13); box-shadow:0 0 0 2px var(--blue); }
+</style>
+
+{% if error %}<div class="alert">{{ error }}</div>{% endif %}
+
+<!-- Progress bar -->
+<div class="adv-wrap">
+  <div class="prog-bar" id="prog" style="grid-template-columns:repeat(5,1fr)">
+    <div class="prog-step current" id="p1">1. Źródło tools</div>
+    <div class="prog-step" id="p2">2. Podstawy</div>
+    <div class="prog-step" id="p3">3. Narzędzie</div>
+    <div class="prog-step" id="p4">4. Bezpieczeństwo</div>
+    <div class="prog-step" id="p5">5. Utwórz</div>
+  </div>
+
+  <form id="adv-form" method="post" action="/api/runtimes">
+    <input type="hidden" name="package_id" id="pkg-hidden" value="">
+    <input type="hidden" name="runtime_class" id="rc-hidden" value="http-gateway">
+    <input type="hidden" name="adapter_names" id="adapter-hidden" value="http_request">
+
+    <!-- STEP 1: Źródło tools -->
+    <div class="adv-step active" id="s1">
+      <h2>Skąd pochodzą tools?</h2>
+      <div class="sub">Wybierz czy używasz gotowej paczki (najszybciej) czy budujesz serwer od zera.</div>
+      <div class="adv-type-grid">
+        <button type="button" class="adv-type-btn" onclick="chooseSource('package')">
+          <div class="icon">📦</div>
+          <div class="name">Gotowa paczka</div>
+          <div class="desc">Wybierz z katalogu — tools, silnik i polityka konfigurują się automatycznie</div>
+        </button>
+        {% if not _can_shell %}{% else %}
+        <button type="button" class="adv-type-btn" onclick="chooseSource('blank')">
+          <div class="icon">🔧</div>
+          <div class="name">Od zera</div>
+          <div class="desc">Wybierz silnik wykonania i zdefiniuj tools ręcznie po utworzeniu</div>
+        </button>{% endif %}
+        {% if _can_shell %}{% else %}<div class="adv-type-btn" style="opacity:.45;cursor:not-allowed;border-color:#3a2020;pointer-events:none"><div class="icon">🔒</div><div class="name">Od zera</div><div class="desc" style="color:#8a6060">Niedostępne dla roli read_write — tylko gotowe paczki</div></div>{% endif %}
+      </div>
+
+      <!-- Package picker (hidden until "package" chosen) -->
+      <div id="pkg-picker" style="display:none;margin-top:16px">
+        <div style="font-weight:700;font-size:13px;color:#aac8e0;margin-bottom:8px">Wybierz paczkę:</div>
+        <div style="display:grid;gap:8px;max-height:340px;overflow-y:auto;padding-right:4px">{% for p in packages %}
+        <label class="qs-pkg-card" onclick="pkgChosen('{{ p['id'] }}', this)">
+          <input type="radio" name="package_id" value="{{ p['id'] }}" form="adv-form" style="display:none">
+          <div class="qs-pkg-inner">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="pkg-check" style="display:none;color:#4caf50;font-size:16px;flex-shrink:0">&#10003;</span>
+              <div style="font-weight:800;font-size:14px;color:white">{{ p['name'] }}</div>
+            </div>
+            <div style="color:var(--muted);font-size:12px;margin-top:4px">{{ (p['description'] or '')[:80] }}</div>
+          </div>
+        </label>{% endfor %}</div>
+        <button type="button" class="adv-big-btn" id="pkg-next-btn" onclick="goStep(2)" style="display:none;margin-top:14px">
+          Dalej →
+        </button>
+      </div>
+
+      <!-- Blank engine picker (hidden until "blank" chosen) -->
+      <div id="engine-picker" style="display:none;margin-top:16px">
+        <div style="font-weight:700;font-size:13px;color:#aac8e0;margin-bottom:10px">Wybierz silnik wykonania:</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+          <button type="button" class="adv-type-btn" onclick="chooseEngine('http_request','http-gateway')" id="eng-http">
+            <div class="icon">🌐</div>
+            <div class="name">HTTP Request</div>
+            <div class="desc">Wywołuje REST API — GitLab, Jira, własny serwis</div>
+          </button>
+          <button type="button" class="adv-type-btn" onclick="chooseEngine('shell','shell-readonly')" id="eng-shell">
+            <div class="icon">⌨️</div>
+            <div class="name">Shell</div>
+            <div class="desc">Wykonuje komendy — curl, oc, kubectl, dowolne CLI</div>
+          </button>
+          <button type="button" class="adv-type-btn" onclick="chooseEngine('openapi','openapi')" id="eng-openapi">
+            <div class="icon">📄</div>
+            <div class="name">OpenAPI Spec</div>
+            <div class="desc">Auto-generuje tools z dokumentacji REST API (openapi.json) — zero definiowania narzędzi</div>
+          </button>
+        </div>
+
+        <!-- OpenAPI config (shown when OpenAPI engine chosen) -->
+        <div id="openapi-cfg" style="display:none;margin-top:16px;background:#0a1a2a;border:1px solid #1a4060;border-radius:10px;padding:16px 18px">
+          <div style="font-weight:800;color:#7dd3fc;font-size:14px;margin-bottom:4px">📄 Konfiguracja OpenAPI</div>
+          <div style="color:var(--muted);font-size:12px;margin-bottom:14px">Podaj URL serwisu — tools zostaną wygenerowane automatycznie ze specyfikacji OpenAPI przy starcie kontenera.</div>
+          <div class="adv-field" style="margin-bottom:10px">
+            <label>🔗 URL serwisu (base URL) <span style="color:#f47a80">*</span></label>
+            <input id="oa-backend-url" name="openapi_backend_url" form="adv-form"
+                   placeholder="http://moja-api:8000" autocomplete="off"
+                   style="font-family:monospace;font-size:13px">
+            <div class="hint">Adres bazowy usługi REST API którą chcesz wyeksponować jako MCP</div>
+          </div>
+          <div class="adv-field" style="margin-bottom:10px">
+            <label>📋 URL do openapi.json (opcjonalny)</label>
+            <input id="oa-spec-url" name="openapi_spec_url" form="adv-form"
+                   placeholder="https://moja-api.com/openapi.json"
+                   autocomplete="off" style="font-family:monospace;font-size:13px">
+            <div class="hint">Zostaw puste — platforma automatycznie wykryje spec. Dla zewnętrznych API podaj dokładny URL ich dokumentacji OpenAPI.</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+            <div class="adv-field" style="margin:0">
+              <label>🔑 Token autoryzacyjny (opcjonalny)</label>
+              <input type="password" id="oa-auth-token" name="openapi_auth_token" form="adv-form"
+                     placeholder="ghp_xxx / Bearer token" autocomplete="new-password" style="font-size:13px">
+            </div>
+            <div class="adv-field" style="margin:0">
+              <label>📛 Nagłówek auth (opcjonalny)</label>
+              <input id="oa-auth-header" name="openapi_auth_header" form="adv-form"
+                     placeholder="Authorization" autocomplete="off" style="font-size:13px">
+              <div class="hint">Domyślnie: <code>Authorization</code> z prefixem <code>Bearer</code></div>
+            </div>
+          </div>
+          <button type="button" class="adv-big-btn" onclick="openapiGoNext()">Dalej →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2: Podstawy -->
+    <div class="adv-step" id="s2">
+      <button type="button" class="adv-back" onclick="goStep(1)">← Wróć</button>
+      <h2>Podstawowe informacje</h2>
+      <div class="sub">Nazwij serwer i opcjonalnie dostosuj typ środowiska.</div>
+
+      <div class="adv-field">
+        <label>Nazwa serwera MCP</label>
+        <input name="name" id="adv-name" placeholder="GitLab Assistant" required>
+        <div class="hint">Dowolna nazwa — pojawi się na liście serwerów i w Continue / OpenWebUI</div>
+      </div>
+      <div class="adv-field">
+        <label>Opis (opcjonalny)</label>
+        <input name="description" placeholder="Asystent do przeszukiwania GitLab issues i MR">
+      </div>
+      <div class="adv-field" id="rc-field" style="display:none">
+        <label>Typ środowiska (Runtime Class)</label>
+        <select id="rc-select" onchange="document.getElementById('rc-hidden').value=this.value">
+          {% for r in runtime_classes %}<option value="{{ r['name'] }}">{{ r['name'] }} — {{ r['runtime_image'] }}</option>{% endfor %}
+        </select>
+        <div class="hint">Określa jaki obraz Docker zostanie uruchomiony</div>
+      </div>
+
+      <!-- Shell env builder (shown when shell engine selected) -->
+      <div id="adv-shell-env" style="display:none;background:#0d1a0a;border:1px solid #2a4a1a;border-radius:10px;padding:16px 18px;margin-top:12px">
+        <div style="font-weight:800;color:#5ce89a;margin-bottom:4px;font-size:14px">🛠️ Dostępne narzędzia w kontenerze</div>
+        <div class="muted" style="font-size:12px;margin-bottom:12px">Standardowy obraz ma już: <code>oc</code> <code>kubectl</code> <code>curl</code> <code>jq</code>. Potrzebujesz innych? Zbuduj własny obraz poniżej.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div class="adv-field" style="margin:0">
+            <label>Baza obrazu</label>
+            <select id="adv-build-base" style="font-size:13px" onchange="advUpdateBaseHint()">
+              {{ _adv_base_opts }}
+            </select>
+            <input id="adv-build-base-custom" placeholder="np. ubuntu:22.04" style="display:none;font-size:13px;margin-top:6px">
+            <div id="adv-base-hint" class="hint" style="color:#7dd3fc">✅ Zawiera oc, kubectl, curl, jq + Python 3.12 UBI9 (RHEL 9)</div>
+          </div>
+          <div class="adv-field" style="margin:0">
+            <label>Dodatkowe pakiety APT (spacja)</label>
+            <input id="adv-build-apt" placeholder="postgresql-client terraform" style="font-size:13px" list="adv-apt-list">
+            <datalist id="adv-apt-list">
+              <option value="postgresql-client"><option value="mysql-client"><option value="redis-tools">
+              <option value="git"><option value="python3-pip"><option value="awscli">
+              <option value="openssh-client"><option value="unzip wget">
+            </datalist>
+          </div>
+        </div>
+        <div class="adv-field" style="margin:0 0 10px">
+          <label>Pakiety pip (opcjonalne)</label>
+          <input id="adv-build-pip" placeholder="boto3 kubernetes psycopg2-binary" style="font-size:13px">
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <button type="button" id="adv-build-btn" onclick="advStartBuild()"
+                  style="background:#1a7a3f;color:white;border:none;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
+            🔨 Zbuduj własne środowisko
+          </button>
+          <span class="muted" style="font-size:12px">lub pomiń i użyj standardowego</span>
+        </div>
+        <div id="adv-build-progress" style="display:none;margin-top:10px;padding:10px 12px;background:#0b1420;border-radius:6px;font-size:13px">
+          <span id="adv-build-spinner">⏳</span> <span id="adv-build-status">Budowanie...</span>
+        </div>
+      </div>
+
+      <button type="button" class="adv-big-btn" onclick="goStep(3)" id="step2-next" style="margin-top:14px">Dalej →</button>
+    </div>
+
+    <!-- STEP 3: Narzędzia -->
+    <div class="adv-step" id="s3">
+      <button type="button" class="adv-back" onclick="goStep(2)">← Wróć</button>
+      <h2>🔧 Zdefiniuj narzędzia</h2>
+      <div class="sub" id="s3-sub">Dodaj jedno lub więcej narzędzi — AI użyje ich definicji do wywołań.</div>
+
+      <!-- OpenAPI auto-gen info (shown only in openapi mode) -->
+      <div id="s3-openapi-info" style="display:none;background:#0a1a2a;border:1px solid #1a4060;border-radius:10px;padding:18px 20px;margin-bottom:16px">
+        <div style="font-size:22px;margin-bottom:8px">📄</div>
+        <div style="font-weight:800;color:#7dd3fc;font-size:15px;margin-bottom:6px">Tools generowane automatycznie z OpenAPI spec</div>
+        <div style="color:var(--muted);font-size:13px;line-height:1.6">
+          Przy starcie kontenera runtime pobierze <code>openapi.json</code> z podanego serwisu
+          i automatycznie wygeneruje z niego wszystkie narzędzia MCP.<br><br>
+          <span id="s3-oa-summary" style="color:#5ce89a;font-family:monospace;font-size:12px"></span>
+        </div>
+      </div>
+
+      <!-- Dynamic tool list -->
+      <div id="s3-tools-list" style="display:grid;gap:12px;margin-bottom:12px"></div>
+
+      <button type="button" onclick="s3AddTool()" style="background:#1a2e1a;border:1px dashed #2a5a2a;color:#5ce89a;padding:10px 18px;border-radius:8px;font-size:13px;cursor:pointer;width:100%;margin-bottom:16px">
+        + Dodaj kolejne narzędzie
+      </button>
+
+      <!-- Hidden fields — first tool (for backend compat) + extra tools JSON -->
+      <input type="hidden" name="shell_cmd_adv"       id="s3-cmd-hidden"  form="adv-form" value="">
+      <input type="hidden" name="shell_tool_name_adv" id="s3-name-hidden" form="adv-form" value="">
+      <input type="hidden" name="first_tool_desc_adv" id="s3-desc-hidden" form="adv-form" value="">
+      <input type="hidden" name="first_tool_url"      id="s3-url-hidden"  form="adv-form" value="">
+      <input type="hidden" name="first_tool_method"   id="s3-method-hidden" form="adv-form" value="POST">
+      <input type="hidden" name="first_tool_name"     id="s3-fname-hidden" form="adv-form" value="">
+      <input type="hidden" name="extra_tools_json"    id="s3-extra-json"  form="adv-form" value="[]">
+
+      <button type="button" class="adv-big-btn" onclick="s3Proceed()">Dalej → Bezpieczeństwo</button>
+    </div>
+
+    <!-- STEP 4: Bezpieczeństwo -->
+    <div class="adv-step" id="s4">
+      <button type="button" class="adv-back" onclick="goStep(3)">← Wróć</button>
+      <h2>🔒 Ustawienia bezpieczeństwa</h2>
+      <div class="sub">Pełna kontrola nad tym co serwer może robić. Domyślnie — maksymalna ochrona.</div>
+
+      <!-- Tryby -->
+      <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Tryb dostępu</div>
+      <div style="display:grid;gap:10px;margin-bottom:20px">
+        <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;background:#0d1822;border:1px solid var(--line);border-radius:8px;padding:12px 14px">
+          <input type="checkbox" name="policy_read_only" value="1" checked form="adv-form" style="width:auto;margin-top:2px;flex-shrink:0">
+          <div>
+            <div style="font-weight:700;font-size:13px;color:white">🔒 Tylko odczyt</div>
+            <div style="color:var(--muted);font-size:12px;margin-top:2px">Serwer może tylko czytać dane — nie modyfikuje ani nie usuwa niczego</div>
+          </div>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;background:#0d1822;border:1px solid var(--line);border-radius:8px;padding:12px 14px">
+          <input type="checkbox" name="policy_block_write" value="1" form="adv-form" style="width:auto;margin-top:2px;flex-shrink:0">
+          <div>
+            <div style="font-weight:700;font-size:13px;color:white">🚫 Blokuj zapis</div>
+            <div style="color:var(--muted);font-size:12px;margin-top:2px">Blokuje narzędzia w trybie <code>write</code> — zapis do baz, API PUT/POST/DELETE</div>
+          </div>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;background:#0d1822;border:1px solid var(--line);border-radius:8px;padding:12px 14px">
+          <input type="checkbox" name="policy_block_destructive" value="1" form="adv-form" style="width:auto;margin-top:2px;flex-shrink:0">
+          <div>
+            <div style="font-weight:700;font-size:13px;color:white">⛔ Blokuj destruktywne</div>
+            <div style="color:var(--muted);font-size:12px;margin-top:2px">Zapobiega usuwaniu danych i operacjom nieodwracalnym (<code>delete</code>, <code>drop</code>)</div>
+          </div>
+        </label>
+      </div>
+
+      <!-- Limity -->
+      <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Limity</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px">
+        <div class="adv-field" style="margin:0">
+          <label>⏱️ Timeout (s)</label>
+          <input type="number" name="timeout_seconds" value="30" min="5" max="300" form="adv-form">
+          <div class="hint">Max czas wykonania komendy</div>
+        </div>
+        <div class="adv-field" style="margin:0">
+          <label>📏 Maks. odpowiedź (KB)</label>
+          <input type="number" name="max_response_kb" value="5120" min="64" max="51200" form="adv-form">
+          <div class="hint">Max rozmiar danych zwracanych AI</div>
+        </div>
+        <div class="adv-field" style="margin:0">
+          <label>📥 Maks. payload (KB)</label>
+          <input type="number" name="max_payload_kb" value="256" min="16" max="10240" form="adv-form">
+          <div class="hint">Max rozmiar danych od AI</div>
+        </div>
+      </div>
+
+      <!-- Kontrola komend (shell) -->
+      <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Kontrola komend <span style="color:#3a6a8a;font-weight:400;text-transform:none">(dla shell tools)</span></div>
+      <div style="display:grid;gap:12px;margin-bottom:20px">
+        <div class="adv-field" style="margin:0">
+          <label>✅ Dozwolone binarki</label>
+          <input name="allowed_binaries" placeholder="curl jq oc kubectl" form="adv-form">
+          <div class="hint">Spacja — tylko te binarki mogą być uruchamiane. Puste = brak ograniczeń.</div>
+        </div>
+        <div class="adv-field" style="margin:0">
+          <label>🎯 Dozwolony prefix komendy</label>
+          <input name="allowed_prefix" placeholder="oc get" form="adv-form">
+          <div class="hint">AI może wywołać tylko komendy zaczynające się od tego prefiksu. Np. <code>oc get</code> → nie może <code>oc delete</code>.</div>
+        </div>
+        <div class="adv-field" style="margin:0">
+          <label>🚫 Zablokowane komendy (denylist)</label>
+          <textarea name="blocked_prefixes" rows="3" placeholder="kubectl delete&#10;kubectl exec&#10;oc delete" form="adv-form"
+            style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #34465b;border-radius:6px;background:#0d1420;color:var(--text);font-size:13px;resize:vertical;font-family:monospace"></textarea>
+          <div class="hint">Jedna komenda na linię. Każda komenda <b>zaczynająca się</b> od tego prefiksu zostanie zablokowana.</div>
+        </div>
+      </div>
+
+      <!-- ENV vars -->
+      <div style="font-size:11px;font-weight:800;color:#f59e0b;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">🔑 Zmienne środowiskowe (ENV) <span style="color:var(--muted);font-weight:400;text-transform:none">— tokeny, klucze API, hasła</span></div>
+      <div style="background:#1a1200;border:1px solid #3a2800;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:12px;color:#d4a820">
+        Zmienne ENV są dostępne wewnątrz kontenera jako zmienne środowiskowe. Użyj ich dla tokenów API, kluczy SSH, URL baz danych — wszystkiego co nie powinno być w kodzie.
+      </div>
+      <div id="adv-env-list" style="display:grid;gap:6px;margin-bottom:8px"></div>
+      <button type="button" onclick="advAddEnv()" style="background:#1a1200;border:1px solid #3a2800;color:#d4a820;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer">+ Dodaj zmienną ENV</button>
+
+      <div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:8px;padding:10px 14px;margin:16px 0">
+        <div style="color:#4ac86a;font-size:12px;font-weight:700;margin-bottom:4px">🛡️ Zawsze aktywne (nie można wyłączyć):</div>
+        <div style="color:#7ab890;font-size:12px;line-height:1.8">
+          ✅ user 1000:1000 (bez roota) &nbsp;·&nbsp; ✅ read-only filesystem &nbsp;·&nbsp; ✅ cap_drop ALL &nbsp;·&nbsp; ✅ 512MB RAM limit &nbsp;·&nbsp; ✅ no-new-privileges
+        </div>
+      </div>
+
+      <button type="button" class="adv-big-btn" onclick="goStep(5)">Dalej →</button>
+    </div>
+
+    <!-- STEP 5: Podsumowanie + Utwórz -->
+    <div class="adv-step" id="s5">
+      <button type="button" class="adv-back" onclick="goStep(4)">← Wróć</button>
+      <h2>✅ Gotowe do utworzenia</h2>
+      <div class="sub">Sprawdź podsumowanie i kliknij Utwórz serwer MCP.</div>
+
+      <div id="summary" style="background:#0d1822;border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:16px;font-size:13px;line-height:2"></div>
+
+      <div style="background:#0a1520;border:1px solid #1a3a50;border-radius:8px;padding:12px 14px;margin-bottom:14px">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px">
+          <input type="checkbox" name="deploy_after_create" value="true" form="adv-form" checked style="width:auto">
+          <div>
+            <div style="font-weight:700;color:white">🚀 Uruchom od razu po utworzeniu</div>
+            <div style="color:var(--muted);font-size:12px">Serwer zostanie automatycznie zdeplojowany — będzie działać za kilka sekund</div>
+          </div>
+        </label>
+      </div>
+
+      <button type="submit" class="adv-big-btn" style="background:#1a7a3f">🚀 Utwórz serwer MCP</button>
+      <p style="text-align:center;color:var(--muted);font-size:12px;margin-top:8px">
+        Możesz edytować tools i politykę po utworzeniu na stronie serwera.
+      </p>
+    </div>
+
+  </form>
+</div>
+
+<script>
+(function() {
+  var source = null;
+
+  // ── multi-tool state for step 3 ──────────────────────────────
+  var _s3Tools = [];   // [{cmd,name,desc,url,method,isShell}]
+  var _s3IsShell = true;
+  var _s3IsPkg = false;
+  var _s3IsOpenAPI = false;
+
+  var _s3ShellPresets = [
+    ['psql ${*args}','🐘 psql'],
+    ['curl ${*args}','🌐 curl'],
+    ['curl -s ${url}','🌐 curl GET'],
+    ['oc get ${*args}','🔴 oc get'],
+    ['kubectl get ${*args}','☸️ kubectl']
+  ];
+
+  function s3ToolHtml(idx, isShell) {
+    var presets = '';
+    if (isShell) {
+      var _pLabel = (localStorage.getItem('mcp_lang')==='en') ? 'Patterns:' : 'Wzorce:';
+      presets = '<div style="font-size:11px;color:#7dd3fc;font-weight:700;margin-bottom:6px">⚡ '+_pLabel+'</div><div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">';
+      for (var pi=0; pi<_s3ShellPresets.length; pi++) {
+        var pcmd = _s3ShellPresets[pi][0], plbl = _s3ShellPresets[pi][1];
+        presets += '<button type="button" onclick="s3ToolPreset('+idx+',this.dataset.cmd)" data-cmd="'+pcmd+'" style="background:#1a2a3a;border:1px solid #2a4a6a;color:#7dd3fc;padding:3px 9px;border-radius:5px;font-size:11px;cursor:pointer">'+plbl+'</button>';
+      }
+      presets += '</div>';
+    }
+    var inputStyle = 'width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:13px';
+    var cmdField = isShell
+      ? '<label style="font-size:12px;color:var(--muted)">Komenda</label>' + presets +
+        '<input id="s3t-cmd-'+idx+'" placeholder="curl -s ${url}" style="'+inputStyle+';font-family:monospace;margin-bottom:4px">' +
+        '<div style="font-size:11px;color:var(--muted);margin-bottom:8px"><code style="background:#0d1420;padding:1px 5px;border-radius:3px">${zmienna}</code> = jeden parametr &nbsp;|&nbsp; <code style="background:#0d1420;padding:1px 5px;border-radius:3px">${*args}</code> = AI podaje wszystkie argumenty naraz</div>'
+      : '<div style="display:grid;grid-template-columns:80px 1fr;gap:8px;margin-bottom:8px">' +
+        '<div><label style="font-size:12px;color:var(--muted)">Metoda</label>' +
+        '<select id="s3t-method-'+idx+'" style="'+inputStyle+'"><option>POST</option><option>GET</option></select></div>' +
+        '<div><label style="font-size:12px;color:var(--muted)">URL</label>' +
+        '<input id="s3t-url-'+idx+'" placeholder="https://api.example.com/v1/search" style="'+inputStyle+'"></div></div>';
+    var delBtn = idx > 0
+      ? '<button type="button" onclick="s3RemoveTool('+idx+')" style="background:none;border:none;color:#f47a80;font-size:20px;cursor:pointer;padding:0;line-height:1">×</button>'
+      : '';
+    return '<div id="s3-card-'+idx+'" style="background:#0d1822;border:1px solid #2a3a4a;border-radius:10px;padding:14px 16px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
+      '<span style="font-weight:700;font-size:13px;color:#7dd3fc">Narzędzie '+(idx+1)+'</span>'+delBtn+'</div>' +
+      cmdField +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+      '<div><label style="font-size:12px;color:var(--muted)">Nazwa</label>' +
+      '<input id="s3t-name-'+idx+'" placeholder="run_command" value="'+(idx===0?'run_command':'')+'" style="'+inputStyle+'"></div>' +
+      '<div><label style="font-size:12px;color:var(--muted)">Opis (dla AI)</label>' +
+      '<input id="s3t-desc-'+idx+'" placeholder="Pobiera dane / wykonuje komendę" style="'+inputStyle+'"></div>' +
+      '</div></div>';
+  }
+
+  function s3SaveValues() {
+    for (var i = 0; i < _s3Tools.length; i++) {
+      var cmd = document.getElementById('s3t-cmd-'+i);
+      var name = document.getElementById('s3t-name-'+i);
+      var desc = document.getElementById('s3t-desc-'+i);
+      var url = document.getElementById('s3t-url-'+i);
+      var method = document.getElementById('s3t-method-'+i);
+      if (cmd) _s3Tools[i].cmd = cmd.value;
+      if (name) _s3Tools[i].name = name.value;
+      if (desc) _s3Tools[i].desc = desc.value;
+      if (url) _s3Tools[i].url = url.value;
+      if (method) _s3Tools[i].method = method.value;
+    }
+  }
+  function s3RestoreValues() {
+    for (var i = 0; i < _s3Tools.length; i++) {
+      var t = _s3Tools[i];
+      var cmd = document.getElementById('s3t-cmd-'+i);
+      var name = document.getElementById('s3t-name-'+i);
+      var desc = document.getElementById('s3t-desc-'+i);
+      var url = document.getElementById('s3t-url-'+i);
+      var method = document.getElementById('s3t-method-'+i);
+      if (cmd && t.cmd) cmd.value = t.cmd;
+      if (name && t.name) name.value = t.name;
+      if (desc && t.desc) desc.value = t.desc;
+      if (url && t.url) url.value = t.url;
+      if (method && t.method) method.value = t.method;
+    }
+  }
+  function s3Render() {
+    s3SaveValues();
+    var list = document.getElementById('s3-tools-list');
+    if (!list) return;
+    list.innerHTML = _s3Tools.map(function(_,i){ return s3ToolHtml(i, _s3IsShell); }).join('');
+    s3RestoreValues();
+    var lang = localStorage.getItem('mcp_lang');
+    if (lang === 'en' && typeof applyLang === 'function') applyLang('en');
+  }
+
+  window.s3AddTool = function() {
+    _s3Tools.push({});
+    s3Render();
+  };
+
+  window.s3RemoveTool = function(idx) {
+    if (_s3Tools.length <= 1) return;
+    _s3Tools.splice(idx, 1);
+    s3Render();
+  };
+
+  window.s3ToolPreset = function(idx, cmd) {
+    var c = document.getElementById('s3t-cmd-'+idx);
+    if (c) c.value = cmd;
+    var n = document.getElementById('s3t-name-'+idx);
+    if (n && (!n.value || n.value === 'run_command')) {
+      n.value = cmd.split(' ')[0].replace(/[^a-z0-9]/gi,'') + '_command';
+    }
+  };
+
+  window.s3Proceed = function() {
+    if (_s3IsOpenAPI) { goStep(4); return; }
+    var tools = [];
+    for (var i=0; i<_s3Tools.length; i++) {
+      var name = (document.getElementById('s3t-name-'+i)||{}).value || ('tool_'+i);
+      var desc = (document.getElementById('s3t-desc-'+i)||{}).value || '';
+      if (_s3IsShell) {
+        var cmd = (document.getElementById('s3t-cmd-'+i)||{}).value || '';
+        tools.push({cmd:cmd, name:name, desc:desc, isShell:true});
+      } else {
+        var url = (document.getElementById('s3t-url-'+i)||{}).value || '';
+        var method = (document.getElementById('s3t-method-'+i)||{}).value || 'POST';
+        tools.push({url:url, method:method, name:name, desc:desc, isShell:false});
+      }
+    }
+    if (tools.length === 0 && !_s3IsPkg) { alert('Dodaj co najmniej jedno narzędzie.'); return; }
+    // Write first tool to legacy hidden fields
+    if (tools.length > 0) {
+      var t0 = tools[0];
+      if (t0.isShell) {
+        document.getElementById('s3-cmd-hidden').value  = t0.cmd;
+        document.getElementById('s3-name-hidden').value = t0.name;
+        document.getElementById('s3-desc-hidden').value = t0.desc;
+      } else {
+        document.getElementById('s3-url-hidden').value    = t0.url;
+        document.getElementById('s3-method-hidden').value = t0.method;
+        document.getElementById('s3-fname-hidden').value  = t0.name;
+        document.getElementById('s3-desc-hidden').value   = t0.desc;
+      }
+    }
+    // Extra tools (idx 1+)
+    document.getElementById('s3-extra-json').value = JSON.stringify(tools.slice(1));
+    goStep(4);
+  };
+
+  window.goStep = function(n) {
+    if (n === 3) {
+      var name = document.getElementById('adv-name').value.trim();
+      if (!name) { document.getElementById('adv-name').focus(); return; }
+      var adapter = document.getElementById('adapter-hidden').value;
+      _s3IsShell   = adapter === 'shell';
+      _s3IsPkg     = source === 'package';
+      _s3IsOpenAPI = adapter === 'openapi';
+      var hideTools = _s3IsPkg || _s3IsOpenAPI;
+      if (!hideTools && _s3Tools.length === 0) _s3Tools.push({});
+      if (!hideTools) s3Render();
+      var sub = document.getElementById('s3-sub');
+      if (sub) {
+        if (_s3IsOpenAPI)    sub.textContent = 'Tools zostaną wygenerowane automatycznie z OpenAPI spec — nie musisz nic definiować.';
+        else if (_s3IsPkg)   sub.textContent = 'Narzędzia są już zdefiniowane w wybranej paczce — przejdź dalej.';
+        else if (_s3IsShell) sub.textContent = 'Zdefiniuj komendy które AI będzie wykonywać w kontenerze.';
+        else                 sub.textContent = 'Podaj adresy API które AI ma wywoływać.';
+      }
+      var oaInfo = document.getElementById('s3-openapi-info');
+      if (oaInfo) {
+        oaInfo.style.display = _s3IsOpenAPI ? 'block' : 'none';
+        if (_s3IsOpenAPI) {
+          var oaSummEl = document.getElementById('s3-oa-summary');
+          if (oaSummEl) {
+            var backUrl = (document.getElementById('oa-backend-url')||{}).value || '';
+            var specUrl = (document.getElementById('oa-spec-url')||{}).value || (backUrl ? backUrl.replace(/\/$/, '') + '/openapi.json' : '');
+            oaSummEl.textContent = 'Backend: ' + backUrl + (specUrl ? '\nSpec: ' + specUrl : '');
+          }
+        }
+      }
+      var addBtn = document.querySelector('#s3 > button[onclick="s3AddTool()"]') || document.querySelector('#s3 button[onclick="s3AddTool()"]');
+      if (addBtn) addBtn.style.display = hideTools ? 'none' : '';
+      var toolList = document.getElementById('s3-tools-list');
+      if (toolList) toolList.style.display = hideTools ? 'none' : '';
+    }
+    [1,2,3,4,5].forEach(function(i) {
+      var s = document.getElementById('s'+i);
+      if (s) s.classList.toggle('active', i===n);
+      var p = document.getElementById('p'+i);
+      if (p) p.className = 'prog-step' + (i<n ? ' done' : (i===n ? ' current' : ''));
+    });
+    if (n === 5) buildSummary();
+    window.scrollTo(0,0);
+    var lang = localStorage.getItem('mcp_lang');
+    if (lang === 'en' && typeof applyLang === 'function') setTimeout(function(){ applyLang('en'); }, 50);
+  };
+
+  window.s3Preset = function(cmd, desc) {
+    s3ToolPreset(0, cmd);
+    var d = document.getElementById('s3t-desc-0');
+    if (d && !d.value) d.value = desc;
+  };
+
+  window.chooseSource = function(src) {
+    source = src;
+    document.getElementById('pkg-picker').style.display = (src==='package') ? 'block' : 'none';
+    document.getElementById('engine-picker').style.display = (src==='blank') ? 'block' : 'none';
+    if (src==='package') {
+      document.getElementById('pkg-hidden').value = '';
+    }
+    // Highlight selected button
+    document.querySelectorAll('.adv-type-grid .adv-type-btn').forEach(function(btn) {
+      btn.style.borderColor = '';
+      btn.style.background = '';
+    });
+    var idx = src === 'package' ? 0 : 1;
+    var btns = document.querySelectorAll('.adv-type-grid .adv-type-btn');
+    if (btns[idx]) {
+      btns[idx].style.borderColor = 'var(--blue)';
+      btns[idx].style.background = '#0d2a40';
+    }
+  };
+
+  window.pkgChosen = function(pkgId, labelEl) {
+    document.getElementById('pkg-hidden').value = pkgId;
+    var radio = labelEl.querySelector('input[type="radio"]');
+    if (radio) radio.checked = true;
+    document.querySelectorAll('.pkg-check').forEach(function(el) { el.style.display = 'none'; });
+    var chk = labelEl.querySelector('.pkg-check');
+    if (chk) chk.style.display = 'inline';
+    document.getElementById('pkg-next-btn').style.display = 'block';
+  };
+
+  window.chooseEngine = function(adapter, rc) {
+    document.getElementById('adapter-hidden').value = adapter;
+    document.getElementById('rc-hidden').value = rc;
+    document.getElementById('pkg-hidden').value = '';
+    ['http','shell','openapi'].forEach(function(e) {
+      var el = document.getElementById('eng-'+e);
+      if (el) el.style.borderColor = '';
+    });
+    var key = adapter === 'http_request' ? 'http' : (adapter === 'openapi' ? 'openapi' : 'shell');
+    var selBtn = document.getElementById('eng-'+key);
+    if (selBtn) selBtn.style.borderColor = 'var(--blue)';
+    // OpenAPI: show inline config form, stay on step 1
+    _s3IsOpenAPI = (adapter === 'openapi');
+    var oaCfg = document.getElementById('openapi-cfg');
+    if (oaCfg) oaCfg.style.display = _s3IsOpenAPI ? 'block' : 'none';
+    if (_s3IsOpenAPI) return;
+    document.getElementById('rc-field').style.display = 'block';
+    // Show shell env builder only for shell
+    var envBox = document.getElementById('adv-shell-env');
+    if (envBox) envBox.style.display = adapter === 'shell' ? 'block' : 'none';
+    var sel = document.getElementById('rc-select');
+    for (var i=0; i<sel.options.length; i++) {
+      if (sel.options[i].value === rc) { sel.selectedIndex = i; break; }
+    }
+    goStep(2);
+  };
+
+  window.openapiGoNext = function() {
+    var url = (document.getElementById('oa-backend-url')||{}).value || '';
+    if (!url.trim()) {
+      var el = document.getElementById('oa-backend-url');
+      if (el) { el.style.borderColor = '#f47a80'; el.focus(); }
+      return;
+    }
+    document.getElementById('rc-field').style.display = 'none';
+    var envBox = document.getElementById('adv-shell-env');
+    if (envBox) envBox.style.display = 'none';
+    goStep(2);
+  };
+
+  // Advanced Creator env builder
+  window.advUpdateBaseHint = function() {
+    var sel = document.getElementById('adv-build-base');
+    var custom = document.getElementById('adv-build-base-custom');
+    var hint = document.getElementById('adv-base-hint');
+    var hints = {
+      'mcp-runtime-shell:latest': '✅ Zawiera oc, kubectl, curl, jq + Python 3.12 UBI9 (RHEL 9)',
+      'mcp-runtime-http-gateway:latest': '✅ HTTP gateway, Python 3.12',
+      'python:3.12-slim': '⚠️ Czysty Python — dodaj curl w APT jeśli potrzebny',
+      'debian:bookworm-slim': '⚠️ Czysty Debian — dodaj wszystkie potrzebne paczki',
+      '__custom__': '⚠️ UWAGA: Czysty obraz OS (ubuntu, debian, alpine) nie zadziała! Obraz musi być zbudowany na bazie mcp-runtime-shell:latest lub mcp-runtime-http-gateway:latest — tylko te mają wbudowany serwer MCP. Przykład Dockerfile: FROM mcp-runtime-shell:latest'
+    };
+    if (custom) custom.style.display = sel.value === '__custom__' ? 'block' : 'none';
+    if (hint) hint.innerHTML = hints[sel.value] || '';
+  };
+
+  window.advBuildReset = function() {
+    document.getElementById('adv-build-progress').style.display = 'none';
+    document.getElementById('adv-build-btn').disabled = false;
+    document.getElementById('adv-build-btn').textContent = '🔨 Spróbuj ponownie';
+  };
+
+  window.advStartBuild = function() {
+    var apt = (document.getElementById('adv-build-apt').value || '').trim();
+    var pip = (document.getElementById('adv-build-pip').value || '').trim();
+    if (!apt && !pip) { document.getElementById('adv-build-apt').focus(); return; }
+    var sel = document.getElementById('adv-build-base');
+    var baseImg = sel && sel.value !== '__custom__' ? sel.value : (document.getElementById('adv-build-base-custom').value.trim() || 'mcp-runtime-shell:latest');
+    var basePart = baseImg.split('/').pop().replace(/[^a-z0-9]/gi,'-').replace(/-+/g,'-').replace(/^-|-$/g,'').toLowerCase().replace(/:[^:]*$/,'');
+    var aptPart = apt.split(/\s+/).slice(0,3).map(function(p){return p.replace(/[^a-z0-9]/g,'').substring(0,12);}).filter(Boolean).join('-');
+    var namePart = (aptPart || pip.split(/\s+/)[0].replace(/[^a-z0-9]/g,'').substring(0,12) || 'env');
+    var rcName = basePart + '-' + namePart;
+    var imgTag = 'mcp-runtime-' + rcName + ':latest';
+    document.getElementById('adv-build-btn').disabled = true;
+    document.getElementById('adv-build-progress').style.display = 'block';
+    document.getElementById('adv-build-status').textContent = 'Budowanie ' + imgTag + '...';
+    var body = new URLSearchParams({
+      image: imgTag, base_image: baseImg, runtime_class: rcName,
+      apt_packages: apt, pip_packages: pip,
+      allowed_execution_types: 'shell', risk_level: 'low', security_profile: 'restricted'
+    });
+    fetch('/api/runtime-images/build', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: body.toString(), redirect:'manual' })
+    .then(function() {
+      var polls = 0;
+      var t = setInterval(function() {
+        polls++;
+        fetch('/api/runtime-image-builds/latest?rc=' + encodeURIComponent(rcName))
+        .then(function(r){return r.json();}).then(function(d) {
+          if (d.status === 'done') {
+            clearInterval(t);
+            document.getElementById('adv-build-spinner').textContent = '✅';
+            document.getElementById('adv-build-status').textContent = 'Gotowe! Środowisko ' + imgTag + ' zbudowane.';
+            // Update rc-hidden and rc-select with new image
+            document.getElementById('rc-hidden').value = rcName;
+            document.getElementById('adapter-hidden').value = 'shell';
+            // Add new option to rc-select
+            var rcSel = document.getElementById('rc-select');
+            var opt = new Option(imgTag + ' (nowy)', rcName, true, true);
+            rcSel.add(opt);
+          } else if (d.status === 'failed') {
+            clearInterval(t);
+            document.getElementById('adv-build-spinner').textContent = '❌';
+            var errMsg = (d.error || 'nieznany błąd');
+            var hint = '';
+            if (errMsg.indexOf('non-zero code: 100') !== -1 || errMsg.indexOf('Unable to locate package') !== -1) {
+              hint = '<br><br>💡 <b>Błąd 100 = paczka nie istnieje w Debian APT.</b><br>Sprawdź nazwę — np. <code>postgres-client</code> ❌ → <code>postgresql-client</code> ✅<br>Szukaj na <a href="https://packages.debian.org" target="_blank" style="color:#7dd3fc">packages.debian.org</a>';
+            } else if (errMsg.indexOf('non-zero code: 1') !== -1) {
+              hint = '<br><br>💡 Sprawdź nazwy pakietów na <a href="https://packages.debian.org" target="_blank" style="color:#7dd3fc">packages.debian.org</a>';
+            }
+            document.getElementById('adv-build-progress').innerHTML =
+              '<div style="background:#2a0a0a;border:2px solid #8a2020;border-radius:8px;padding:14px 16px">' +
+              '<div style="font-weight:800;color:#f47a80;margin-bottom:6px">❌ Budowanie nie powiodło się</div>' +
+              '<code style="font-size:11px;color:#f4c163;word-break:break-all;line-height:1.6">' + errMsg.slice(0, 300) + '</code>' +
+              hint +
+              '<br><br><button type="button" onclick="advBuildReset()" ' +
+              'style="background:#1a3a5a;border:none;color:white;padding:8px 14px;border-radius:6px;font-size:12px;cursor:pointer;margin-top:8px">← Popraw i spróbuj ponownie</button>' +
+              '</div>';
+          } else if (polls > 90) { clearInterval(t); document.getElementById('adv-build-status').textContent = 'Timeout — odśwież stronę i sprawdź Runtime Image Builds.'; }
+        }).catch(function(){});
+      }, 3000);
+    });
+  };
+
+  var _advEnvCount = 0;
+  window.advAddEnv = function(key, val) {
+    var i = _advEnvCount++;
+    var row = document.createElement('div');
+    row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center';
+    row.innerHTML =
+      '<input placeholder="NAZWA_ZMIENNEJ" value="'+(key||'')+'" style="padding:8px 10px;border:1px solid #3a2800;border-radius:6px;background:#0d1000;color:var(--text);font-size:13px;font-family:monospace" oninput="syncEnvHidden('+i+',this,null)">' +
+      '<input type="password" placeholder="wartość / token / klucz" value="'+(val||'')+'" style="padding:8px 10px;border:1px solid #3a2800;border-radius:6px;background:#0d1000;color:var(--text);font-size:13px" oninput="syncEnvHidden('+i+',null,this)">' +
+      '<button type="button" onclick="this.parentNode.remove()" style="background:#3a1010;border:1px solid #6a2020;color:#f47a80;padding:6px 10px;border-radius:6px;font-size:12px;cursor:pointer">✕</button>';
+    document.getElementById('adv-env-list').appendChild(row);
+    // hidden inputs for form submit
+    var hk = document.createElement('input'); hk.type='hidden'; hk.name='env_key_'+i; hk.id='env_hk_'+i; hk.value=key||'';
+    var hv = document.createElement('input'); hv.type='hidden'; hv.name='env_val_'+i; hv.id='env_hv_'+i; hv.value=val||'';
+    hk.setAttribute('form','adv-form'); hv.setAttribute('form','adv-form');
+    document.getElementById('adv-env-list').appendChild(hk);
+    document.getElementById('adv-env-list').appendChild(hv);
+  };
+  window.syncEnvHidden = function(i, keyEl, valEl) {
+    if (keyEl) { var h=document.getElementById('env_hk_'+i); if(h) h.value=keyEl.value; }
+    if (valEl) { var h=document.getElementById('env_hv_'+i); if(h) h.value=valEl.value; }
+  };
+
+  function buildSummary() {
+    var name = document.getElementById('adv-name').value || '(brak nazwy)';
+    var pkgId = document.getElementById('pkg-hidden').value;
+    var adapter = document.getElementById('adapter-hidden').value;
+    var rc = document.getElementById('rc-hidden').value;
+    var pkgName = pkgId ? (document.querySelector('input[name="package_id"][value="'+pkgId+'"]')?.closest('.qs-pkg-card')?.querySelector('[style*="font-weight:800"]')?.textContent || pkgId) : '— brak paczki (blank)';
+    var ro = document.querySelector('input[name="policy_read_only"]')?.checked;
+    var bw = document.querySelector('input[name="policy_block_write"]')?.checked;
+    var bd = document.querySelector('input[name="policy_block_destructive"]')?.checked;
+    var to = document.querySelector('input[name="timeout_seconds"]')?.value;
+    var toolLine = '';
+    if (_s3IsOpenAPI) {
+      var oaBack = (document.getElementById('oa-backend-url')||{}).value || '';
+      var oaSpec = (document.getElementById('oa-spec-url')||{}).value || (oaBack ? oaBack.replace(/\/$/, '') + '/openapi.json' : '');
+      toolLine = '📄 <b>Backend URL:</b> <code>' + oaBack + '</code><br>📋 <b>OpenAPI spec:</b> <code>' + oaSpec + '</code><br>';
+    } else {
+      var cmd = (document.getElementById('s3-cmd')||{}).value || '';
+      var toolUrl = (document.querySelector('input[name="first_tool_url"]')||{}).value || '';
+      toolLine = cmd ? ('🔧 <b>Komenda:</b> <code>' + cmd + '</code><br>') : (toolUrl ? ('🌐 <b>URL:</b> <code>' + toolUrl + '</code><br>') : '');
+    }
+    var envKeys = document.querySelectorAll('#adv-env-list input[name^="env_key_"]');
+    var envLine = envKeys.length ? ('🔑 <b>ENV vars:</b> ' + envKeys.length + ' zdefiniowanych<br>') : '';
+    document.getElementById('summary').innerHTML =
+      '🖥️ <b>Serwer:</b> ' + name + '<br>' +
+      (pkgId ? '📦 <b>Paczka:</b> ' + pkgName + '<br>' : toolLine) +
+      '⚙️ <b>Silnik:</b> ' + (adapter||'—') + ' &nbsp; 🏗️ <b>Środowisko:</b> ' + (rc||'—') + '<br>' +
+      '🔒 <b>Tylko odczyt:</b> ' + (ro?'✅':'❌') + ' &nbsp; ' +
+      '🚫 <b>Blokuj zapis:</b> ' + (bw?'✅':'❌') + ' &nbsp; ' +
+      '⛔ <b>Blokuj destruktywne:</b> ' + (bd?'✅':'❌') + '<br>' +
+      '⏱️ <b>Timeout:</b> ' + to + 's<br>' + envLine;
+  }
+})();
+</script>
+{% endblock %}

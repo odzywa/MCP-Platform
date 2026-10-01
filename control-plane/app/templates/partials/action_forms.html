@@ -1,0 +1,128 @@
+
+<style>
+.act-btn { padding:8px 14px; border:0; border-radius:6px; font-weight:700; cursor:pointer; font-size:13px; transition:.12s; color:white; }
+.act-btn:hover { filter:brightness(1.15); transform:translateY(-1px); }
+.act-btn.primary { background:var(--blue); }
+.act-btn.secondary { background:#3d5268; }
+.act-btn.warn { background:#d9822b; }
+.act-btn.danger { background:#c43b3b; }
+.act-btn.dark { background:#263548; }
+#{{ msg_id }} { padding:10px 14px; border-radius:8px; font-size:13px; font-weight:600; margin-top:10px; display:none; }
+#{{ msg_id }}.ok { background:#0e2e1e; border:1px solid #1a5a38; color:#5ce89a; }
+#{{ msg_id }}.err { background:#2c0e10; border:1px solid #5a2025; color:#f47a80; }
+#{{ msg_id }}.info { background:#0d1e2e; border:1px solid #1a3a50; color:#7dd3fc; }
+</style>
+<div class="actions" style="flex-wrap:wrap;gap:8px" id="act-btns-{{ rid }}">
+  <button class="act-btn primary"   onclick="doAct('{{ rid }}','deploy')">🚀 Deploy</button>
+  <button class="act-btn dark"      onclick="doAct('{{ rid }}','reload')">♻️ Reload Config</button>
+  <button class="act-btn warn"      onclick="doAct('{{ rid }}','stop')">⏹ Zatrzymaj</button>
+  <button class="act-btn secondary" onclick="doAct('{{ rid }}','start')">▶️ Uruchom</button>
+  <button class="act-btn secondary" onclick="doAct('{{ rid }}','restart')">🔄 Restart</button>
+  <button class="act-btn dark"      onclick="doAct('{{ rid }}','health')">🩺 Sprawdź status</button>
+  <button class="act-btn dark"      onclick="doAct('{{ rid }}','logs')">📋 Pobierz logi</button>
+  <button class="act-btn dark"      onclick="doAct('{{ rid }}','rebuild-redeploy')" style="background:#6b3a0a">🔨 Przebuduj obraz + Deploy</button>
+  <button class="act-btn danger"    onclick="doAct('{{ rid }}','delete')">🗑️ Usuń</button>
+</div>
+<div id="{{ msg_id }}"></div>
+<script>
+(function() {
+  var rid = '{{ rid }}';
+  var msgs = {
+    'deploy':           ['info', '🚀 Deployment zlecony — kontener uruchomi się za kilka sekund. Status zmieni się automatycznie.'],
+    'reload':           ['info', '♻️ Przeładowuję konfigurację...'],
+    'stop':             ['info', '⏹ Zatrzymywanie kontenera...'],
+    'start':            ['info', '▶️ Uruchamianie kontenera...'],
+    'restart':          ['info', '🔄 Restartowanie kontenera...'],
+    'health':           ['info', '🩺 Sprawdzam status...'],
+    'logs':             ['info', '📋 Pobieranie logów z kontenera...'],
+    'rebuild-redeploy': ['info', '🔨 Przebudowywanie obrazu Docker — może potrwać kilka minut. Status zaktualizuje się automatycznie.'],
+    'delete':           ['info', '🗑️ Usuwanie serwera...']
+  };
+  var confirms = {
+    'rebuild-redeploy': 'Przebuduje obraz Docker i zrestartuje serwer. Może potrwać kilka minut. Kontynuować?',
+    'delete':           'Trwale usunąć ten serwer MCP i jego kontener?'
+  };
+  var successMsgs = {
+    'deploy':    '🚀 Deployment zlecony! Kontener uruchomi się za chwilę.',
+    'stop':      '⏹️ Serwer zatrzymany.',
+    'start':     '▶️ Serwer uruchomiony.',
+    'restart':   '🔄 Serwer zrestartowany.',
+    'delete':    '🗑️ Serwer usunięty. Przekierowuję...',
+    'rebuild-redeploy': '🔨 Przebudowanie obrazu zlecone. Może potrwać kilka minut.'
+  };
+
+  window.doAct = function(r, action) {
+    if (confirms[action] && !confirm(confirms[action])) return;
+    var box = document.getElementById('act-msg-' + r);
+    var pair = msgs[action] || ['info', 'Wykonuję operację...'];
+    box.className = pair[0]; box.textContent = pair[1]; box.style.display = 'block';
+
+    fetch('/api/runtimes/' + r + '/' + action, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: 'return_to=' + encodeURIComponent('/runtimes/' + r),
+      redirect: 'manual'
+    }).then(function(resp) {
+      if (action === 'delete') {
+        box.className = 'ok'; box.textContent = successMsgs['delete'] || '✅ Gotowe.';
+        setTimeout(function() { window.location = '/runtimes'; }, 1200);
+        return;
+      }
+      if (action === 'logs') {
+        box.className = 'ok'; box.textContent = '📋 Pobieranie logów zlecone — odśwież za chwilę.';
+        setTimeout(function() {
+          var el = document.getElementById('sec-logs');
+          if (el) { el.open = true; el.scrollIntoView({behavior:'smooth'}); }
+        }, 800);
+        return;
+      }
+      if (action === 'reload') {
+        fetch('/api/runtimes/' + r + '/status').then(function(r2){return r2.json();}).then(function(d) {
+          box.className = 'ok';
+          box.textContent = '✅ Konfiguracja przeładowana. Status: ' + (d.status || '?');
+        });
+        return;
+      }
+      if (action === 'health') {
+        setTimeout(function() {
+          fetch('/api/runtimes/' + r + '/status').then(function(r2){return r2.json();}).then(function(d) {
+            var ok = d.status === 'running';
+            box.className = ok ? 'ok' : 'err';
+            box.textContent = ok
+              ? '✅ Kontener żyje i odpowiada! Status: running · Endpoint: ' + (d.endpoint_url || '?')
+              : '❌ Problem z kontenerem. Status: ' + (d.status || '?') + (d.last_error ? ' · Błąd: ' + d.last_error : '');
+          });
+        }, 1200);
+        return;
+      }
+      // deploy, stop, start, restart, rebuild
+      var msg = successMsgs[action];
+      if (msg) {
+        box.className = 'ok'; box.textContent = msg;
+        // after deploy/restart/start, poll for running
+        if (['deploy','start','restart','rebuild-redeploy'].includes(action)) {
+          var polls = 0;
+          var t = setInterval(function() {
+            polls++;
+            fetch('/api/runtimes/' + r + '/status').then(function(r2){return r2.json();}).then(function(d) {
+              if (d.status === 'running') {
+                clearInterval(t);
+                box.textContent = '✅ Serwer działa! · ' + (d.endpoint_url || '');
+                setTimeout(function() { location.reload(); }, 1500);
+              } else if (d.status === 'failed' || d.status === 'missing') {
+                clearInterval(t);
+                box.className = 'err';
+                box.textContent = '❌ Błąd: ' + (d.last_error || d.status);
+              } else if (polls > 30) { clearInterval(t); }
+            });
+          }, 2000);
+        } else if (action === 'stop') {
+          setTimeout(function() { location.reload(); }, 1500);
+        }
+      }
+    }).catch(function(e) {
+      box.className = 'err'; box.textContent = '❌ Błąd połączenia: ' + e;
+    });
+  };
+})();
+</script>

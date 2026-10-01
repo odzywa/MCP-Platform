@@ -1,0 +1,296 @@
+{
+  "id": "raghybrid-assistant",
+  "name": "RAGHybrid Assistant",
+  "description": "Gotowy MCP runtime z toolami do RAGHybrid API.",
+  "category": "rag",
+  "risk_level": "low",
+  "runtime_class": {
+    "name": "http-gateway",
+    "runtime_image": "mcp-runtime-http-gateway:latest",
+    "allowed_execution_types": [
+      "http_request"
+    ],
+    "risk_level": "low",
+    "security_profile": "restricted"
+  },
+  "adapters": [
+    {
+      "name": "http_request",
+      "description": "Adapter HTTP — wywołuje zewnętrzne REST API.",
+      "adapter_type": "http",
+      "runtime_image": "mcp-runtime-http-gateway:latest",
+      "implemented": true,
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "schema": {
+        "type": "object"
+      }
+    }
+  ],
+  "policy": {
+    "block_write_tools": true,
+    "block_destructive_tools": true,
+    "require_read_only": true,
+    "timeout_seconds": 60,
+    "max_payload_bytes": 1048576,
+    "max_response_bytes": 5242880,
+    "allowed_clients": [
+      "OpenWebUI",
+      "local"
+    ]
+  },
+  "tools": [
+    {
+      "name": "hybridrag_context",
+      "description": "Best default tool for Continue coding help. Retrieves concise source-grounded context from RAGHybrid and returns model-ready text with source markers.",
+      "execution_type": "http_request",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "rag",
+      "openwebui_enabled": false,
+      "mcp_response_mode": "context_text",
+      "response_formatter": {
+        "max_items": 8,
+        "content_chars": 1400,
+        "include_debug": false
+      },
+      "config": {
+        "method": "POST",
+        "url": "http://raghybrid-app:8000/retrieve_json",
+        "body": {
+          "query": "${query}",
+          "top_k": "${top_k}",
+          "max_vector": "${max_vector}",
+          "max_graph": "${max_graph}",
+          "max_evidence": "${max_evidence}",
+          "max_context_chars": 20000,
+          "telemetry": true
+        },
+        "timeout_seconds": 60,
+        "max_response_bytes": 5242880,
+        "openwebui_enabled": false,
+        "mcp_response_mode": "context_text",
+        "response_formatter": {
+          "max_items": 8,
+          "content_chars": 1400,
+          "include_debug": false
+        }
+      },
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000,
+            "description": "Standalone search query or coding question."
+          },
+          "top_k": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "default": 8
+          },
+          "max_vector": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "default": 8
+          },
+          "max_graph": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 30,
+            "default": 12
+          },
+          "max_evidence": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 12,
+            "default": 8
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "output_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "hybridrag_search",
+      "description": "Raw RAGHybrid retrieval JSON for OpenWebUI and debugging. For Continue, prefer hybridrag_context unless raw metadata is needed.",
+      "execution_type": "http_request",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "rag",
+      "openwebui_enabled": true,
+      "config": {
+        "method": "POST",
+        "url": "http://raghybrid-app:8000/retrieve_json",
+        "body": {
+          "query": "${query}",
+          "top_k": "${top_k}",
+          "max_vector": "${max_vector}",
+          "max_graph": "${max_graph}",
+          "max_evidence": "${max_evidence}",
+          "max_context_chars": 20000,
+          "telemetry": true
+        },
+        "timeout_seconds": 60,
+        "max_response_bytes": 5242880,
+        "openwebui_enabled": true
+      },
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000,
+            "description": "Standalone search query or coding question."
+          },
+          "top_k": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "default": 8
+          },
+          "max_vector": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "default": 8
+          },
+          "max_graph": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 30,
+            "default": 12
+          },
+          "max_evidence": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 12,
+            "default": 8
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "output_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "hybridrag_sources",
+      "description": "List source documents and metadata related to a query without returning full chunks.",
+      "execution_type": "http_request",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "rag",
+      "openwebui_enabled": false,
+      "mcp_response_mode": "sources_text",
+      "response_formatter": {
+        "max_items": 16
+      },
+      "config": {
+        "method": "POST",
+        "url": "http://raghybrid-app:8000/retrieve_json",
+        "body": {
+          "query": "${query}",
+          "top_k": "${top_k}",
+          "max_vector": "${max_vector}",
+          "max_graph": "${max_graph}",
+          "max_evidence": "${max_evidence}",
+          "max_context_chars": 20000,
+          "telemetry": true
+        },
+        "timeout_seconds": 60,
+        "max_response_bytes": 5242880,
+        "openwebui_enabled": false,
+        "mcp_response_mode": "sources_text",
+        "response_formatter": {
+          "max_items": 16
+        }
+      },
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000,
+            "description": "Standalone search query or coding question."
+          },
+          "top_k": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "default": 8
+          },
+          "max_vector": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "default": 8
+          },
+          "max_graph": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 30,
+            "default": 12
+          },
+          "max_evidence": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 12,
+            "default": 8
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "output_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "hybridrag_health",
+      "description": "Check RAGHybrid API health before relying on retrieval results.",
+      "execution_type": "http_request",
+      "enabled": true,
+      "risk_level": "low",
+      "mode": "read-only",
+      "category": "rag",
+      "openwebui_enabled": false,
+      "mcp_response_mode": "health_text",
+      "config": {
+        "method": "GET",
+        "url": "http://raghybrid-app:8000/health",
+        "timeout_seconds": 10,
+        "max_response_bytes": 262144,
+        "openwebui_enabled": false,
+        "mcp_response_mode": "health_text"
+      },
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "output_schema": {
+        "type": "object"
+      }
+    }
+  ]
+}

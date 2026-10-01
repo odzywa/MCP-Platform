@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+      <div class="cards">
+        <a class="card" href="/runtimes">
+          <div class="metric">{{ len(runtimes) }}</div>
+          <div style="font-weight:700;color:white;margin-bottom:2px">Serwery MCP</div>
+          <div class="muted">wszystkie środowiska</div>
+        </a>
+        <a class="card" href="/runtimes?status=running">
+          <div class="metric" style="color:#5ce89a">{{ running }}</div>
+          <div style="font-weight:700;color:white;margin-bottom:2px">Działające</div>
+          <div class="muted">status: running</div>
+        </a>
+        <a class="card" href="/runtimes?status=problem">
+          <div class="metric" style="color:{% if failed %}#f47a80{% else %}#5ce89a{% endif %}">{{ failed }}</div>
+          <div style="font-weight:700;color:white;margin-bottom:2px">Z problemami</div>
+          <div class="muted">failed / unhealthy</div>
+        </a>
+        <a class="card" href="/external-mcp">
+          <div class="metric" style="color:#c084fc">{{ external_count }}</div>
+          <div style="font-weight:700;color:white;margin-bottom:2px">Zewnętrzne MCP</div>
+          <div class="muted">zarejestrowane serwery</div>
+        </a>
+      </div>
+      {% if not runtimes %}
+      <div style="background:linear-gradient(135deg,#0d1a2a,#0a1220);border:2px dashed var(--blue);border-radius:12px;padding:36px;text-align:center;margin-top:8px">
+        <div style="font-size:48px;margin-bottom:12px">🚀</div>
+        <div style="font-size:22px;font-weight:800;color:white;margin-bottom:8px">Witaj w MCP Platform!</div>
+        <div style="color:var(--muted);font-size:15px;margin-bottom:24px;max-width:480px;margin-left:auto;margin-right:auto">
+          Nie masz jeszcze żadnego serwera MCP. Zacznij od kreatora — zajmie to mniej niż minutę.
+        </div>
+        <a href="/quick-start" style="display:inline-block;background:var(--blue);color:white;padding:14px 28px;border-radius:8px;font-weight:800;font-size:16px;text-decoration:none">
+          ⚡ Stwórz pierwszy serwer MCP
+        </a>
+        <div style="margin-top:16px;color:var(--muted);font-size:13px">
+          lub <a href="/tool-packages">przeglądaj gotowe zestawy</a> &nbsp;·&nbsp; <a href="/docs">jak to działa?</a>
+        </div>
+      </div>
+      {% endif %}
+      <div class="grid">
+        <section>
+          <h2><a href="/audit" style="color:white">📋 Historia operacji</a></h2>
+          <ul style="list-style:none;margin:0;padding:0">{% for a in audit %}<li style="padding:6px 0;border-bottom:1px solid var(--line);font-size:12px;display:flex;gap:8px;align-items:baseline"><span style="color:var(--muted);flex-shrink:0">{{ a['created_at'][11:19] }}</span><span>{{ action_icons_dash.get(a['action'], '📌') }} <b>{{ a['action'] }}</b></span><span class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ a['target_id'][:28] }}</span></li>{% endfor %}</ul>
+          <a href="/audit" class="muted" style="font-size:12px;display:block;margin-top:10px">→ Pełna historia</a>
+        </section>
+        <section>
+          <h2><a href="/logs" style="color:white">🔎 Ostatnie logi</a></h2>
+          <ul style="list-style:none;margin:0;padding:0">{% for l in logs %}<li style="padding:6px 0;border-bottom:1px solid var(--line);font-size:12px;display:flex;gap:8px;align-items:baseline"><span style="color:var(--muted);flex-shrink:0">{{ l['created_at'][11:19] }}</span><span style="color:{{ level_colors_dash.get(l['level'], '#8ea2b8') }};flex-shrink:0;font-weight:700">{{ l['level'].upper() }}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ l['message'][:80] }}</span></li>{% endfor %}</ul>
+          <a href="/logs" class="muted" style="font-size:12px;display:block;margin-top:10px">→ Wszystkie logi</a>
+        </section>
+      </div>
+    {% endblock %}

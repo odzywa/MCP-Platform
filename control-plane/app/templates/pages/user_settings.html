@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+    {% if error %}<div class="alert">{{ error }}</div>{% endif %}{% if ok %}<div class="success">{{ ok }}</div>{% endif %}
+    <section style="max-width:480px">
+      <h2>⚙️ Ustawienia konta</h2>
+      <p class="muted">Zalogowany jako: <b>{{ user.get('username', '?') }}</b> · Rola: <b>{{ user.get('role', '?') }}</b></p>
+      <form method="post" action="/api/user/change-password">
+        <div class="gen-field">
+          <label>Aktualne hasło</label>
+          <input type="password" name="current_password" required style="padding:10px 12px;border:1px solid #34465b;border-radius:6px;background:#0d1420;color:#dce7f3">
+        </div>
+        <div class="gen-field">
+          <label>Nowe hasło (min. 6 znaków)</label>
+          <input type="password" name="new_password" minlength="6" required style="padding:10px 12px;border:1px solid #34465b;border-radius:6px;background:#0d1420;color:#dce7f3">
+        </div>
+        <div class="gen-field">
+          <label>Potwierdź nowe hasło</label>
+          <input type="password" name="new_password2" required style="padding:10px 12px;border:1px solid #34465b;border-radius:6px;background:#0d1420;color:#dce7f3">
+        </div>
+        <button style="background:#1a7a3f;padding:10px 18px;border:none;border-radius:8px;color:white;font-weight:700;cursor:pointer">Zmień hasło</button>
+      </form>
+    </section>{% endblock %}

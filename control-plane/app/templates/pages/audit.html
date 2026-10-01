@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block content %}
+      <div style="display:flex;gap:4px;flex-wrap:wrap;border-bottom:2px solid var(--line);margin-bottom:20px">
+        <button class="rt-tab rt-tab-active" onclick="auditTab('ops')" id="atab-ops">📋 Operacje adminów ({{ len(audit) }})</button>
+        <button class="rt-tab" onclick="auditTab('ai')" id="atab-ai">🤖 Wywołania AI ({{ len(tool_calls_all) }})</button>
+      </div>
+      <style>
+      .rt-tab{background:none;border:none;border-bottom:3px solid transparent;padding:8px 14px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;margin-bottom:-2px;transition:.15s;border-radius:6px 6px 0 0}
+      .rt-tab:hover{color:var(--text);background:var(--panel-2)}
+      .rt-tab.rt-tab-active{color:white;border-bottom-color:var(--blue);background:var(--panel-2)}
+      .audit-pane{display:none}.audit-pane.active{display:block}
+      </style>
+
+      <!-- OPS tab -->
+      <div class="audit-pane active" id="apane-ops">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:4px">
+          <div>
+            <label style="font-size:12px;margin-bottom:4px;display:block">Akcja</label>
+            <select id="f-action" onchange="filterAudit()" style="width:220px;padding:8px 10px;font-size:13px">
+              <option value="">— wszystkie akcje —</option>
+              {% for a in unique_actions %}<option value="{{ a }}">{{ action_icons.get(a, '📌') }} {{ a }}</option>{% endfor %}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px;margin-bottom:4px;display:block">Aktor</label>
+            <select id="f-actor" onchange="filterAudit()" style="width:140px;padding:8px 10px;font-size:13px">
+              <option value="">— wszyscy —</option>
+              {% for a in unique_actors %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
+            </select>
+          </div>
+          <div style="flex:1;min-width:200px">
+            <label style="font-size:12px;margin-bottom:4px;display:block">Szukaj po celu / ID</label>
+            <input id="f-target" oninput="filterAudit()" placeholder="wpisz fragment ID..." style="padding:8px 10px;font-size:13px">
+          </div>
+          <button onclick="clearFilters()" class="secondary" style="padding:8px 12px;font-size:12px;height:38px;align-self:flex-end">✕ Wyczyść</button>
+          <span id="f-count" class="muted" style="font-size:12px;align-self:flex-end;padding-bottom:10px">{{ len(audit) }} wpisów</span>
+        </div>
+        <section style="padding:0;overflow:auto">
+          <table id="audit-table">
+            <thead><tr><th>Czas</th><th>Aktor</th><th>Akcja</th><th>Typ</th><th>Cel</th><th>Szczegóły</th></tr></thead>
+            <tbody>{% for a in audit %}<tr data-action="{{ a['action'] }}" data-actor="{{ a['actor'] }}" data-target="{{ a['target_id'] }}">
+          <td style="font-size:12px;color:var(--muted);white-space:nowrap">{{ a['created_at'][:19].replace('T', ' ') }}</td>
+          <td><span class="badge" style="font-size:11px">{{ a['actor'] }}</span></td>
+          <td style="white-space:nowrap">{{ action_icons.get(a['action'], '📌') }} <b>{{ a['action'] }}</b></td>
+          <td class="muted" style="font-size:12px">{{ a['target_type'] }}</td>
+          <td style="font-size:12px;font-family:monospace;color:#7dd3fc">{{ a['target_id'][:32] }}</td>
+          <td><details style="padding:6px;border:none;background:transparent"><summary style="font-size:11px;margin-bottom:0;color:var(--muted)">szczegóły</summary><pre style="margin-top:6px;font-size:11px;max-height:100px">{{ a['details_json'] }}</pre></details></td>
+        </tr>{% endfor %}</tbody>
+          </table>
+        </section>
+      </div>
+
+      <!-- AI CALLS tab -->
+      <div class="audit-pane" id="apane-ai">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:4px">
+          <div>
+            <label style="font-size:12px;margin-bottom:4px;display:block">Serwer</label>
+            <select id="tc-runtime" onchange="filterTC()" style="width:200px;padding:8px 10px;font-size:13px">
+              <option value="">— wszystkie —</option>
+              {% for r in unique_tc_runtimes %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px;margin-bottom:4px;display:block">Tool</label>
+            <select id="tc-tool" onchange="filterTC()" style="width:180px;padding:8px 10px;font-size:13px">
+              <option value="">— wszystkie —</option>
+              {% for t in unique_tc_tools %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px;margin-bottom:4px;display:block">Status</label>
+            <select id="tc-ok" onchange="filterTC()" style="width:120px;padding:8px 10px;font-size:13px">
+              <option value="">— wszystkie —</option>
+              <option value="1">✅ OK</option>
+              <option value="0">❌ Błąd</option>
+            </select>
+          </div>
+          <button onclick="clearTC()" class="secondary" style="padding:8px 12px;font-size:12px;height:38px;align-self:flex-end">✕ Wyczyść</button>
+          <span id="tc-count" class="muted" style="font-size:12px;align-self:flex-end;padding-bottom:10px">{{ len(tool_calls_all) }} wywołań</span>
+        </div>
+        <section style="padding:0;overflow:auto">
+          <table id="tc-table">
+            <thead><tr><th>Czas</th><th>Serwer</th><th>Tool</th><th>Status</th><th>Czas ms</th><th>IP</th><th>Model</th><th>Argumenty</th></tr></thead>
+            <tbody>{% for tc in tool_calls_all %}<tr data-runtime="{{ tc['runtime_id'] }}" data-tool="{{ tc['tool_name'] }}" data-ok="{{ tc['result_ok'] }}">
+          <td style="font-size:12px;color:var(--muted);white-space:nowrap">{{ tc['created_at'][:19].replace('T', ' ') }}</td>
+          <td style="font-size:12px;font-family:monospace;color:#7dd3fc"><a href="/runtimes/{{ tc['runtime_id'] }}" style="color:#7dd3fc">{{ (tc.get('runtime_name') or tc['runtime_id'])[:28] }}</a></td>
+          <td style="font-weight:700;color:var(--blue)">{{ tc['tool_name'] }}</td>
+          <td><span class="badge {% if tc['result_ok'] %}running{% else %}failed{% endif %}" style="font-size:11px;padding:2px 7px">{% if tc['result_ok'] %}OK{% else %}ERR{% endif %}</span></td>
+          <td class="muted" style="font-size:12px">{{ tc['duration_ms'] }} ms</td>
+          <td class="muted" style="font-size:12px;font-family:monospace">{{ (tc.get('caller_ip', '') or '—') }}</td>
+          <td class="muted" style="font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ tc.get('model', '') }}">{{ (tc.get('model', '') or '—')[:24] }}</td>
+          <td><details style="padding:6px;border:none;background:transparent"><summary style="font-size:11px;margin-bottom:0;color:var(--muted)">argumenty</summary><pre style="margin-top:6px;font-size:11px;max-height:100px">{{ tc['arguments_json'] }}</pre></details></td>
+        </tr>{% endfor %}</tbody>
+          </table>
+        </section>
+      </div>
+
+<script>
+function auditTab(name) {
+  document.querySelectorAll('.audit-pane').forEach(function(p) { p.classList.remove('active'); });
+  document.querySelectorAll('.rt-tab').forEach(function(t) { t.classList.remove('rt-tab-active'); });
+  document.getElementById('apane-' + name).classList.add('active');
+  document.getElementById('atab-' + name).classList.add('rt-tab-active');
+  try { localStorage.setItem('audit_tab', name); } catch(e) {}
+}
+var _savedAuditTab = 'ops';
+try { _savedAuditTab = localStorage.getItem('audit_tab') || 'ops'; } catch(e) {}
+auditTab(_savedAuditTab);
+
+function filterAudit() {
+  var action = document.getElementById('f-action').value.toLowerCase();
+  var actor  = document.getElementById('f-actor').value.toLowerCase();
+  var target = document.getElementById('f-target').value.toLowerCase();
+  var rows = document.querySelectorAll('#audit-table tbody tr');
+  var visible = 0;
+  rows.forEach(function(r) {
+    var ok = true;
+    if (action && r.dataset.action.toLowerCase().indexOf(action) === -1) ok = false;
+    if (actor  && r.dataset.actor.toLowerCase()  !== actor)  ok = false;
+    if (target && r.dataset.target.toLowerCase().indexOf(target) === -1) ok = false;
+    r.style.display = ok ? '' : 'none';
+    if (ok) visible++;
+  });
+  document.getElementById('f-count').textContent = visible + ' / {{ len(audit) }} wpisów';
+}
+function clearFilters() {
+  document.getElementById('f-action').value = '';
+  document.getElementById('f-actor').value  = '';
+  document.getElementById('f-target').value = '';
+  filterAudit();
+}
+function filterTC() {
+  var runtime = document.getElementById('tc-runtime').value;
+  var tool    = document.getElementById('tc-tool').value;
+  var ok      = document.getElementById('tc-ok').value;
+  var rows = document.querySelectorAll('#tc-table tbody tr');
+  var visible = 0;
+  rows.forEach(function(r) {
+    var show = true;
+    if (runtime && r.dataset.runtime !== runtime) show = false;
+    if (tool    && r.dataset.tool    !== tool)    show = false;
+    if (ok      && r.dataset.ok      !== ok)      show = false;
+    r.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  document.getElementById('tc-count').textContent = visible + ' / {{ len(tool_calls_all) }} wywołań';
+}
+function clearTC() {
+  document.getElementById('tc-runtime').value = '';
+  document.getElementById('tc-tool').value    = '';
+  document.getElementById('tc-ok').value      = '';
+  filterTC();
+}
+</script>{% endblock %}

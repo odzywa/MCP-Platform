@@ -1,0 +1,785 @@
+{% extends "base.html" %}
+{% block content %}{% set _custom_options %}{% for r in _built_images %}<option value="{{ r['runtime_image'] }}">{{ r['runtime_image'] }} — własny (wcześniej zbudowany)</option>{% endfor %}{% endset %}
+
+<style>
+.qs-wrap { max-width:720px; margin:0 auto; display:grid; gap:20px; }
+.qs-step { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:28px; }
+.qs-step h2 { margin:0 0 6px; font-size:22px; }
+.qs-step .sub { color:var(--muted); font-size:14px; margin-bottom:22px; }
+.qs-type-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; }
+.qs-type-btn { background:#0d1822; border:2px solid var(--line); border-radius:10px; padding:20px 16px; cursor:pointer;
+               text-align:center; transition:.15s; color:var(--text); }
+.qs-type-btn:hover { border-color:var(--blue); background:#0d2a40; }
+.qs-type-btn .qs-icon { font-size:36px; margin-bottom:10px; }
+.qs-type-btn .qs-name { font-weight:800; font-size:15px; margin-bottom:6px; }
+.qs-type-btn .qs-desc { color:var(--muted); font-size:12px; line-height:1.5; }
+.qs-form-section { display:none; margin-top:4px; }
+.qs-form-section.active { display:block; }
+.qs-field { margin-bottom:14px; }
+.qs-field label { display:block; font-weight:700; font-size:13px; color:#aac8e0; margin-bottom:5px; }
+.qs-field input, .qs-field select { width:100%; box-sizing:border-box; padding:10px 12px;
+  border:1px solid #34465b; border-radius:6px; background:#0d1420; color:var(--text); font-size:14px; }
+.qs-field .hint { color:var(--muted); font-size:12px; margin-top:4px; }
+.qs-big-btn { width:100%; padding:14px; font-size:16px; font-weight:800; border:none; border-radius:8px;
+              background:var(--blue); color:white; cursor:pointer; margin-top:8px; }
+.qs-big-btn:hover { background:var(--blue-dark); }
+.qs-pkg-card { display:block; cursor:pointer; margin-bottom:8px; }
+.qs-pkg-inner { background:#0d1822; border:2px solid var(--line); border-radius:8px; padding:12px 16px;
+                transition:.15s; }
+.qs-pkg-card.selected .qs-pkg-inner { border-color:var(--blue); background:#0d2a40; }
+.qs-pkg-card.selected .qs-pkg-chevron { transform:rotate(180deg); color:var(--blue); }
+.qs-pkg-inner:hover { border-color:var(--blue); }
+.qs-pkg-details { animation: fadeIn .15s ease; }
+@keyframes fadeIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:none; } }
+.qs-back { background:#263548; color:#c9d7e6; border:none; padding:8px 14px; border-radius:6px;
+           cursor:pointer; font-size:13px; margin-bottom:16px; }
+</style>
+{% if error %}<div class="alert">{{ error }}</div>{% endif %}
+<div class="qs-wrap">
+  <div class="qs-step" id="step-choose">
+    <h2>Co chcesz podłączyć do AI?</h2>
+    <div class="sub">Wybierz typ i wypełnij 2-3 pola — serwer uruchomi się automatycznie.</div>
+    {% if not _is_admin %}{% else %}<div style="background:#0a1520;border:1px solid #1a3a50;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--muted)">💡 Chcesz uruchomić komendę shell (psql, oc, curl)? Skorzystaj z <a href="/create" style="color:var(--blue);font-weight:700">Kreatora zaawansowanego</a> — tam możesz wybrać środowisko i zdefiniować narzędzia.</div>{% endif %}
+    <div class="qs-type-grid" style="grid-template-columns:1fr 1fr;grid-template-rows:auto auto">
+      <button type="button" class="qs-type-btn" onclick="chooseType('external')">
+        <div class="qs-icon">🔗</div>
+        <div class="qs-name">Zewnętrzny MCP</div>
+        <div class="qs-desc">Masz już działający serwer MCP? Podaj jego URL — platforma go zarejestruje i będzie monitorować</div>
+      </button>
+      <button type="button" class="qs-type-btn" onclick="chooseType('package')">
+        <div class="qs-icon">📦</div>
+        <div class="qs-name">Gotowy zestaw</div>
+        <div class="qs-desc">Wybierz gotowy zestaw narzędzi z katalogu — tools, silnik i polityka konfigurują się automatycznie</div>
+      </button>
+      <button type="button" class="qs-type-btn" onclick="chooseType('import')" style="grid-column:1/-1;display:flex;align-items:center;gap:16px;text-align:left;padding:16px 20px">
+        <div class="qs-icon" style="font-size:28px;flex-shrink:0">📥</div>
+        <div>
+          <div class="qs-name">Importuj z pliku / Git / URL</div>
+          <div class="qs-desc">Masz gotowy plik JSON konfiguracji MCP? Wklej go, podaj URL albo wgraj plik — serwer uruchomi się automatycznie</div>
+        </div>
+      </button>
+    </div>
+  </div>
+
+  <div class="qs-step" id="step-form" style="display:none">
+    <button type="button" class="qs-back" onclick="goBack()">← Wróć</button>
+    <form method="post" action="/api/quick-start" id="qs-form" enctype="multipart/form-data">
+      <input type="hidden" name="type" id="qs-type">
+
+      <!-- Zewnętrzny MCP -->
+      <div class="qs-form-section" id="form-external">
+        <h2>🔗 Zewnętrzny serwer MCP</h2>
+        <div class="sub">Podaj adres istniejącego serwera MCP — platforma go zarejestruje, sprawdzi dostępność i zacznie monitorować.</div>
+        <div class="qs-field">
+          <label>Adres endpointu MCP</label>
+          <input name="ext_endpoint_url" placeholder="http://moj-serwer.dom:8080/mcp" id="ext-url-input">
+          <div class="hint">Pełny URL endpointu MCP — np. <code>http://192.168.1.10:8080/mcp</code> lub <code>https://mcp.firma.pl/mcp</code></div>
+        </div>
+        <div class="qs-field">
+          <label>Opis (opcjonalny)</label>
+          <input name="ext_description" placeholder="Serwer MCP dla GitLab, pobrany z GitHub">
+        </div>
+        <div class="qs-field">
+          <label>Autoryzacja</label>
+          <select name="ext_auth_type" id="ext-auth-select" onchange="document.getElementById('ext-token-field').style.display=this.value==='bearer'?'block':'none'">
+            <option value="none">Brak — serwer jest dostępny bez tokena</option>
+            <option value="bearer">Bearer token</option>
+          </select>
+        </div>
+        <div class="qs-field" id="ext-token-field" style="display:none">
+          <label>Token</label>
+          <input name="ext_auth_token" type="password" placeholder="eyJhbGci...">
+        </div>
+        <div style="background:#0a1520;border:1px solid #1a3a50;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--muted)">
+          💡 Po zarejestrowaniu serwer pojawi się w zakładce <b>Zewnętrzne MCP</b> — platforma będzie sprawdzać jego dostępność i wylistuje dostępne tools.
+        </div>
+      </div>
+
+      <!-- Shell command — step 0: choose environment -->
+      <div class="qs-form-section" id="form-shell">
+        {% if not _can_shell %}<div style="background:#2a1010;border:1px solid #6a2020;border-radius:10px;padding:24px;text-align:center"><div style="font-size:32px;margin-bottom:12px">🔒</div><div style="font-weight:800;font-size:16px;color:#f47a80;margin-bottom:8px">Brak uprawnień</div><div style="color:#a08080;font-size:14px;margin-bottom:16px">Twoja rola (<b>read_write</b>) nie pozwala na definiowanie własnych poleceń shell.<br>Skorzystaj z gotowego zestawu narzędzi.</div><button type="button" class="qs-big-btn" style="max-width:280px;margin:0 auto" onclick="chooseType('package')">📦 Wybierz gotowy zestaw</button></div>{% endif %}
+        <div id="shell-s0" {% if not _can_shell %}style="display:none"{% endif %}>
+          <h2>Jakie narzędzia ma mieć kontener?</h2>
+          <div class="sub">Wybierz środowisko — określa co jest dostępne w kontenerze gdy AI wywołuje komendę.</div>
+
+          <div style="display:grid;gap:10px">
+
+            <button type="button" class="qs-type-btn" style="text-align:left;padding:16px 18px;display:flex;gap:14px;align-items:flex-start"
+                    onclick="pickEnv('standard')" id="env-btn-standard">
+              <div style="font-size:28px;flex-shrink:0">🐚</div>
+              <div>
+                <div style="font-weight:800;font-size:14px;color:white;margin-bottom:4px">Standardowe</div>
+                <div style="color:var(--muted);font-size:12px;margin-bottom:8px">Gotowe do użycia — bez konfiguracji</div>
+                <div style="display:flex;flex-wrap:wrap;gap:5px">
+                  {% for t in ['curl', 'jq', 'bash', 'grep', 'sed', 'awk', 'cat', 'find', 'sort', 'uniq', 'head', 'tail', 'wc'] %}<code style="background:#0d1a2a;border:1px solid #1a3a50;padding:2px 7px;border-radius:4px;font-size:11px;color:#7dd3fc">{{ t }}</code>{% endfor %}
+                </div>
+              </div>
+            </button>
+
+            <button type="button" class="qs-type-btn" style="text-align:left;padding:16px 18px;display:flex;gap:14px;align-items:flex-start"
+                    onclick="pickEnv('openshift')" id="env-btn-openshift">
+              <div style="font-size:28px;flex-shrink:0">🔴</div>
+              <div>
+                <div style="font-weight:800;font-size:14px;color:white;margin-bottom:4px">OpenShift / Kubernetes</div>
+                <div style="color:var(--muted);font-size:12px;margin-bottom:8px">CLI dla klastrów — oc, kubectl plus standardowe narzędzia</div>
+                <div style="display:flex;flex-wrap:wrap;gap:5px">
+                  {% for t in ['oc', 'kubectl', 'curl', 'jq', 'bash', 'grep'] %}<code style="background:#0d1a2a;border:1px solid #1a3a50;padding:2px 7px;border-radius:4px;font-size:11px;color:#7dd3fc">{{ t }}</code>{% endfor %}
+                </div>
+              </div>
+            </button>
+
+            <button type="button" class="qs-type-btn" style="text-align:left;padding:16px 18px;display:flex;gap:14px;align-items:flex-start;border-color:#5a420f"
+                    onclick="pickEnv('custom')" id="env-btn-custom">
+              <div style="font-size:28px;flex-shrink:0">🛠️</div>
+              <div style="flex:1">
+                <div style="font-weight:800;font-size:14px;color:white;margin-bottom:4px">Własne narzędzia</div>
+                <div style="color:var(--muted);font-size:12px;margin-bottom:8px">Potrzebujesz psql, terraform, awscli lub innych? Platforma zbuduje obraz z tymi narzędziami.</div>
+                <div style="display:flex;flex-wrap:wrap;gap:5px">
+                  {% for t in ['psql', 'terraform', 'awscli', 'python3', 'node', 'git', '...'] %}<code style="background:#1a1000;border:1px solid #3a2a00;padding:2px 7px;border-radius:4px;font-size:11px;color:#f4c163">{{ t }}</code>{% endfor %}
+                </div>
+              </div>
+            </button>
+          </div>
+
+          <!-- Custom env builder (hidden until custom chosen) -->
+          <div id="custom-build-box" style="display:none;margin-top:14px;background:#0d1a0a;border:1px solid #2a4a1a;border-radius:10px;padding:18px">
+            <div style="font-weight:800;color:#5ce89a;margin-bottom:12px;font-size:14px">🛠️ Zbuduj własne środowisko</div>
+            <div style="margin-bottom:12px">
+              <div class="qs-field" style="margin:0 0 10px">
+                <label>Baza obrazu (FROM)</label>
+                <select id="build-base" style="font-size:13px" onchange="updateBaseHint()">
+                  {% for v, l in _builtin_images %}<option value="{{ v }}"{% if v == 'mcp-runtime-shell:latest' %}selected{% endif %}>{{ l }}</option>{% endfor %}
+                  {% if _custom_options %}<optgroup label="── Wcześniej zbudowane ──">{{ _custom_options }}</optgroup>{% endif %}
+                  <option value="__custom__">⌨️ Inny — wpisz ręcznie (zaawansowane)</option>
+                </select>
+                <input id="build-base-custom" placeholder="musi zawierać serwer MCP (zbudowany na bazie mcp-runtime-shell lub http-gateway)" style="display:none;font-size:13px;margin-top:6px">
+                <div id="base-hint" class="hint" style="margin-top:4px;color:#7dd3fc">
+                  ✅ Zawiera: <b>oc, kubectl, curl, jq</b> + Python 3.12 (Debian Slim) — dodasz tylko brakujące narzędzia
+                </div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+              <div class="qs-field" style="margin:0">
+                <label>Pakiety APT (spacja)</label>
+                <input id="build-apt" placeholder="postgresql-client python3-pip" style="font-size:13px" list="apt-suggestions">
+                <datalist id="apt-suggestions">
+                  <option value="postgresql-client">postgresql-client — psql CLI</option>
+                  <option value="mysql-client">mysql-client — mysql CLI</option>
+                  <option value="redis-tools">redis-tools — redis-cli</option>
+                  <option value="mongodb-clients">mongodb-clients — mongo CLI</option>
+                  <option value="git">git — version control</option>
+                  <option value="python3-pip">python3-pip — pip</option>
+                  <option value="python3-venv">python3-venv — virtualenv</option>
+                  <option value="nodejs npm">nodejs npm — Node.js</option>
+                  <option value="awscli">awscli — AWS CLI</option>
+                  <option value="gnupg lsb-release">gnupg lsb-release — (do instalacji terraform)</option>
+                  <option value="openssh-client">openssh-client — ssh CLI</option>
+                  <option value="iputils-ping netcat-openbsd">iputils-ping netcat-openbsd — diagnostyka sieci</option>
+                  <option value="unzip wget">unzip wget — pobieranie plików</option>
+                </datalist>
+                <div style="margin-top:6px;background:#0a1000;border:1px solid #2a3a0a;border-radius:6px;padding:8px 10px;font-size:11px">
+                  ⚠️ <b style="color:#f4c163">Uwaga na nazwy!</b> Baza to <b>Debian</b> — używaj Debianowych nazw:<br>
+                  <span style="color:#f47a80">❌ postgres-client</span> → <span style="color:#5ce89a">✅ postgresql-client</span><br>
+                  <span style="color:#f47a80">❌ python3.12</span> → <span style="color:#5ce89a">✅ python3</span><br>
+                  <span style="color:#f47a80">❌ terraform</span> → <span style="color:#5ce89a">✅ terraform (wymaga dodatkowego repo)</span>
+                </div>
+              </div>
+              <div class="qs-field" style="margin:0">
+                <label>Pakiety pip (opcjonalne)</label>
+                <input id="build-pip" placeholder="boto3 kubernetes" style="font-size:13px">
+              </div>
+            </div>
+            <button type="button" id="build-btn" onclick="startBuild()"
+                    style="background:#1a7a3f;color:white;border:none;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
+              🔨 Zbuduj środowisko (2-5 min)
+            </button>
+            <div id="build-progress" style="display:none;margin-top:12px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div id="build-spinner" style="font-size:20px">⏳</div>
+                <div>
+                  <div style="font-weight:700;font-size:13px;color:white" id="build-status-text">Budowanie obrazu...</div>
+                  <div style="color:var(--muted);font-size:12px">Platforma buduje Docker image z Twoimi narzędziami. Możesz czekać lub wrócić później.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="shell-s1" style="display:none">
+          <button type="button" class="qs-back" onclick="document.getElementById('shell-s0').style.display='';document.getElementById('shell-s1').style.display='none'">← Zmień środowisko</button>
+          <div id="env-badge" style="margin-bottom:14px;padding:8px 12px;background:#0a1a0a;border:1px solid #1a4a1a;border-radius:8px;font-size:12px;color:#5ce89a">
+            ✅ Środowisko wybrane — dostępne narzędzia pokazane powyżej
+          </div>
+          <h2>Komenda</h2>
+          <div class="sub">AI będzie wykonywać tę komendę w izolowanym kontenerze.</div>
+
+          <div style="margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:#7ab8d8;margin-bottom:8px">⚡ Gotowe wzorce — kliknij żeby wstawić:</div>
+            <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px">
+              <span style="font-size:11px;color:var(--muted);align-self:center;margin-right:4px">Specyficzne:</span>
+              <button type="button" class="preset-btn" onclick="setCmd('curl -s -L --max-time 30 ${url}','Wykonaj GET na podanym URL')">🌐 curl GET</button>
+              <button type="button" class="preset-btn" onclick="setCmd('oc get ${resource} -n ${namespace} -o json','Pobierz zasób OC (pods, svc, deploy...)')">🔴 oc get resource</button>
+              <button type="button" class="preset-btn" onclick="setCmd('kubectl get ${resource} -n ${namespace} -o json','Pobierz zasób K8s')">☸️ kubectl get resource</button>
+              <button type="button" class="preset-btn" onclick="setCmd('oc logs ${pod} -n ${namespace} --tail ${lines}','Pobierz logi z poda OC')">🔴 oc logs</button>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:7px">
+              <span style="font-size:11px;color:#f4c163;align-self:center;margin-right:4px">Pełny dostęp:</span>
+              <button type="button" class="preset-btn" style="border-color:#5a420f;color:#f4c163"
+                      onclick="setCmd('curl ${*args}','Wykonaj dowolną komendę curl — AI podaje wszystkie argumenty');setPrefix('curl')">
+                🌐 curl (wszystko)
+              </button>
+              <button type="button" class="preset-btn" style="border-color:#5a2020;color:#f47a80"
+                      onclick="setCmd('oc get ${*args}','Wykonaj dowolne oc get — AI podaje zasoby i flagi');setPrefix('oc get')">
+                🔴 oc get (wszystko)
+              </button>
+              <button type="button" class="preset-btn" style="border-color:#5a2020;color:#f47a80"
+                      onclick="setCmd('kubectl get ${*args}','Wykonaj dowolne kubectl get — AI podaje zasoby i flagi');setPrefix('kubectl get')">
+                ☸️ kubectl get (wszystko)
+              </button>
+              <button type="button" class="preset-btn" style="border-color:#5a2020;color:#f47a80"
+                      onclick="setCmd('kubectl ${*args}','Pełny dostęp do kubectl — ustaw denylist w kroku bezpieczeństwa!');setPrefix('')">
+                ☸️ kubectl (pełny)
+              </button>
+            </div>
+            <div style="margin-top:8px;font-size:11px;color:var(--muted)">
+              💡 <b style="color:#f4c163">${{ '{' }}*args}</b> = AI podaje <b>wszystkie argumenty naraz</b> (np. <code>pods -n production -o json</code>) — skonfiguruj denylist w następnym kroku
+            </div>
+          </div>
+
+          <div class="qs-field">
+            <label>Komenda do wykonania</label>
+            <input name="cmd" id="shell-cmd-input" placeholder="oc get ${*args}">
+            <div style="margin-top:6px;font-size:12px;color:var(--muted)">
+              <code>${{ '{' }}zmienna}</code> = jeden parametr &nbsp;|&nbsp;
+              <code>${{ '{' }}*args}</code> = wiele argumentów (pełny dostęp)
+            </div>
+          </div>
+          <div class="qs-field">
+            <label>Co robi ta komenda? (opis dla AI)</label>
+            <input name="desc" id="shell-desc-input" placeholder="Pobiera zasoby OpenShift">
+          </div>
+          <button type="button" class="qs-big-btn" style="background:#263548;color:white;margin-top:4px"
+                  onclick="goShellSec()">
+            Dalej → Ustawienia dostępu 🔒
+          </button>
+        </div>
+
+        <!-- Shell step 2: Security -->
+        <div id="shell-s2" style="display:none">
+          <button type="button" class="qs-back" onclick="backShellCmd()">← Wróć do komendy</button>
+          <h2>🔒 Ograniczenia dostępu</h2>
+          <div class="sub">Określ dokładnie co AI może robić. Szczególnie ważne przy pełnym dostępie <code>${{ '{' }}*args}</code>.</div>
+
+          <div class="qs-field">
+            <label>Dozwolony prefix komendy</label>
+            <input name="allowed_prefix" id="shell-prefix-input" placeholder="oc get">
+            <div class="hint">
+              Zostaw puste = brak ograniczeń na prefix.<br>
+              Wpisz np. <code>oc get</code> → AI może TYLKO wywoływać <code>oc get ...</code> — nie może <code>oc delete</code>, <code>oc apply</code> itp.
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+              <button type="button" class="preset-btn" onclick="document.getElementById('shell-prefix-input').value='oc get'">oc get</button>
+              <button type="button" class="preset-btn" onclick="document.getElementById('shell-prefix-input').value='kubectl get'">kubectl get</button>
+              <button type="button" class="preset-btn" onclick="document.getElementById('shell-prefix-input').value='curl -s'">curl -s</button>
+              <button type="button" class="preset-btn" onclick="document.getElementById('shell-prefix-input').value=''">brak ograniczeń</button>
+            </div>
+          </div>
+
+          <div class="qs-field">
+            <label>Zabronione komendy / prefixy (jedna na linię)</label>
+            <textarea name="blocked_prefixes" id="shell-blocked-input"
+                      placeholder="kubectl delete&#10;kubectl apply&#10;kubectl exec&#10;oc delete"
+                      style="min-height:110px;font-family:monospace;font-size:13px"></textarea>
+            <div class="hint">
+              Komendy zaczynające się od tych prefiksów będą zablokowane.<br>
+              Np. <code>kubectl delete</code> blokuje <code>kubectl delete pod xyz</code>, <code>kubectl delete -f ...</code> itp.
+            </div>
+          </div>
+
+          <div style="background:#0d1822;border:1px solid #1a3a50;border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:12px">
+            <b style="color:#7dd3fc">Podgląd konfiguracji zabezpieczeń:</b>
+            <pre id="sec-preview" style="margin-top:6px;font-size:11px;max-height:80px;border:none;background:transparent;padding:0;color:#8ea2b8"></pre>
+          </div>
+
+          <div style="padding-top:18px;border-top:1px solid var(--line);margin-top:6px">
+            <div class="qs-field">
+              <label>Nazwa Twojego serwera MCP</label>
+              <input id="shell-name-inline" placeholder="Mój asystent OC" style="font-size:15px;padding:12px 14px"
+                     oninput="syncShellName(this.value)">
+              <div class="hint">Dowolna nazwa — pojawi się w Continue i OpenWebUI</div>
+            </div>
+            <button type="button" class="qs-big-btn" style="background:#1a7a3f" onclick="launchShell()">
+              🚀 Stwórz i uruchom serwer MCP
+            </button>
+          </div>
+        </div>
+      </div>
+
+<style>
+.preset-btn {
+  background:#0d1822; border:1px solid #2a3a4a; border-radius:6px;
+  padding:5px 10px; font-size:12px; font-weight:600; color:#b0c8e0;
+  cursor:pointer; transition:.12s; white-space:nowrap;
+}
+.preset-btn:hover { background:#0d2a40; border-color:var(--blue); color:white; transform:none; }
+</style>
+<script>
+function setCmd(cmd, desc) {
+  var c = document.getElementById('shell-cmd-input');
+  var d = document.getElementById('shell-desc-input');
+  if (c) c.value = cmd;
+  if (d && !d.value && desc) d.value = desc;
+}
+function setPrefix(p) {
+  var el = document.getElementById('shell-prefix-input');
+  if (el) el.value = p;
+}
+function goShellSec() {
+  var cmd = document.getElementById('shell-cmd-input').value.trim();
+  if (!cmd) { document.getElementById('shell-cmd-input').focus(); return; }
+  document.getElementById('shell-s1').style.display = 'none';
+  document.getElementById('shell-s2').style.display = '';
+  updateSecPreview();
+}
+function backShellCmd() {
+  document.getElementById('shell-s2').style.display = 'none';
+  document.getElementById('shell-s1').style.display = '';
+}
+function syncShellName(v) {
+  var main = document.querySelector('input[name="name"]');
+  if (main) main.value = v;
+}
+function launchShell() {
+  var n = document.getElementById('shell-name-inline');
+  if (n) { n = n.value.trim(); } else { n = ''; }
+  if (!n) { document.getElementById('shell-name-inline').focus(); return; }
+  syncShellName(n);
+  document.getElementById('qs-form').submit();
+}
+function updateSecPreview() {
+  var prefix = (document.getElementById('shell-prefix-input')||{}).value || '';
+  var blocked = (document.getElementById('shell-blocked-input')||{}).value || '';
+  var lines = blocked.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+  var obj = {};
+  if (prefix) obj.allowed_command_prefixes = [prefix];
+  if (lines.length) obj.blocked_command_prefixes = lines;
+  document.getElementById('sec-preview').textContent = JSON.stringify(obj, null, 2) || '(brak ograniczeń)';
+}
+document.addEventListener('input', function(e) {
+  if (e.target.id === 'shell-prefix-input' || e.target.id === 'shell-blocked-input') updateSecPreview();
+});
+</script>
+
+      <!-- Package -->
+      <div class="qs-form-section" id="form-package">
+        <h2>Gotowy zestaw</h2>
+        <div class="sub">Wybierz zestaw narzędzi — wszystko skonfiguruje się automatycznie.</div>
+        {% for card in pkg_cards %}{% set p = card.pkg %}{% set tools = card.tools %}{% set image = card.image %}{% set risk = card.risk %}{% set risk_color = card.risk_color %}{% set category_icon = card.category_icon %}
+        <div class="qs-pkg-card" onclick="qsPkgToggle(this)">
+          <input type="radio" name="package_id" value="{{ p['id'] }}" style="display:none">
+          <div class="qs-pkg-inner">
+            <div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:18px">{{ category_icon }}</span>
+                <div style="font-weight:800;font-size:14px;color:white">{{ p['name'] }}</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+                <span style="background:#0d1822;border:1px solid {{ risk_color }};color:{{ risk_color }};padding:2px 7px;border-radius:999px;font-size:10px;font-weight:700">{{ risk }}</span>
+                <span class="qs-pkg-chevron" style="color:var(--muted);font-size:12px;transition:.2s">▼</span>
+              </div>
+            </div>
+            <div style="color:var(--muted);font-size:12px;margin-top:4px;margin-left:26px">{{ p['description'][:120] }}</div>
+            <div class="qs-pkg-details" style="display:none;margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+                <div style="background:#0a1520;border:1px solid #1a3a50;border-radius:8px;padding:10px 12px">
+                  <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:4px">Obraz Docker</div>
+                  <div style="font-size:12px;color:#7dd3fc;font-family:monospace;word-break:break-all">{{ image }}</div>
+                </div>
+                <div style="background:#0a1520;border:1px solid #1a3a50;border-radius:8px;padding:10px 12px">
+                  <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:4px">Narzędzia</div>
+                  <div style="font-size:13px;color:white;font-weight:700">{{ len(tools) }} tool{% if len(tools) != 1 %}s{% endif %}</div>
+                </div>
+              </div>
+              <div style="font-size:11px;font-weight:700;color:#aac8e0;margin-bottom:6px;text-transform:uppercase">Tools w tej paczce:</div>
+              <div style="max-height:200px;overflow-y:auto;border:1px solid #1a2a3a;border-radius:8px;padding:6px 10px">{% for t, cmd in tools[:8] %}<div style="padding:7px 0;border-bottom:1px solid #1a2a3a"><div style="display:flex;align-items:center;gap:6px"><span style="color:#5ce89a;font-size:11px;flex-shrink:0">▸</span><div style="font-weight:700;font-size:12px;color:#d0e8ff">{{ t.get('name', '?') }}</div></div><div style="font-size:11px;color:var(--muted);line-height:1.4;margin-left:16px">{{ (t.get('description') or '')[:120] }}</div>{% if cmd %}<div style="margin-top:3px;font-family:monospace;font-size:11px;color:#f4c163;background:#1a1000;border:1px solid #3a2800;border-radius:4px;padding:2px 6px;word-break:break-all">{{ cmd[:180] }}</div>{% endif %}</div>{% else %}<div style="color:var(--muted);font-size:12px">Brak zdefiniowanych tools</div>{% endfor %}{% if len(tools) > 8 %}<div style="font-size:11px;color:var(--muted);margin-top:4px">+ {{ len(tools) - 8 }} więcej...</div>{% endif %}</div>
+            </div>
+          </div>
+        </div>{% endfor %}
+      </div>
+
+      <!-- Import -->
+      <div class="qs-form-section" id="form-import">
+        <h2>📥 Importuj konfigurację MCP</h2>
+        <div class="sub">Wklej JSON, podaj URL (GitHub raw, własny serwer) lub wgraj plik — platforma zainstaluje paczkę i uruchomi serwer.</div>
+
+        <!-- ⚠️ Ważna informacja: co można, a czego nie można importować -->
+        <div style="border-radius:10px;overflow:hidden;margin-bottom:16px;border:1px solid #2a3a4a">
+
+          <div style="background:#0d1e2e;padding:12px 16px;border-bottom:1px solid #1a3a50;font-weight:800;font-size:13px;color:#7dd3fc">
+            ❓ Co mogę tutaj zaimportować?
+          </div>
+
+          <!-- ✅ Co działa -->
+          <div style="background:#0a1e10;border-bottom:1px solid #1a3a20;padding:12px 16px">
+            <div style="font-weight:700;color:#5ce89a;font-size:13px;margin-bottom:8px">✅ Działa — Platform Package JSON</div>
+            <div style="color:#a0c8a8;font-size:12px;line-height:1.8">
+              Plik JSON opisujący <b>tools do uruchomienia wewnątrz platformy</b> — stworzony przez Package Generator, wyeksportowany z innego serwera lub pobrany z repo który ma taki plik.
+              <br>Poznasz go po polach: <code>"tools"</code>, <code>"runtime_class"</code>, <code>"policy"</code>
+            </div>
+          </div>
+
+          <!-- ❌ Co nie działa — repo z kodem -->
+          <div style="background:#1e0a0a;border-bottom:1px solid #3a1a1a;padding:12px 16px">
+            <div style="font-weight:700;color:#f47a80;font-size:13px;margin-bottom:8px">❌ Nie działa — repo z kodem aplikacji</div>
+            <div style="color:#c8a0a0;font-size:12px;line-height:1.8">
+              Repo GitHub z kodem C#, Python, Node.js itp. (<b>np. ustabar/sql-mcp</b>) to gotowa aplikacja serwera MCP —
+              nie plik konfiguracji. Platforma nie kompiluje ani nie uruchamia obcego kodu bezpośrednio.
+            </div>
+            <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <a href="/external-mcp" style="display:flex;align-items:flex-start;gap:8px;background:#0d1822;border:1px solid #2a3a4a;border-radius:8px;padding:10px 12px;text-decoration:none">
+                <span style="font-size:18px;flex-shrink:0">🔗</span>
+                <div>
+                  <div style="font-weight:700;color:white;font-size:12px">Zewnętrzne MCP</div>
+                  <div style="color:var(--muted);font-size:11px;margin-top:2px">Serwer już gdzieś działa? Zarejestruj jego endpoint — platforma odkryje tools i będzie go monitorować.</div>
+                </div>
+              </a>
+              <a href="/tool-packages" style="display:flex;align-items:flex-start;gap:8px;background:#0d1822;border:1px solid #2a3a4a;border-radius:8px;padding:10px 12px;text-decoration:none">
+                <span style="font-size:18px;flex-shrink:0">🏗️</span>
+                <div>
+                  <div style="font-weight:700;color:white;font-size:12px">Runtime Image Builder</div>
+                  <div style="color:var(--muted);font-size:11px;margin-top:2px">Repo ma Dockerfile? Zbuduj custom obraz i uruchom go jako kontener w platformie.</div>
+                </div>
+              </a>
+            </div>
+          </div>
+
+        </div>
+
+        <div style="display:grid;gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:14px">
+
+          <!-- Tab: URL -->
+          <label style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);cursor:pointer;background:#0d1822"
+                 onclick="switchImportTab('url')">
+            <input type="radio" name="import_source" value="url" id="isrc-url" style="width:auto;flex-shrink:0" checked>
+            <div>
+              <div style="font-weight:700;font-size:13px;color:white">🔗 Z URL (GitHub, własny serwer)</div>
+              <div class="hint" style="margin:0">np. <code>https://raw.githubusercontent.com/org/repo/main/mcp-package.json</code></div>
+            </div>
+          </label>
+          <div id="itab-url" style="padding:14px 16px;border-bottom:1px solid var(--line);background:#0b1420">
+            <input name="import_url" id="import-url-input" placeholder="https://raw.githubusercontent.com/.../.../mcp-package.json"
+                   style="font-size:13px">
+            <div class="hint">GitHub: otwórz plik JSON → kliknij Raw → skopiuj URL</div>
+          </div>
+
+          <!-- Tab: Paste -->
+          <label style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);cursor:pointer;background:#0d1822"
+                 onclick="switchImportTab('paste')">
+            <input type="radio" name="import_source" value="paste" id="isrc-paste" style="width:auto;flex-shrink:0">
+            <div>
+              <div style="font-weight:700;font-size:13px;color:white">📋 Wklej JSON</div>
+              <div class="hint" style="margin:0">Skopiuj zawartość pliku JSON i wklej tutaj</div>
+            </div>
+          </label>
+          <div id="itab-paste" style="padding:14px 16px;border-bottom:1px solid var(--line);background:#0b1420;display:none">
+            <textarea name="import_json" id="import-json-input" placeholder='{&#10;  "id": "my-mcp-server",&#10;  "name": "My MCP Server",&#10;  "tools": [...]&#10;}'
+                      style="min-height:140px;font-family:monospace;font-size:12px"></textarea>
+          </div>
+
+          <!-- Tab: File -->
+          <label style="display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer;background:#0d1822"
+                 onclick="switchImportTab('file')">
+            <input type="radio" name="import_source" value="file" id="isrc-file" style="width:auto;flex-shrink:0">
+            <div>
+              <div style="font-weight:700;font-size:13px;color:white">📂 Wgraj plik .json</div>
+              <div class="hint" style="margin:0">Wybierz plik z dysku — musi być w formacie Package JSON</div>
+            </div>
+          </label>
+          <div id="itab-file" style="padding:14px 16px;background:#0b1420;display:none">
+            <input type="file" name="import_file" id="import-file-input" accept=".json,application/json" style="font-size:13px">
+          </div>
+        </div>
+
+        <details style="background:#0b1a10;border:1px solid #1a3a20;border-radius:8px;padding:12px 14px">
+          <summary style="font-size:12px;color:#5a9a6a;list-style:none;cursor:pointer;font-weight:700">📄 Jak wygląda format Package JSON?</summary>
+          <div style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.7">
+            Package JSON to plik definiujący kompletny serwer MCP. Możesz go dostać przez:<br>
+            • <b>Eksport istniejącego serwera</b> → otwórz runtime → sekcja Lifecycle → "Eksportuj jako Package JSON"<br>
+            • <b>GitHub</b> → szukaj plików <code>mcp-package.json</code> lub <code>*-package.json</code><br>
+            • <b>Package Generator</b> → <a href="/tool-packages/generate">utwórz własny</a>
+          </div>
+        </details>
+      </div>
+
+      <!-- Common: server name + policy -->
+      <div style="margin-top:22px;padding-top:18px;border-top:1px solid var(--line)">
+        <div class="qs-field">
+          <label>Nazwa Twojego serwera MCP</label>
+          <input name="name" placeholder="Mój asystent API" required>
+          <div class="hint">Dowolna nazwa — pojawi się w Continue i OpenWebUI</div>
+        </div>
+
+        <details style="background:#0d1822;border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-top:4px">
+          <summary style="cursor:pointer;font-weight:700;font-size:13px;color:#7ab8d8;list-style:none">
+            🔒 Ustawienia bezpieczeństwa <span style="color:var(--muted);font-weight:400">(domyślnie: maksymalne)</span>
+          </summary>
+          <div style="margin-top:14px;display:grid;gap:12px">
+            <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer">
+              <input type="checkbox" name="policy_read_only" value="1" checked style="width:auto;margin-top:2px;flex-shrink:0">
+              <div>
+                <div style="font-weight:700;font-size:13px;color:white">🔒 Tylko odczyt</div>
+                <div style="color:var(--muted);font-size:12px;margin-top:2px">Serwer może tylko czytać dane — nie może niczego modyfikować ani usuwać</div>
+              </div>
+            </label>
+            <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer">
+              <input type="checkbox" name="policy_block_write" value="1" checked style="width:auto;margin-top:2px;flex-shrink:0">
+              <div>
+                <div style="font-weight:700;font-size:13px;color:white">🚫 Blokuj zapis</div>
+                <div style="color:var(--muted);font-size:12px;margin-top:2px">Dodatkowa warstwa blokująca operacje zapisu na poziomie policy</div>
+              </div>
+            </label>
+            <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer">
+              <input type="checkbox" name="policy_block_destructive" value="1" checked style="width:auto;margin-top:2px;flex-shrink:0">
+              <div>
+                <div style="font-weight:700;font-size:13px;color:white">⛔ Blokuj operacje destruktywne</div>
+                <div style="color:var(--muted);font-size:12px;margin-top:2px">Zapobiega usuwaniu danych, resetowaniu konfiguracji, drop/truncate</div>
+              </div>
+            </label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px">
+              <div class="qs-field" style="margin:0">
+                <label>⏱️ Timeout (sekundy)</label>
+                <input type="number" name="policy_timeout" value="30" min="5" max="300" style="width:100%">
+                <div class="hint">Maks. czas oczekiwania na odpowiedź</div>
+              </div>
+              <div class="qs-field" style="margin:0">
+                <label>📏 Maks. odpowiedź (KB)</label>
+                <input type="number" name="policy_max_response_kb" value="5120" min="64" max="51200" style="width:100%">
+                <div class="hint">Maks. rozmiar danych które AI dostanie</div>
+              </div>
+            </div>
+            <div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:6px;padding:10px 12px;margin-top:4px">
+              <div style="color:#4ac86a;font-size:12px;font-weight:700;margin-bottom:4px">🛡️ Zawsze aktywne (nie można wyłączyć):</div>
+              <div style="color:#7ab890;font-size:12px;line-height:1.7">
+                ✅ Kontener bez roota (user 1000:1000)<br>
+                ✅ Read-only filesystem<br>
+                ✅ Brak uprawnień systemowych (cap_drop: ALL)<br>
+                ✅ no-new-privileges<br>
+                ✅ Limit pamięci 512 MB &amp; CPU 1 core<br>
+                ✅ Izolacja sieciowa (tylko ai-net)
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <!-- ENV vars -->
+        <details style="background:#1a1200;border:1px solid #3a2800;border-radius:8px;padding:14px 16px;margin-top:10px" id="qs-env-details">
+          <summary style="cursor:pointer;font-weight:700;font-size:13px;color:#d4a820;list-style:none">
+            🔑 Zmienne środowiskowe ENV <span style="color:var(--muted);font-weight:400">(opcjonalne — tokeny, klucze API, hasła)</span>
+          </summary>
+          <div style="margin-top:12px">
+            <div style="font-size:12px;color:#a08020;margin-bottom:10px">Zmienne są wstrzykiwane do kontenera. Użyj dla tokenów API, kluczy SSH, URL baz danych.</div>
+            <div id="qs-env-list" style="display:grid;gap:6px;margin-bottom:8px"></div>
+            <button type="button" onclick="qsAddEnv()" style="background:#0d1000;border:1px solid #3a2800;color:#d4a820;padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer">+ Dodaj zmienną ENV</button>
+          </div>
+        </details>
+      </div>
+
+      <button type="submit" class="qs-big-btn">🚀 Stwórz i uruchom serwer MCP</button>
+      <p style="text-align:center;color:var(--muted);font-size:12px;margin-top:8px">
+        Platforma automatycznie skonfiguruje i uruchomi serwer. Zajmie to kilka sekund.
+      </p>
+    </form>
+  </div>
+</div>
+
+<script>
+function chooseType(t) {
+  document.getElementById('qs-type').value = t;
+  document.getElementById('step-choose').style.display = 'none';
+  document.getElementById('step-form').style.display = '';
+  document.querySelectorAll('.qs-form-section').forEach(function(el) { el.classList.remove('active'); });
+  document.getElementById('form-' + t).classList.add('active');
+  // For shell, show env picker first
+  if (t === 'shell') {
+    document.getElementById('shell-s0').style.display = '';
+    document.getElementById('shell-s1').style.display = 'none';
+    document.getElementById('shell-s2').style.display = 'none';
+    return;
+  }
+  var first = document.getElementById('form-' + t).querySelector('input, select');
+  if (first) first.focus();
+}
+
+// Environment picker for shell
+var _buildId = null;
+var _buildRcName = null;
+
+window.pickEnv = function(env) {
+  ['standard','openshift','custom'].forEach(function(e) {
+    var b = document.getElementById('env-btn-'+e);
+    if (b) b.style.borderColor = e===env ? 'var(--blue)' : '';
+  });
+  document.getElementById('custom-build-box').style.display = env==='custom' ? '' : 'none';
+  if (env === 'standard' || env === 'openshift') {
+    // Update presets based on env
+    document.getElementById('shell-s0').style.display = 'none';
+    document.getElementById('shell-s1').style.display = '';
+    // Focus command input
+    setTimeout(function() {
+      var el = document.getElementById('shell-cmd-input');
+      if (el) el.focus();
+    }, 100);
+  }
+};
+
+// Base image hint updater
+window.updateBaseHint = function() {
+  var sel = document.getElementById('build-base');
+  var custom = document.getElementById('build-base-custom');
+  var hint = document.getElementById('base-hint');
+  var hints = {
+    'mcp-runtime-shell:latest': '✅ Zawiera: <b>oc, kubectl, curl, jq</b> + Python 3.12 (UBI9 / RHEL 9) — dodaj tylko brakujące narzędzia. Nazwy pakietów wg RHEL, np. <code>iputils</code>, <code>postgresql</code>',
+    'mcp-runtime-http-gateway:latest': '✅ HTTP gateway — brak oc/kubectl, Python 3.12',
+    'mcp-runtime-openapi:latest': '✅ <b>Auto-MCP z OpenAPI</b> — ustaw <code>BACKEND_BASE_URL</code> i <code>OPENAPI_SPEC_URL</code>; narzędzia generowane automatycznie z każdego endpointu',
+    'python:3.12-slim': '⚠️ Czysty Python Debian — brak oc/kubectl/curl. Dodaj <b>curl ca-certificates</b> w APT',
+    'python:3.11-slim': '⚠️ Python 3.11 Debian — brak oc/kubectl',
+    'debian:bookworm-slim': '⚠️ Czysty Debian — brak wszystkiego, musisz dodać wszystkie potrzebne paczki APT',
+    '__custom__': '⚠️ <b>UWAGA:</b> Czysty obraz OS (ubuntu, debian, alpine) nie zadziała! Obraz musi być zbudowany na bazie <b>mcp-runtime-shell:latest</b> lub <b>mcp-runtime-http-gateway:latest</b> — tylko te mają wbudowany serwer MCP (uvicorn). Przykład: <code>FROM mcp-runtime-shell:latest</code>'
+  };
+  custom.style.display = sel.value === '__custom__' ? 'block' : 'none';
+  if (hint) hint.innerHTML = hints[sel.value] || '';
+};
+
+var _qsEnvCount = 0;
+window.qsAddEnv = function() {
+  var i = _qsEnvCount++;
+  var row = document.createElement('div');
+  row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center';
+  row.innerHTML =
+    '<input placeholder="NAZWA_ZMIENNEJ" name="env_key_' + i + '" style="padding:8px 10px;border:1px solid #3a2800;border-radius:6px;background:#0d1000;color:var(--text);font-size:12px;font-family:monospace;width:100%;box-sizing:border-box">' +
+    '<input type="password" placeholder="wartość / token" name="env_val_' + i + '" style="padding:8px 10px;border:1px solid #3a2800;border-radius:6px;background:#0d1000;color:var(--text);font-size:12px;width:100%;box-sizing:border-box">' +
+    '<button type="button" onclick="this.parentNode.remove()" style="background:#3a1010;border:1px solid #6a2020;color:#f47a80;padding:6px 10px;border-radius:6px;font-size:12px;cursor:pointer;flex-shrink:0">✕</button>';
+  document.getElementById('qs-env-list').appendChild(row);
+  document.getElementById('qs-env-details').open = true;
+};
+
+window.qsBuildReset = function() {
+  document.getElementById('build-progress').style.display = 'none';
+  document.getElementById('build-btn').disabled = false;
+  document.getElementById('build-btn').textContent = '🔨 Spróbuj ponownie';
+};
+
+window.startBuild = function() {
+  var apt = (document.getElementById('build-apt').value || '').trim();
+  var pip = (document.getElementById('build-pip').value || '').trim();
+  if (!apt && !pip) { document.getElementById('build-apt').focus(); return; }
+  var selBase = document.getElementById('build-base');
+  var baseVal = selBase && selBase.value !== '__custom__' ? selBase.value : (document.getElementById('build-base-custom').value.trim() || 'mcp-runtime-shell:latest');
+  var basePart = baseVal.split('/').pop().replace(/[^a-z0-9]/gi,'-').replace(/-+/g,'-').replace(/^-|-$/g,'').toLowerCase().replace(/:[^:]*$/,'');
+  var aptPart = apt.split(/\s+/).slice(0,3).map(function(p){return p.replace(/[^a-z0-9]/g,'').substring(0,12);}).filter(Boolean).join('-');
+  var namePart = (aptPart || pip.split(/\s+/)[0].replace(/[^a-z0-9]/g,'').substring(0,12) || 'env');
+  var rcName = basePart + '-' + namePart;
+  _buildRcName = rcName;
+  var imgTag = 'mcp-runtime-' + rcName + ':latest';
+  var selBase = document.getElementById('build-base');
+  var baseImage = selBase && selBase.value !== '__custom__' ? selBase.value : (document.getElementById('build-base-custom').value.trim() || 'mcp-runtime-shell:latest');
+  document.getElementById('build-btn').disabled = true;
+  document.getElementById('build-progress').style.display = 'block';
+  document.getElementById('build-status-text').textContent = 'Budowanie obrazu Docker na bazie ' + baseImage + '... (może potrwać 2-5 minut)';
+
+  var body = new URLSearchParams({
+    image: imgTag, base_image: baseImage,
+    runtime_class: rcName, apt_packages: apt, pip_packages: pip,
+    allowed_execution_types: 'shell', risk_level: 'low', security_profile: 'restricted'
+  });
+  fetch('/api/runtime-images/build', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: body.toString(), redirect:'manual' })
+  .then(function(r) {
+    // poll build status
+    var polls = 0;
+    var t = setInterval(function() {
+      polls++;
+      fetch('/api/runtime-image-builds/latest?rc=' + encodeURIComponent(rcName))
+      .then(function(r2) { return r2.json(); })
+      .then(function(d) {
+        if (d.status === 'done') {
+          clearInterval(t);
+          document.getElementById('build-spinner').textContent = '✅';
+          document.getElementById('build-status-text').textContent = 'Środowisko zbudowane! Możesz teraz wpisać komendę.';
+          // set runtime class hidden input (for POST handler)
+          var rcInput = document.getElementById('shell-rc-name');
+          if (!rcInput) {
+            rcInput = document.createElement('input');
+            rcInput.type = 'hidden'; rcInput.name = 'shell_runtime_class'; rcInput.id = 'shell-rc-name';
+            document.getElementById('qs-form').appendChild(rcInput);
+          }
+          rcInput.value = rcName;
+          setTimeout(function() {
+            document.getElementById('shell-s0').style.display = 'none';
+            document.getElementById('shell-s1').style.display = '';
+          }, 1000);
+        } else if (d.status === 'failed') {
+          clearInterval(t);
+          document.getElementById('build-spinner').textContent = '❌';
+          var errMsg = d.error || 'nieznany błąd';
+          var hint = '';
+          if (errMsg.indexOf('non-zero code: 100') !== -1 || errMsg.indexOf('Unable to locate package') !== -1) {
+            hint = '<br><br>💡 <b>Błąd 100 = paczka nie istnieje w Debian APT.</b><br>Sprawdź nazwę — np. <code>postgres-client</code> ❌ → <code>postgresql-client</code> ✅<br>Szukaj na <a href="https://packages.debian.org" target="_blank" style="color:#7dd3fc">packages.debian.org</a>';
+          } else if (errMsg.indexOf('non-zero code: 1') !== -1) {
+            hint = '<br><br>💡 Sprawdź nazwy pakietów na <a href="https://packages.debian.org" target="_blank" style="color:#7dd3fc">packages.debian.org</a>';
+          }
+          document.getElementById('build-progress').innerHTML =
+            '<div style="background:#2a0a0a;border:2px solid #8a2020;border-radius:8px;padding:14px 16px">' +
+            '<div style="font-weight:800;color:#f47a80;font-size:14px;margin-bottom:8px">❌ Budowanie nie powiodło się</div>' +
+            '<code style="font-size:11px;color:#f4c163;word-break:break-all;line-height:1.6">' + errMsg.slice(0, 300) + '</code>' +
+            hint +
+            '<br><br><button type="button" onclick="qsBuildReset()" ' +
+            'style="background:#1a3a5a;border:none;color:white;padding:8px 14px;border-radius:6px;font-size:12px;cursor:pointer;margin-top:8px">← Popraw i spróbuj ponownie</button>' +
+            '</div>';
+          document.getElementById('build-btn').disabled = false;
+        } else if (polls > 90) { clearInterval(t); document.getElementById('build-status-text').textContent = 'Timeout — sprawdź logi w Paczki tools.'; }
+      }).catch(function() { if (polls > 5) clearInterval(t); });
+    }, 3000);
+  });
+};
+function goBack() {
+  document.getElementById('step-choose').style.display = '';
+  document.getElementById('step-form').style.display = 'none';
+}
+// Package card toggle — select + expand details
+window.qsPkgToggle = function(card) {
+  var radio = card.querySelector('input[type="radio"]');
+  if (!radio) return;
+  var isSelected = card.classList.contains('selected');
+  // Collapse all
+  document.querySelectorAll('.qs-pkg-card').forEach(function(c) {
+    c.classList.remove('selected');
+    var d = c.querySelector('.qs-pkg-details');
+    if (d) d.style.display = 'none';
+  });
+  document.querySelectorAll('.qs-pkg-card input').forEach(function(r) { r.checked = false; });
+  if (!isSelected) {
+    card.classList.add('selected');
+    radio.checked = true;
+    var details = card.querySelector('.qs-pkg-details');
+    if (details) details.style.display = '';
+  }
+};
+// Import tab switcher
+window.switchImportTab = function(tab) {
+  ['url','paste','file'].forEach(function(t) {
+    var el = document.getElementById('itab-' + t);
+    if (el) el.style.display = (t === tab) ? '' : 'none';
+  });
+  var radio = document.getElementById('isrc-' + tab);
+  if (radio) radio.checked = true;
+};
+// Sync import_source with visible tab on submit
+document.getElementById('qs-form').addEventListener('submit', function() {
+  var src = document.querySelector('input[name="import_source"]:checked');
+  if (src && src.value === 'url') {
+    var urlVal = document.getElementById('import-url-input');
+    if (urlVal && !urlVal.value.trim()) { urlVal.focus(); return false; }
+  }
+});
+</script>
+{% endblock %}

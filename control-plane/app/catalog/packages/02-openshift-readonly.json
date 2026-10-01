@@ -1,0 +1,217 @@
+{
+  "id": "openshift-readonly",
+  "name": "OpenShift ReadOnly Assistant",
+  "description": "Paczka gotowych read-only tooli OCP. Wymaga runtime image z binarką oc i kubeconfig/secret w runtime.",
+  "category": "openshift",
+  "risk_level": "medium",
+  "runtime_class": {
+    "name": "openshift-readonly",
+    "runtime_image": "mcp-runtime-shell:latest",
+    "allowed_execution_types": [
+      "shell"
+    ],
+    "risk_level": "medium",
+    "security_profile": "read-only-cluster-access",
+    "required_binaries": [
+      "oc",
+      "jq"
+    ],
+    "binary_source_hint": "Use your own mcp-runtime-shell image with oc installed, or import a package that points to such image."
+  },
+  "adapters": [
+    {
+      "name": "shell",
+      "description": "Adapter shell — wykonuje dozwolone komendy tylko do odczytu w izolowanym kontenerze.",
+      "adapter_type": "shell",
+      "runtime_image": "mcp-runtime-shell:latest",
+      "implemented": true,
+      "enabled": true,
+      "risk_level": "high",
+      "mode": "read-only",
+      "schema": {
+        "type": "object"
+      }
+    }
+  ],
+  "policy": {
+    "block_write_tools": true,
+    "block_destructive_tools": true,
+    "require_read_only": true,
+    "timeout_seconds": 20,
+    "max_payload_bytes": 262144,
+    "max_response_bytes": 1048576,
+    "allowed_binaries": [
+      "oc",
+      "jq"
+    ],
+    "blocked_commands": [
+      "delete",
+      "apply",
+      "patch",
+      "replace",
+      "exec",
+      "rsh",
+      "debug",
+      "adm",
+      "create",
+      "scale"
+    ],
+    "allowed_clients": [
+      "OpenWebUI",
+      "local"
+    ]
+  },
+  "tools": [
+    {
+      "name": "oc_get_pods",
+      "description": "List pods in namespace.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "medium",
+      "mode": "read-only",
+      "category": "openshift",
+      "config": {
+        "command": [
+          "oc",
+          "get",
+          "pods",
+          "-n",
+          "${namespace}",
+          "-o",
+          "json"
+        ],
+        "timeout_seconds": 20
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "namespace": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "namespace"
+        ]
+      },
+      "output_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "oc_get_events",
+      "description": "List events in namespace sorted by time.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "medium",
+      "mode": "read-only",
+      "category": "openshift",
+      "config": {
+        "command": [
+          "oc",
+          "get",
+          "events",
+          "-n",
+          "${namespace}",
+          "--sort-by=.lastTimestamp",
+          "-o",
+          "json"
+        ],
+        "timeout_seconds": 20
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "namespace": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "namespace"
+        ]
+      },
+      "output_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "oc_logs",
+      "description": "Read recent logs from a pod.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "medium",
+      "mode": "read-only",
+      "category": "openshift",
+      "config": {
+        "command": [
+          "oc",
+          "logs",
+          "-n",
+          "${namespace}",
+          "${pod}",
+          "--tail=${tail}"
+        ],
+        "timeout_seconds": 20
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "namespace": {
+            "type": "string"
+          },
+          "pod": {
+            "type": "string"
+          },
+          "tail": {
+            "type": "integer",
+            "default": 100
+          }
+        },
+        "required": [
+          "namespace",
+          "pod"
+        ]
+      },
+      "output_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "oc_describe_pod",
+      "description": "Describe a pod.",
+      "execution_type": "shell",
+      "enabled": true,
+      "risk_level": "medium",
+      "mode": "read-only",
+      "category": "openshift",
+      "config": {
+        "command": [
+          "oc",
+          "describe",
+          "pod",
+          "-n",
+          "${namespace}",
+          "${pod}"
+        ],
+        "timeout_seconds": 20
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "namespace": {
+            "type": "string"
+          },
+          "pod": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "namespace",
+          "pod"
+        ]
+      },
+      "output_schema": {
+        "type": "object"
+      }
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{# Reusable HTML helpers. Usage: {% from "macros.html" import select_options %} #}
+
+{% macro select_options(values, selected) -%}
+{% for value in values %}<option value="{{ value }}" {% if value == selected %}selected{% endif %}>{{ value }}</option>{% endfor %}
+{%- endmacro %}
+
+{% macro runtime_actions_compact(runtime_id, return_to="/runtimes") -%}
+<div class="actions compact">{% for action, label, confirm_msg in [("deploy", "Deploy", none), ("stop", "Zatrzymaj", none), ("start", "Uruchom", none), ("delete", "Usuń", "Trwale usunąć ten serwer MCP?")] %}<form method="post" action="/api/runtimes/{{ runtime_id }}/{{ action }}"><input type="hidden" name="return_to" value="{{ return_to }}"><button class="{% if action == 'delete' %}delete{% elif action == 'stop' %}stop{% endif %}"{% if confirm_msg %} onclick="return confirm('{{ confirm_msg }}')"{% endif %}>{{ label }}</button></form>{% endfor %}</div>
+{%- endmacro %}

@@ -1,0 +1,39 @@
+{
+  "id": "openshift-monitor",
+  "name": "openshift-monitor",
+  "description": "Full OpenShift cluster management — deploy, scale, monitor, manage applications. Add OC_TOKEN and OC_SERVER in Secrets tab, then Deploy.",
+  "runtime_class": "shell-readwrite",
+  "template": "openshift-monitor",
+  "status": "draft",
+  "risk_level": "high",
+  "image": "mcp-runtime-shell:latest",
+  "on_existing": "sync_tools",
+  "tools_from_package": "openshift-monitor",
+  "policy": {
+    "allowed_binaries": [
+      "oc",
+      "kubectl",
+      "jq",
+      "printf",
+      "rm",
+      "cat",
+      "bash",
+      "sh"
+    ],
+    "blocked_commands": [],
+    "require_read_only": false,
+    "block_write_tools": false,
+    "block_destructive_tools": false,
+    "timeout_seconds": 60,
+    "require_approval_for": "auto",
+    "require_approval_for_prefixes": [
+      "oc delete",
+      "oc apply",
+      "oc patch",
+      "kubectl delete"
+    ],
+    "approval_timeout_seconds": 120,
+    "allowed_command_prefixes": [],
+    "blocked_command_prefixes": []
+  }
+}
