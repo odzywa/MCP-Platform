@@ -27,13 +27,13 @@
           <thead><tr><th>Nazwa</th><th>URL</th><th>Serwer</th><th>Zdarzenia</th><th>Status</th><th>Ostatnie wywołanie</th><th>Akcja</th></tr></thead>
           <tbody>{% for wh in webhooks %}<tr>
           <td style="font-weight:700">{{ wh['name'] }}</td>
-          <td style="font-size:12px;font-family:monospace;color:#7dd3fc;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ wh['url'] }}</td>
+          <td style="font-size:12px;font-family:monospace;color:var(--info);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ wh['url'] }}</td>
           <td style="font-size:11px">{{ (wh['runtime_id'] or 'wszystkie') }}</td>
           <td style="font-size:11px">{{ json.loads((wh['events_json'] or '[]'))|join(', ') }}</td>
           <td><span class="badge {% if wh['enabled'] %}running{% else %}failed{% endif %}" style="font-size:11px">{% if wh['enabled'] %}aktywny{% else %}wyłączony{% endif %}</span></td>
           <td style="font-size:11px;color:var(--muted)">{{ (wh['last_fired_at'] or '')[:16].replace('T', ' ') }} {% if wh['last_status'] %}{% if wh['last_status'] and (200 <= int(wh['last_status']) < 300) %}✅{% else %}❌{% endif %}{% endif %}</td>
           <td><form method="post" action="/api/webhooks/{{ wh['id'] }}/delete" onsubmit="return confirm('Usunąć webhook?')">
-            <button style="background:#3a1010;border:1px solid #6a2020;color:#f47a80;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">🗑️</button>
+            <button style="background:var(--danger-bg);border:1px solid var(--danger-border);color:var(--danger);padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">🗑️</button>
           </form></td>
         </tr>{% else %}<tr><td colspan="7" class="muted" style="text-align:center">Brak webhoków.</td></tr>{% endfor %}</tbody>
         </table>

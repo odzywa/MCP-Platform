@@ -7,16 +7,51 @@
       <form method="post" action="/api/user/change-password">
         <div class="gen-field">
           <label>Aktualne hasło</label>
-          <input type="password" name="current_password" required style="padding:10px 12px;border:1px solid #34465b;border-radius:6px;background:#0d1420;color:#dce7f3">
+          <input type="password" name="current_password" required style="padding:10px 12px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface-1);color:var(--text)">
         </div>
         <div class="gen-field">
           <label>Nowe hasło (min. 6 znaków)</label>
-          <input type="password" name="new_password" minlength="6" required style="padding:10px 12px;border:1px solid #34465b;border-radius:6px;background:#0d1420;color:#dce7f3">
+          <input type="password" name="new_password" minlength="6" required style="padding:10px 12px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface-1);color:var(--text)">
         </div>
         <div class="gen-field">
           <label>Potwierdź nowe hasło</label>
-          <input type="password" name="new_password2" required style="padding:10px 12px;border:1px solid #34465b;border-radius:6px;background:#0d1420;color:#dce7f3">
+          <input type="password" name="new_password2" required style="padding:10px 12px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface-1);color:var(--text)">
         </div>
-        <button style="background:#1a7a3f;padding:10px 18px;border:none;border-radius:8px;color:white;font-weight:700;cursor:pointer">Zmień hasło</button>
+        <button style="background:var(--success-solid);padding:10px 18px;border:none;border-radius:8px;color:var(--text-strong);font-weight:700;cursor:pointer">Zmień hasło</button>
       </form>
+    </section>
+
+    <section style="max-width:480px" id="totp">
+      <h2>📱 Kod jednorazowy do zatwierdzania operacji</h2>
+      <p class="muted">Aplikacja uwierzytelniająca (Google Authenticator, Microsoft Authenticator, Authy…) generuje 6-cyfrowe kody. Wpisujesz taki kod w czacie z modelem, żeby zatwierdzić operację, która wymaga zgody człowieka — bez otwierania platformy.</p>
+      {% if not can_approve %}<div class="alert">Twoja rola (tylko odczyt) nie pozwala zatwierdzać operacji — kod nie zostanie przyjęty.</div>{% endif %}
+
+      {% if totp_enabled %}
+      <div class="success">✅ Włączone. Każdy kod działa tylko raz.</div>
+      <form method="post" action="/api/user/totp/disable">
+        <div class="gen-field">
+          <label>Aktualne hasło (żeby wyłączyć)</label>
+          <input type="password" name="current_password" required style="padding:10px 12px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface-1);color:var(--text)">
+        </div>
+        <button class="delete">Wyłącz</button>
+      </form>
+      {% elif totp_secret %}
+      <ol class="muted" style="padding-left:18px;line-height:1.7">
+        <li>Otwórz aplikację uwierzytelniającą i zeskanuj kod QR{% if not totp_qr %} albo dodaj konto ręcznie, wpisując klucz{% endif %}.</li>
+        <li>Wpisz poniżej 6-cyfrowy kod, który pokaże aplikacja.</li>
+      </ol>
+      {% if totp_qr %}<div style="background:white;display:inline-block;padding:6px;border-radius:8px;margin-bottom:10px">{{ totp_qr }}</div>{% endif %}
+      <div class="hint" style="margin-bottom:12px">Klucz do wpisania ręcznego: <code style="font-size:13px;word-break:break-all">{{ totp_secret }}</code></div>
+      <form method="post" action="/api/user/totp/enable" style="display:flex;gap:8px;align-items:flex-end">
+        <div class="gen-field" style="margin:0">
+          <label>Kod z aplikacji</label>
+          <input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}" placeholder="123456" required style="width:140px;padding:10px 12px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface-1);color:var(--text);letter-spacing:2px">
+        </div>
+        <button style="background:var(--success-solid)">Potwierdź i włącz</button>
+      </form>
+      {% else %}
+      <form method="post" action="/api/user/totp/setup">
+        <button>Włącz zatwierdzanie kodem</button>
+      </form>
+      {% endif %}
     </section>{% endblock %}

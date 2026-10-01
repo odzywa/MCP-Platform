@@ -7,21 +7,21 @@
 .gen-step h2 { margin:0 0 4px; font-size:20px; font-weight:800; }
 .gen-step .sub { color:var(--muted); font-size:14px; margin-bottom:20px; }
 .gen-field { margin-bottom:14px; }
-.gen-field label { display:block; font-weight:700; font-size:13px; color:#aac8e0; margin-bottom:5px; }
-.gen-field input,.gen-field select,.gen-field textarea { width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #34465b; border-radius:6px; background:#0d1420; color:var(--text); font-size:14px; }
+.gen-field label { display:block; font-weight:700; font-size:13px; color:var(--text-soft); margin-bottom:5px; }
+.gen-field input,.gen-field select,.gen-field textarea { width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid var(--border-strong); border-radius:6px; background:var(--surface-1); color:var(--text); font-size:14px; }
 .gen-field textarea { min-height:80px; font-family:monospace; font-size:13px; }
 .gen-field .hint { color:var(--muted); font-size:12px; margin-top:4px; }
-.gen-next { width:100%; padding:13px; font-size:15px; font-weight:800; border:none; border-radius:8px; background:var(--blue); color:white; cursor:pointer; margin-top:10px; }
+.gen-next { width:100%; padding:13px; font-size:15px; font-weight:800; border:none; border-radius:8px; background:var(--blue); color:var(--text-strong); cursor:pointer; margin-top:10px; }
 .gen-next:hover { background:var(--blue-dark); }
-.gen-back { background:#263548; color:#c9d7e6; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-size:13px; margin-bottom:16px; }
+.gen-back { background:var(--surface-3); color:var(--text); border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-size:13px; margin-bottom:16px; }
 .gen-prog { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:4px; }
 .gen-p { padding:10px; border-radius:8px; text-align:center; background:var(--panel-2); border:1px solid var(--line); font-size:12px; font-weight:700; color:var(--muted); transition:.2s; }
-.gen-p.done { background:#0e2e1e; color:#5ce89a; border-color:#1a5a38; }
-.gen-p.cur { background:#0d3a55; color:white; border-color:var(--blue); }
-.tool-card { background:#0d1420; border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:12px; }
-.tool-card h4 { margin:0 0 12px; font-size:14px; color:#7dd3fc; display:flex; justify-content:space-between; }
-.ptype-btn { background:#0d1822; border:2px solid var(--line); border-radius:10px; padding:18px 14px; cursor:pointer; text-align:center; transition:.15s; color:var(--text); width:100%; }
-.ptype-btn:hover,.ptype-btn.sel { border-color:var(--blue); background:#0d2a40; }
+.gen-p.done { background:var(--success-bg); color:var(--success); border-color:var(--success-border); }
+.gen-p.cur { background:var(--primary-bg); color:var(--text-strong); border-color:var(--blue); }
+.tool-card { background:var(--surface-1); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:12px; }
+.tool-card h4 { margin:0 0 12px; font-size:14px; color:var(--info); display:flex; justify-content:space-between; }
+.ptype-btn { background:var(--surface-1); border:2px solid var(--line); border-radius:10px; padding:18px 14px; cursor:pointer; text-align:center; transition:.15s; color:var(--text); width:100%; }
+.ptype-btn:hover,.ptype-btn.sel { border-color:var(--blue); background:var(--primary-bg); }
 .ptype-btn .pi { font-size:30px; margin-bottom:8px; }
 .ptype-btn .pn { font-weight:800; font-size:14px; margin-bottom:5px; }
 .ptype-btn .pd { color:var(--muted); font-size:12px; line-height:1.5; }
@@ -84,7 +84,7 @@
 
     <div id="tools-container"></div>
 
-    <button type="button" onclick="addTool()" style="background:#263548;color:#c9d7e6;border:none;padding:9px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+    <button type="button" onclick="addTool()" style="background:var(--surface-3);color:var(--text);border:none;padding:9px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
       + Dodaj kolejne narzędzie
     </button>
 
@@ -98,19 +98,19 @@
     <div class="sub">Określ co AI może, a czego nie może robić. Domyślnie maksymalna ochrona.</div>
 
     <div style="display:grid;gap:10px;margin-bottom:16px">
-      <label style="display:flex;align-items:flex-start;gap:12px;background:#0d1822;border:1px solid var(--line);border-radius:8px;padding:12px 14px;cursor:pointer">
+      <label style="display:flex;align-items:flex-start;gap:12px;background:var(--surface-1);border:1px solid var(--line);border-radius:8px;padding:12px 14px;cursor:pointer">
         <input type="checkbox" id="pol-readonly" checked onchange="gUpdate()" style="width:auto;margin-top:2px;flex-shrink:0">
-        <div><div style="font-weight:700;font-size:13px;color:white">🔒 Tylko odczyt</div>
+        <div><div style="font-weight:700;font-size:13px;color:var(--text-strong)">🔒 Tylko odczyt</div>
         <div style="color:var(--muted);font-size:12px;margin-top:2px">Tools mogą tylko czytać dane</div></div>
       </label>
-      <label style="display:flex;align-items:flex-start;gap:12px;background:#0d1822;border:1px solid var(--line);border-radius:8px;padding:12px 14px;cursor:pointer">
+      <label style="display:flex;align-items:flex-start;gap:12px;background:var(--surface-1);border:1px solid var(--line);border-radius:8px;padding:12px 14px;cursor:pointer">
         <input type="checkbox" id="pol-nowrite" checked onchange="gUpdate()" style="width:auto;margin-top:2px;flex-shrink:0">
-        <div><div style="font-weight:700;font-size:13px;color:white">🚫 Blokuj zapis</div>
+        <div><div style="font-weight:700;font-size:13px;color:var(--text-strong)">🚫 Blokuj zapis</div>
         <div style="color:var(--muted);font-size:12px;margin-top:2px">Blokada operacji zapisu</div></div>
       </label>
-      <label style="display:flex;align-items:flex-start;gap:12px;background:#0d1822;border:1px solid var(--line);border-radius:8px;padding:12px 14px;cursor:pointer">
+      <label style="display:flex;align-items:flex-start;gap:12px;background:var(--surface-1);border:1px solid var(--line);border-radius:8px;padding:12px 14px;cursor:pointer">
         <input type="checkbox" id="pol-nodestr" checked onchange="gUpdate()" style="width:auto;margin-top:2px;flex-shrink:0">
-        <div><div style="font-weight:700;font-size:13px;color:white">⛔ Blokuj destruktywne</div>
+        <div><div style="font-weight:700;font-size:13px;color:var(--text-strong)">⛔ Blokuj destruktywne</div>
         <div style="color:var(--muted);font-size:12px;margin-top:2px">Blokada usuwania, resetowania, drop</div></div>
       </label>
     </div>
@@ -179,15 +179,15 @@
     </div>
 
     <div style="margin-bottom:14px">
-      <div style="font-weight:700;font-size:13px;color:#aac8e0;margin-bottom:8px">Podgląd JSON paczki:</div>
-      <textarea id="json-preview" readonly style="height:280px;font-family:monospace;font-size:12px;color:#c9d7e6;background:#0b1420;border:1px solid var(--line);border-radius:8px;padding:12px;width:100%;box-sizing:border-box"></textarea>
+      <div style="font-weight:700;font-size:13px;color:var(--text-soft);margin-bottom:8px">Podgląd JSON paczki:</div>
+      <textarea id="json-preview" readonly style="height:280px;font-family:monospace;font-size:12px;color:var(--text);background:var(--surface-1);border:1px solid var(--line);border-radius:8px;padding:12px;width:100%;box-sizing:border-box"></textarea>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <button type="button" onclick="installPackage()" style="background:#1a7a3f;color:white;border:none;padding:14px;border-radius:8px;font-size:15px;font-weight:800;cursor:pointer">
+      <button type="button" onclick="installPackage()" style="background:var(--success-solid);color:var(--text-strong);border:none;padding:14px;border-radius:8px;font-size:15px;font-weight:800;cursor:pointer">
         🚀 Zainstaluj paczkę
       </button>
-      <button type="button" id="copy-btn" onclick="copyJSON()" style="background:#263548;color:#c9d7e6;border:none;padding:14px;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer">
+      <button type="button" id="copy-btn" onclick="copyJSON()" style="background:var(--surface-3);color:var(--text);border:none;padding:14px;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer">
         📋 Kopiuj JSON
       </button>
     </div>
@@ -251,7 +251,7 @@ function toolHTML(tid, showShell, showHttp) {
   const defType = showShell ? 'shell' : 'http_request';
   return `<div>
     <h4>🔧 Narzędzie #${tid}
-      <button type="button" onclick="removeTool(${tid})" style="background:#c43b3b;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:white">Usuń</button>
+      <button type="button" onclick="removeTool(${tid})" style="background:var(--danger-solid);border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--text-strong)">Usuń</button>
     </h4>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       <div class="gen-field" style="margin:0">
@@ -274,7 +274,7 @@ function toolHTML(tid, showShell, showHttp) {
     <div id="shell-cfg-${tid}" style="${showShell?'':'display:none'}">
       <div class="gen-field">
         <label>Komenda (użyj <code>\${variable}</code> lub <code>\${*args}</code>)</label>
-        <input id="tool-cmd-${tid}" placeholder="oc get ${*args}" oninput="gUpdate()">
+        <input id="tool-cmd-${tid}" placeholder="oc get \${*args}" oninput="gUpdate()">
         <div class="hint">
           <code>\${namespace}</code> = jeden parametr &nbsp;|&nbsp; <code>\${*args}</code> = AI podaje wszystkie argumenty naraz
         </div>
@@ -309,9 +309,9 @@ function toolHTML(tid, showShell, showHttp) {
     </div>
 
     <div style="margin-top:10px">
-      <div style="font-weight:700;font-size:12px;color:#7dd3fc;margin-bottom:6px">Parametry (input schema):</div>
+      <div style="font-weight:700;font-size:12px;color:var(--info);margin-bottom:6px">Parametry (input schema):</div>
       <div id="fields-${tid}"></div>
-      <button type="button" onclick="addField(${tid})" style="background:#1a2a3a;border:1px solid var(--line);color:#b0c8e0;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">+ Dodaj parametr</button>
+      <button type="button" onclick="addField(${tid})" style="background:var(--surface-2);border:1px solid var(--line);color:var(--text-soft);padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">+ Dodaj parametr</button>
     </div>
   </div>`;
 }
@@ -358,7 +358,7 @@ function addField(tid) {
     <label style="display:flex;gap:5px;align-items:center;font-size:12px;padding-top:16px">
       <input type="checkbox" class="freq" onchange="gUpdate()"> Req
     </label>
-    <button type="button" onclick="removeField(${tid},${fid})" style="background:#c43b3b;border:none;padding:6px 8px;border-radius:6px;cursor:pointer;color:white">✕</button>`;
+    <button type="button" onclick="removeField(${tid},${fid})" style="background:var(--danger-solid);border:none;padding:6px 8px;border-radius:6px;cursor:pointer;color:var(--text-strong)">✕</button>`;
   c.appendChild(d);
   gUpdate();
 }
@@ -441,10 +441,8 @@ function generateJSON() {
   if (document.getElementById('pol-nowrite')?.checked) pol.block_write_tools = true;
   if (document.getElementById('pol-nodestr')?.checked) pol.block_destructive_tools = true;
   const bins = val('pol-bins').trim(); if (bins) pol.allowed_binaries = bins.split(/\s+/);
-  const pfx = val('pol-pfx').trim(); if (pfx) pol.allowed_command_prefixes = pfx.split(/
-+/).filter(Boolean);
-  const blk = val('pol-blk').trim(); if (blk) pol.blocked_command_prefixes = blk.split(/
-+/).filter(Boolean);
+  const pfx = val('pol-pfx').trim(); if (pfx) pol.allowed_command_prefixes = pfx.split(/\n+/).filter(Boolean);
+  const blk = val('pol-blk').trim(); if (blk) pol.blocked_command_prefixes = blk.split(/\n+/).filter(Boolean);
   pol.timeout_seconds = parseInt(val('pol-timeout'))||30;
   pol.max_payload_bytes = 262144;
   pol.max_response_bytes = 5242880;

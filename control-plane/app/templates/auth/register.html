@@ -7,7 +7,7 @@
       <div class="auth-field"><label>Potwierdź hasło</label><input type="password" name="password2" placeholder="••••••••"></div>
       <div class="auth-field">
         <label>Żądana rola</label>
-        <select name="requested_role" style="width:100%;padding:10px 12px;border:1px solid #34465b;border-radius:7px;background:#0d1420;color:#dce7f3;font-size:14px">
+        <select name="requested_role" style="width:100%;padding:10px 12px;border:1px solid var(--border-strong);border-radius:7px;background:var(--surface-1);color:var(--text);font-size:14px">
           <option value="read_write">read_write — tworzenie serwerów MCP</option>
           <option value="read_only">read_only — tylko podgląd</option>
         </select>
@@ -15,6 +15,6 @@
       <button class="auth-btn">Wyślij prośbę o konto →</button>
     </form>
     <div class="auth-link">Masz już konto? <a href="/login">Zaloguj się</a></div>
-    <div style="margin-top:16px;padding:12px;background:#0d1e2e;border-radius:8px;font-size:12px;color:#7ab8d8">
+    <div style="margin-top:16px;padding:12px;background:var(--surface-2);border-radius:8px;font-size:12px;color:var(--info)">
       ℹ️ Administrator musi zaakceptować Twoje konto zanim będziesz mógł się zalogować.
     </div>{% endblock %}

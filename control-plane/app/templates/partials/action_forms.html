@@ -1,16 +1,9 @@
 
 <style>
-.act-btn { padding:8px 14px; border:0; border-radius:6px; font-weight:700; cursor:pointer; font-size:13px; transition:.12s; color:white; }
-.act-btn:hover { filter:brightness(1.15); transform:translateY(-1px); }
-.act-btn.primary { background:var(--blue); }
-.act-btn.secondary { background:#3d5268; }
-.act-btn.warn { background:#d9822b; }
-.act-btn.danger { background:#c43b3b; }
-.act-btn.dark { background:#263548; }
 #{{ msg_id }} { padding:10px 14px; border-radius:8px; font-size:13px; font-weight:600; margin-top:10px; display:none; }
-#{{ msg_id }}.ok { background:#0e2e1e; border:1px solid #1a5a38; color:#5ce89a; }
-#{{ msg_id }}.err { background:#2c0e10; border:1px solid #5a2025; color:#f47a80; }
-#{{ msg_id }}.info { background:#0d1e2e; border:1px solid #1a3a50; color:#7dd3fc; }
+#{{ msg_id }}.ok { background:var(--success-bg); border:1px solid var(--success-border); color:var(--success); }
+#{{ msg_id }}.err { background:var(--danger-bg); border:1px solid var(--danger-border); color:var(--danger); }
+#{{ msg_id }}.info { background:var(--surface-2); border:1px solid var(--border-strong); color:var(--info); }
 </style>
 <div class="actions" style="flex-wrap:wrap;gap:8px" id="act-btns-{{ rid }}">
   <button class="act-btn primary"   onclick="doAct('{{ rid }}','deploy')">🚀 Deploy</button>
@@ -20,7 +13,7 @@
   <button class="act-btn secondary" onclick="doAct('{{ rid }}','restart')">🔄 Restart</button>
   <button class="act-btn dark"      onclick="doAct('{{ rid }}','health')">🩺 Sprawdź status</button>
   <button class="act-btn dark"      onclick="doAct('{{ rid }}','logs')">📋 Pobierz logi</button>
-  <button class="act-btn dark"      onclick="doAct('{{ rid }}','rebuild-redeploy')" style="background:#6b3a0a">🔨 Przebuduj obraz + Deploy</button>
+  <button class="act-btn dark"      onclick="doAct('{{ rid }}','rebuild-redeploy')">🔨 Przebuduj obraz + Deploy</button>
   <button class="act-btn danger"    onclick="doAct('{{ rid }}','delete')">🗑️ Usuń</button>
 </div>
 <div id="{{ msg_id }}"></div>

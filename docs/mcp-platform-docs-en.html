@@ -653,6 +653,11 @@ user="1000:1000"</code></pre>
         <td>The MCP client declares elicitation support</td>
       </tr>
       <tr>
+        <td><strong>One-time code in the chat</strong></td>
+        <td>The user types the 6-digit code from an authenticator app (set up in Account settings); the AI calls the tool again with <code>approval_code</code>. A code works once; the command is then shown by the model, not by the platform.</td>
+        <td>Other clients, when a user has the app enabled and the policy allows it</td>
+      </tr>
+      <tr>
         <td><strong>Approval link</strong></td>
         <td>The tool returns a link to a platform page. A logged-in user (read_write or admin) approves or rejects; then the AI calls the tool again. One approval = one execution.</td>
         <td>All other clients, e.g. OpenWebUI</td>

@@ -69,19 +69,19 @@ def security_page(ok: str = "") -> str:
         {
             "name": "🔒 Ścisła (produkcja)",
             "desc": "Maksymalna ochrona — tylko odczyt, blokada zapisu i destruktywnych operacji. Zalecana dla wszystkich serwerów produkcyjnych.",
-            "color": "#0e2e1e", "border": "#1a5a38",
+            "color": "var(--success-bg)", "border": "var(--success-border)",
             "policy": {"require_read_only": True, "block_write_tools": True, "block_destructive_tools": True, "timeout_seconds": 30, "max_payload_bytes": 262144, "max_response_bytes": 5242880},
         },
         {
             "name": "🔶 Standardowa",
             "desc": "Blokuje operacje destruktywne, ale pozwala na zapis. Przydatna dla serwerów zarządzających danymi (np. tworzenie ticketów).",
-            "color": "#1a1400", "border": "#5a420f",
+            "color": "var(--warning-bg)", "border": "var(--warning-border)",
             "policy": {"require_read_only": False, "block_write_tools": False, "block_destructive_tools": True, "timeout_seconds": 60, "max_payload_bytes": 524288, "max_response_bytes": 10485760},
         },
         {
             "name": "🧪 Deweloperska",
             "desc": "Brak ograniczeń policy — tylko dla testów lokalnych. NIGDY nie używaj na produkcji.",
-            "color": "#1a0a0a", "border": "#5a2025",
+            "color": "var(--danger-bg)", "border": "var(--danger-border)",
             "policy": {"require_read_only": False, "block_write_tools": False, "block_destructive_tools": False, "timeout_seconds": 120, "max_payload_bytes": 1048576, "max_response_bytes": 20971520},
         },
     ]

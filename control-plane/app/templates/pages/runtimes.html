@@ -6,9 +6,9 @@
           <a class="filter-pill {% if status == 'running' %}active{% endif %}" href="/runtimes?status=running">🟢 Działające ({{ running_count }})</a>
           <a class="filter-pill {% if status == 'problem' %}active{% endif %}" href="/runtimes?status=problem">🔴 Z problemami ({{ problem_count }})</a>
         </div>
-        <a href="/quick-start" style="background:var(--blue);color:white;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;white-space:nowrap">⚡ Nowy serwer</a>
+        <a href="/quick-start" style="background:var(--blue);color:var(--text-strong);padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;white-space:nowrap">⚡ Nowy serwer</a>
       </div>
-      <div class="srv-grid">{% for r in runtimes %}{% set s = r['status'] %}{% set endpoint %}{% if r['endpoint_url'] %}{{ r['endpoint_url'] }}{% else %}{% endif %}{% endset %}{% set rid = r['id'] %}{% set is_running = (s == 'running') %}{% set is_stopped = (s in set(['stopped', 'missing', 'draft'])) %}{% set last_audit = audit_by_rid.get(rid) %}{% if last_audit %}{% set _icon = _action_icons_card.get(last_audit['action'], '📌') %}{% set _time = last_audit['created_at'][:16].replace('T', ' ') %}{% set _actor = last_audit['actor'] %}{% set _act = last_audit['action'].replace('_', ' ') %}{% set audit_strip %}<div style="border-top:1px solid var(--line);margin-top:8px;padding-top:7px;display:flex;gap:6px;align-items:center;font-size:11px;color:var(--muted)"><span>{{ _icon }}</span><span style="color:#6a8aa8">{{ _time }}</span><span style="color:#5a7a9a">{{ _actor }}</span><span>·</span><span>{{ _act }}</span></div>{% endset %}{% else %}{% set audit_strip %}<div style="border-top:1px solid var(--line);margin-top:8px;padding-top:7px;font-size:11px;color:var(--muted)">Brak historii operacji</div>{% endset %}{% endif %}
+      <div class="srv-grid">{% for r in runtimes %}{% set s = r['status'] %}{% set endpoint %}{% if r['endpoint_url'] %}{{ r['endpoint_url'] }}{% else %}{% endif %}{% endset %}{% set rid = r['id'] %}{% set is_running = (s == 'running') %}{% set is_stopped = (s in set(['stopped', 'missing', 'draft'])) %}{% set last_audit = audit_by_rid.get(rid) %}{% if last_audit %}{% set _icon = _action_icons_card.get(last_audit['action'], '📌') %}{% set _time = last_audit['created_at'][:16].replace('T', ' ') %}{% set _actor = last_audit['actor'] %}{% set _act = last_audit['action'].replace('_', ' ') %}{% set audit_strip %}<div style="border-top:1px solid var(--line);margin-top:8px;padding-top:7px;display:flex;gap:6px;align-items:center;font-size:11px;color:var(--muted)"><span>{{ _icon }}</span><span style="color:var(--muted)">{{ _time }}</span><span style="color:var(--muted)">{{ _actor }}</span><span>·</span><span>{{ _act }}</span></div>{% endset %}{% else %}{% set audit_strip %}<div style="border-top:1px solid var(--line);margin-top:8px;padding-top:7px;font-size:11px;color:var(--muted)">Brak historii operacji</div>{% endset %}{% endif %}
         <div class="srv-card" id="card-{{ rid }}" onclick="if(!event.target.closest('button,a,form'))location.href='/runtimes/{{ rid }}'" style="cursor:pointer">
           <div class="srv-card-top">
             <div>
@@ -19,15 +19,15 @@
           </div>
           {% if endpoint %}<div class="srv-card-endpoint">🔗 <a href="{{ endpoint }}" target="_blank">{{ endpoint }}</a></div>{% else %}<div class="srv-card-endpoint" style="color:var(--muted)">brak endpointu</div>{% endif %}
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-            <a href="/runtimes/{{ rid }}" style="padding:6px 10px;background:#263548;border-radius:6px;font-size:12px;font-weight:700;color:#c9d7e6;text-decoration:none">⚙️ Zarządzaj</a>
-            {% if not is_running %}<button onclick="cardAct('{{ rid }}','deploy')" style="padding:6px 10px;border:0;border-radius:6px;background:var(--blue);color:white;font-size:12px;font-weight:700;cursor:pointer">🚀 Deploy</button>{% endif %}
-            {% if is_running %}<button onclick="cardAct('{{ rid }}','stop')" style="padding:6px 10px;border:0;border-radius:6px;background:#d9822b;color:white;font-size:12px;font-weight:700;cursor:pointer">⏹ Stop</button>{% endif %}
-            {% if is_stopped %}<button onclick="cardAct('{{ rid }}','start')" style="padding:6px 10px;border:0;border-radius:6px;background:#3d5268;color:white;font-size:12px;font-weight:700;cursor:pointer">▶️ Start</button>{% endif %}
-            {% if is_running %}<button onclick="cardAct('{{ rid }}','restart')" style="padding:6px 10px;border:0;border-radius:6px;background:#3d5268;color:white;font-size:12px;font-weight:700;cursor:pointer">🔄 Restart</button>{% endif %}
-            {% if is_running %}<button onclick="cardAct('{{ rid }}','health')" style="padding:6px 10px;border:0;border-radius:6px;background:#263548;color:#c9d7e6;font-size:12px;font-weight:700;cursor:pointer">🩺 Status</button>{% endif %}
-            <a href="/runtimes/{{ rid }}?tab=logs" style="padding:6px 10px;background:#263548;border-radius:6px;font-size:12px;font-weight:700;color:#c9d7e6;text-decoration:none">📋 Logi</a>
-            <a href="/runtimes/{{ rid }}?tab=audit" style="padding:6px 10px;background:#263548;border-radius:6px;font-size:12px;font-weight:700;color:#c9d7e6;text-decoration:none">🤖 Wywołania</a>
-            <button onclick="if(confirm('Usunąć?'))cardAct('{{ rid }}','delete')" style="padding:6px 10px;border:0;border-radius:6px;background:#c43b3b;color:white;font-size:12px;font-weight:700;cursor:pointer">🗑️</button>
+            <a href="/runtimes/{{ rid }}" style="padding:6px 10px;background:var(--surface-3);border-radius:6px;font-size:12px;font-weight:700;color:var(--text);text-decoration:none">⚙️ Zarządzaj</a>
+            {% if not is_running %}<button onclick="cardAct('{{ rid }}','deploy')" style="padding:6px 10px;border:0;border-radius:6px;background:var(--blue);color:var(--text-strong);font-size:12px;font-weight:700;cursor:pointer">🚀 Deploy</button>{% endif %}
+            {% if is_running %}<button onclick="cardAct('{{ rid }}','stop')" style="padding:6px 10px;border:0;border-radius:6px;background:var(--warning-solid);color:var(--text-strong);font-size:12px;font-weight:700;cursor:pointer">⏹ Stop</button>{% endif %}
+            {% if is_stopped %}<button onclick="cardAct('{{ rid }}','start')" style="padding:6px 10px;border:0;border-radius:6px;background:var(--neutral-solid);color:var(--text-strong);font-size:12px;font-weight:700;cursor:pointer">▶️ Start</button>{% endif %}
+            {% if is_running %}<button onclick="cardAct('{{ rid }}','restart')" style="padding:6px 10px;border:0;border-radius:6px;background:var(--neutral-solid);color:var(--text-strong);font-size:12px;font-weight:700;cursor:pointer">🔄 Restart</button>{% endif %}
+            {% if is_running %}<button onclick="cardAct('{{ rid }}','health')" style="padding:6px 10px;border:0;border-radius:6px;background:var(--surface-3);color:var(--text);font-size:12px;font-weight:700;cursor:pointer">🩺 Status</button>{% endif %}
+            <a href="/runtimes/{{ rid }}?tab=logs" style="padding:6px 10px;background:var(--surface-3);border-radius:6px;font-size:12px;font-weight:700;color:var(--text);text-decoration:none">📋 Logi</a>
+            <a href="/runtimes/{{ rid }}?tab=audit" style="padding:6px 10px;background:var(--surface-3);border-radius:6px;font-size:12px;font-weight:700;color:var(--text);text-decoration:none">🤖 Wywołania</a>
+            <button onclick="if(confirm('Usunąć?'))cardAct('{{ rid }}','delete')" style="padding:6px 10px;border:0;border-radius:6px;background:var(--danger-solid);color:var(--text-strong);font-size:12px;font-weight:700;cursor:pointer">🗑️</button>
           </div>
           {{ audit_strip }}
           <div id="cmsg-{{ rid }}" style="display:none;margin-top:8px;padding:8px 12px;border-radius:6px;font-size:12px;font-weight:600"></div>
@@ -42,7 +42,7 @@ window.cardAct = function(rid, action) {
     restart:'🔄 Restartowanie...', health:'🩺 Sprawdzam status...', delete:'🗑️ Usuwanie...'
   };
   box.style.display = 'block';
-  box.style.background = '#0d1e2e'; box.style.border = '1px solid #1a3a50'; box.style.color = '#7dd3fc';
+  box.style.background = 'var(--surface-2)'; box.style.border = '1px solid var(--border-strong)'; box.style.color = 'var(--info)';
   box.textContent = msgs[action] || 'Wykonuję...';
 
   fetch('/api/runtimes/' + rid + '/' + action, {
@@ -50,7 +50,7 @@ window.cardAct = function(rid, action) {
     body:'return_to=/runtimes', redirect:'manual'
   }).then(function() {
     if (action === 'delete') {
-      box.style.background='#0e2e1e'; box.style.border='1px solid #1a5a38'; box.style.color='#5ce89a';
+      box.style.background='var(--success-bg)'; box.style.border='1px solid var(--success-border)'; box.style.color='var(--success)';
       box.textContent = '✅ Usunięto.';
       setTimeout(function() { var card=document.getElementById('card-'+rid); if(card) card.remove(); }, 800);
       return;
@@ -59,9 +59,9 @@ window.cardAct = function(rid, action) {
       setTimeout(function() {
         fetch('/api/runtimes/' + rid + '/status').then(function(r){return r.json();}).then(function(d) {
           var ok = d.status === 'running';
-          box.style.background = ok ? '#0e2e1e' : '#2c0e10';
-          box.style.border = ok ? '1px solid #1a5a38' : '1px solid #5a2025';
-          box.style.color = ok ? '#5ce89a' : '#f47a80';
+          box.style.background = ok ? 'var(--success-bg)' : 'var(--danger-bg)';
+          box.style.border = ok ? '1px solid var(--success-border)' : '1px solid var(--danger-border)';
+          box.style.color = ok ? 'var(--success)' : 'var(--danger)';
           box.textContent = ok
             ? '✅ Kontener żyje! Status: running'
             : '❌ Problem! Status: ' + (d.status||'?') + (d.last_error ? ' — ' + d.last_error.slice(0,60) : '');
@@ -79,11 +79,11 @@ window.cardAct = function(rid, action) {
           if (statusBadge) statusBadge.textContent = d.status;
           if (d.status === 'running') {
             clearInterval(t);
-            box.style.background='#0e2e1e'; box.style.border='1px solid #1a5a38'; box.style.color='#5ce89a';
+            box.style.background='var(--success-bg)'; box.style.border='1px solid var(--success-border)'; box.style.color='var(--success)';
             box.textContent = '✅ Działa! ' + (d.endpoint_url || '');
           } else if (d.status === 'failed' || d.status === 'missing') {
             clearInterval(t);
-            box.style.background='#2c0e10'; box.style.border='1px solid #5a2025'; box.style.color='#f47a80';
+            box.style.background='var(--danger-bg)'; box.style.border='1px solid var(--danger-border)'; box.style.color='var(--danger)';
             box.textContent = '❌ Błąd: ' + (d.last_error || d.status);
           } else if (polls > 30) clearInterval(t);
         });
@@ -91,13 +91,13 @@ window.cardAct = function(rid, action) {
       return;
     }
     if (action === 'stop') {
-      box.style.background='#1e252e'; box.style.border='1px solid #2b394a'; box.style.color='#7a92a8';
+      box.style.background='var(--surface-2)'; box.style.border='1px solid var(--border-strong)'; box.style.color='var(--muted)';
       box.textContent = '⏹ Serwer zatrzymany.';
       if (statusBadge) statusBadge.textContent = 'stopped';
       return;
     }
   }).catch(function(e) {
-    box.style.background='#2c0e10'; box.style.color='#f47a80';
+    box.style.background='var(--danger-bg)'; box.style.color='var(--danger)';
     box.textContent = '❌ Błąd: ' + e;
   });
 };

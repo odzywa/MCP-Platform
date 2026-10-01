@@ -83,7 +83,7 @@ def quick_start_page(error: str = "") -> str:
             "image": rc.get('runtime_image') or '—',
             "tools": [(t, _tool_cmd(t)) for t in pj.get('tools') or []],
             "risk": risk,
-            "risk_color": {'low': '#5ce89a', 'medium': '#f4c163', 'high': '#f47a80'}.get(risk, '#7a92a8'),
+            "risk_color": {'low': 'var(--success)', 'medium': 'var(--warning)', 'high': 'var(--danger)'}.get(risk, 'var(--muted)'),
             "category_icon": {'rag': '🧠', 'http': '🌐', 'shell': '🐚', 'openshift': '🔴', 'kubernetes': '☸️', 'database': '🗄️'}.get(p.get('category', ''), '📦'),
         }
 

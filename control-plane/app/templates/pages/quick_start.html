@@ -7,31 +7,31 @@
 .qs-step h2 { margin:0 0 6px; font-size:22px; }
 .qs-step .sub { color:var(--muted); font-size:14px; margin-bottom:22px; }
 .qs-type-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; }
-.qs-type-btn { background:#0d1822; border:2px solid var(--line); border-radius:10px; padding:20px 16px; cursor:pointer;
+.qs-type-btn { background:var(--surface-1); border:2px solid var(--line); border-radius:10px; padding:20px 16px; cursor:pointer;
                text-align:center; transition:.15s; color:var(--text); }
-.qs-type-btn:hover { border-color:var(--blue); background:#0d2a40; }
+.qs-type-btn:hover { border-color:var(--blue); background:var(--primary-bg); }
 .qs-type-btn .qs-icon { font-size:36px; margin-bottom:10px; }
 .qs-type-btn .qs-name { font-weight:800; font-size:15px; margin-bottom:6px; }
 .qs-type-btn .qs-desc { color:var(--muted); font-size:12px; line-height:1.5; }
 .qs-form-section { display:none; margin-top:4px; }
 .qs-form-section.active { display:block; }
 .qs-field { margin-bottom:14px; }
-.qs-field label { display:block; font-weight:700; font-size:13px; color:#aac8e0; margin-bottom:5px; }
+.qs-field label { display:block; font-weight:700; font-size:13px; color:var(--text-soft); margin-bottom:5px; }
 .qs-field input, .qs-field select { width:100%; box-sizing:border-box; padding:10px 12px;
-  border:1px solid #34465b; border-radius:6px; background:#0d1420; color:var(--text); font-size:14px; }
+  border:1px solid var(--border-strong); border-radius:6px; background:var(--surface-1); color:var(--text); font-size:14px; }
 .qs-field .hint { color:var(--muted); font-size:12px; margin-top:4px; }
 .qs-big-btn { width:100%; padding:14px; font-size:16px; font-weight:800; border:none; border-radius:8px;
-              background:var(--blue); color:white; cursor:pointer; margin-top:8px; }
+              background:var(--blue); color:var(--text-strong); cursor:pointer; margin-top:8px; }
 .qs-big-btn:hover { background:var(--blue-dark); }
 .qs-pkg-card { display:block; cursor:pointer; margin-bottom:8px; }
-.qs-pkg-inner { background:#0d1822; border:2px solid var(--line); border-radius:8px; padding:12px 16px;
+.qs-pkg-inner { background:var(--surface-1); border:2px solid var(--line); border-radius:8px; padding:12px 16px;
                 transition:.15s; }
-.qs-pkg-card.selected .qs-pkg-inner { border-color:var(--blue); background:#0d2a40; }
+.qs-pkg-card.selected .qs-pkg-inner { border-color:var(--blue); background:var(--primary-bg); }
 .qs-pkg-card.selected .qs-pkg-chevron { transform:rotate(180deg); color:var(--blue); }
 .qs-pkg-inner:hover { border-color:var(--blue); }
 .qs-pkg-details { animation: fadeIn .15s ease; }
 @keyframes fadeIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:none; } }
-.qs-back { background:#263548; color:#c9d7e6; border:none; padding:8px 14px; border-radius:6px;
+.qs-back { background:var(--surface-3); color:var(--text); border:none; padding:8px 14px; border-radius:6px;
            cursor:pointer; font-size:13px; margin-bottom:16px; }
 </style>
 {% if error %}<div class="alert">{{ error }}</div>{% endif %}
@@ -39,7 +39,7 @@
   <div class="qs-step" id="step-choose">
     <h2>Co chcesz podłączyć do AI?</h2>
     <div class="sub">Wybierz typ i wypełnij 2-3 pola — serwer uruchomi się automatycznie.</div>
-    {% if not _is_admin %}{% else %}<div style="background:#0a1520;border:1px solid #1a3a50;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--muted)">💡 Chcesz uruchomić komendę shell (psql, oc, curl)? Skorzystaj z <a href="/create" style="color:var(--blue);font-weight:700">Kreatora zaawansowanego</a> — tam możesz wybrać środowisko i zdefiniować narzędzia.</div>{% endif %}
+    {% if not _is_admin %}{% else %}<div style="background:var(--surface-1);border:1px solid var(--border-strong);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--muted)">💡 Chcesz uruchomić komendę shell (psql, oc, curl)? Skorzystaj z <a href="/create" style="color:var(--blue);font-weight:700">Kreatora zaawansowanego</a> — tam możesz wybrać środowisko i zdefiniować narzędzia.</div>{% endif %}
     <div class="qs-type-grid" style="grid-template-columns:1fr 1fr;grid-template-rows:auto auto">
       <button type="button" class="qs-type-btn" onclick="chooseType('external')">
         <div class="qs-icon">🔗</div>
@@ -90,14 +90,14 @@
           <label>Token</label>
           <input name="ext_auth_token" type="password" placeholder="eyJhbGci...">
         </div>
-        <div style="background:#0a1520;border:1px solid #1a3a50;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--muted)">
+        <div style="background:var(--surface-1);border:1px solid var(--border-strong);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--muted)">
           💡 Po zarejestrowaniu serwer pojawi się w zakładce <b>Zewnętrzne MCP</b> — platforma będzie sprawdzać jego dostępność i wylistuje dostępne tools.
         </div>
       </div>
 
       <!-- Shell command — step 0: choose environment -->
       <div class="qs-form-section" id="form-shell">
-        {% if not _can_shell %}<div style="background:#2a1010;border:1px solid #6a2020;border-radius:10px;padding:24px;text-align:center"><div style="font-size:32px;margin-bottom:12px">🔒</div><div style="font-weight:800;font-size:16px;color:#f47a80;margin-bottom:8px">Brak uprawnień</div><div style="color:#a08080;font-size:14px;margin-bottom:16px">Twoja rola (<b>read_write</b>) nie pozwala na definiowanie własnych poleceń shell.<br>Skorzystaj z gotowego zestawu narzędzi.</div><button type="button" class="qs-big-btn" style="max-width:280px;margin:0 auto" onclick="chooseType('package')">📦 Wybierz gotowy zestaw</button></div>{% endif %}
+        {% if not _can_shell %}<div style="background:var(--danger-bg);border:1px solid var(--danger-border);border-radius:10px;padding:24px;text-align:center"><div style="font-size:32px;margin-bottom:12px">🔒</div><div style="font-weight:800;font-size:16px;color:var(--danger);margin-bottom:8px">Brak uprawnień</div><div style="color:var(--muted);font-size:14px;margin-bottom:16px">Twoja rola (<b>read_write</b>) nie pozwala na definiowanie własnych poleceń shell.<br>Skorzystaj z gotowego zestawu narzędzi.</div><button type="button" class="qs-big-btn" style="max-width:280px;margin:0 auto" onclick="chooseType('package')">📦 Wybierz gotowy zestaw</button></div>{% endif %}
         <div id="shell-s0" {% if not _can_shell %}style="display:none"{% endif %}>
           <h2>Jakie narzędzia ma mieć kontener?</h2>
           <div class="sub">Wybierz środowisko — określa co jest dostępne w kontenerze gdy AI wywołuje komendę.</div>
@@ -108,10 +108,10 @@
                     onclick="pickEnv('standard')" id="env-btn-standard">
               <div style="font-size:28px;flex-shrink:0">🐚</div>
               <div>
-                <div style="font-weight:800;font-size:14px;color:white;margin-bottom:4px">Standardowe</div>
+                <div style="font-weight:800;font-size:14px;color:var(--text-strong);margin-bottom:4px">Standardowe</div>
                 <div style="color:var(--muted);font-size:12px;margin-bottom:8px">Gotowe do użycia — bez konfiguracji</div>
                 <div style="display:flex;flex-wrap:wrap;gap:5px">
-                  {% for t in ['curl', 'jq', 'bash', 'grep', 'sed', 'awk', 'cat', 'find', 'sort', 'uniq', 'head', 'tail', 'wc'] %}<code style="background:#0d1a2a;border:1px solid #1a3a50;padding:2px 7px;border-radius:4px;font-size:11px;color:#7dd3fc">{{ t }}</code>{% endfor %}
+                  {% for t in ['curl', 'jq', 'bash', 'grep', 'sed', 'awk', 'cat', 'find', 'sort', 'uniq', 'head', 'tail', 'wc'] %}<code style="background:var(--surface-1);border:1px solid var(--border-strong);padding:2px 7px;border-radius:4px;font-size:11px;color:var(--info)">{{ t }}</code>{% endfor %}
                 </div>
               </div>
             </button>
@@ -120,30 +120,30 @@
                     onclick="pickEnv('openshift')" id="env-btn-openshift">
               <div style="font-size:28px;flex-shrink:0">🔴</div>
               <div>
-                <div style="font-weight:800;font-size:14px;color:white;margin-bottom:4px">OpenShift / Kubernetes</div>
+                <div style="font-weight:800;font-size:14px;color:var(--text-strong);margin-bottom:4px">OpenShift / Kubernetes</div>
                 <div style="color:var(--muted);font-size:12px;margin-bottom:8px">CLI dla klastrów — oc, kubectl plus standardowe narzędzia</div>
                 <div style="display:flex;flex-wrap:wrap;gap:5px">
-                  {% for t in ['oc', 'kubectl', 'curl', 'jq', 'bash', 'grep'] %}<code style="background:#0d1a2a;border:1px solid #1a3a50;padding:2px 7px;border-radius:4px;font-size:11px;color:#7dd3fc">{{ t }}</code>{% endfor %}
+                  {% for t in ['oc', 'kubectl', 'curl', 'jq', 'bash', 'grep'] %}<code style="background:var(--surface-1);border:1px solid var(--border-strong);padding:2px 7px;border-radius:4px;font-size:11px;color:var(--info)">{{ t }}</code>{% endfor %}
                 </div>
               </div>
             </button>
 
-            <button type="button" class="qs-type-btn" style="text-align:left;padding:16px 18px;display:flex;gap:14px;align-items:flex-start;border-color:#5a420f"
+            <button type="button" class="qs-type-btn" style="text-align:left;padding:16px 18px;display:flex;gap:14px;align-items:flex-start;border-color:var(--warning-border)"
                     onclick="pickEnv('custom')" id="env-btn-custom">
               <div style="font-size:28px;flex-shrink:0">🛠️</div>
               <div style="flex:1">
-                <div style="font-weight:800;font-size:14px;color:white;margin-bottom:4px">Własne narzędzia</div>
+                <div style="font-weight:800;font-size:14px;color:var(--text-strong);margin-bottom:4px">Własne narzędzia</div>
                 <div style="color:var(--muted);font-size:12px;margin-bottom:8px">Potrzebujesz psql, terraform, awscli lub innych? Platforma zbuduje obraz z tymi narzędziami.</div>
                 <div style="display:flex;flex-wrap:wrap;gap:5px">
-                  {% for t in ['psql', 'terraform', 'awscli', 'python3', 'node', 'git', '...'] %}<code style="background:#1a1000;border:1px solid #3a2a00;padding:2px 7px;border-radius:4px;font-size:11px;color:#f4c163">{{ t }}</code>{% endfor %}
+                  {% for t in ['psql', 'terraform', 'awscli', 'python3', 'node', 'git', '...'] %}<code style="background:var(--warning-bg);border:1px solid var(--warning-border);padding:2px 7px;border-radius:4px;font-size:11px;color:var(--warning)">{{ t }}</code>{% endfor %}
                 </div>
               </div>
             </button>
           </div>
 
           <!-- Custom env builder (hidden until custom chosen) -->
-          <div id="custom-build-box" style="display:none;margin-top:14px;background:#0d1a0a;border:1px solid #2a4a1a;border-radius:10px;padding:18px">
-            <div style="font-weight:800;color:#5ce89a;margin-bottom:12px;font-size:14px">🛠️ Zbuduj własne środowisko</div>
+          <div id="custom-build-box" style="display:none;margin-top:14px;background:var(--success-bg);border:1px solid var(--success-border);border-radius:10px;padding:18px">
+            <div style="font-weight:800;color:var(--success);margin-bottom:12px;font-size:14px">🛠️ Zbuduj własne środowisko</div>
             <div style="margin-bottom:12px">
               <div class="qs-field" style="margin:0 0 10px">
                 <label>Baza obrazu (FROM)</label>
@@ -153,7 +153,7 @@
                   <option value="__custom__">⌨️ Inny — wpisz ręcznie (zaawansowane)</option>
                 </select>
                 <input id="build-base-custom" placeholder="musi zawierać serwer MCP (zbudowany na bazie mcp-runtime-shell lub http-gateway)" style="display:none;font-size:13px;margin-top:6px">
-                <div id="base-hint" class="hint" style="margin-top:4px;color:#7dd3fc">
+                <div id="base-hint" class="hint" style="margin-top:4px;color:var(--info)">
                   ✅ Zawiera: <b>oc, kubectl, curl, jq</b> + Python 3.12 (Debian Slim) — dodasz tylko brakujące narzędzia
                 </div>
               </div>
@@ -177,11 +177,11 @@
                   <option value="iputils-ping netcat-openbsd">iputils-ping netcat-openbsd — diagnostyka sieci</option>
                   <option value="unzip wget">unzip wget — pobieranie plików</option>
                 </datalist>
-                <div style="margin-top:6px;background:#0a1000;border:1px solid #2a3a0a;border-radius:6px;padding:8px 10px;font-size:11px">
-                  ⚠️ <b style="color:#f4c163">Uwaga na nazwy!</b> Baza to <b>Debian</b> — używaj Debianowych nazw:<br>
-                  <span style="color:#f47a80">❌ postgres-client</span> → <span style="color:#5ce89a">✅ postgresql-client</span><br>
-                  <span style="color:#f47a80">❌ python3.12</span> → <span style="color:#5ce89a">✅ python3</span><br>
-                  <span style="color:#f47a80">❌ terraform</span> → <span style="color:#5ce89a">✅ terraform (wymaga dodatkowego repo)</span>
+                <div style="margin-top:6px;background:var(--surface-0);border:1px solid var(--success-border);border-radius:6px;padding:8px 10px;font-size:11px">
+                  ⚠️ <b style="color:var(--warning)">Uwaga na nazwy!</b> Baza to <b>Debian</b> — używaj Debianowych nazw:<br>
+                  <span style="color:var(--danger)">❌ postgres-client</span> → <span style="color:var(--success)">✅ postgresql-client</span><br>
+                  <span style="color:var(--danger)">❌ python3.12</span> → <span style="color:var(--success)">✅ python3</span><br>
+                  <span style="color:var(--danger)">❌ terraform</span> → <span style="color:var(--success)">✅ terraform (wymaga dodatkowego repo)</span>
                 </div>
               </div>
               <div class="qs-field" style="margin:0">
@@ -190,14 +190,14 @@
               </div>
             </div>
             <button type="button" id="build-btn" onclick="startBuild()"
-                    style="background:#1a7a3f;color:white;border:none;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
+                    style="background:var(--success-solid);color:var(--text-strong);border:none;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
               🔨 Zbuduj środowisko (2-5 min)
             </button>
             <div id="build-progress" style="display:none;margin-top:12px">
               <div style="display:flex;align-items:center;gap:10px">
                 <div id="build-spinner" style="font-size:20px">⏳</div>
                 <div>
-                  <div style="font-weight:700;font-size:13px;color:white" id="build-status-text">Budowanie obrazu...</div>
+                  <div style="font-weight:700;font-size:13px;color:var(--text-strong)" id="build-status-text">Budowanie obrazu...</div>
                   <div style="color:var(--muted);font-size:12px">Platforma buduje Docker image z Twoimi narzędziami. Możesz czekać lub wrócić później.</div>
                 </div>
               </div>
@@ -207,14 +207,14 @@
 
         <div id="shell-s1" style="display:none">
           <button type="button" class="qs-back" onclick="document.getElementById('shell-s0').style.display='';document.getElementById('shell-s1').style.display='none'">← Zmień środowisko</button>
-          <div id="env-badge" style="margin-bottom:14px;padding:8px 12px;background:#0a1a0a;border:1px solid #1a4a1a;border-radius:8px;font-size:12px;color:#5ce89a">
+          <div id="env-badge" style="margin-bottom:14px;padding:8px 12px;background:var(--success-bg);border:1px solid var(--success-border);border-radius:8px;font-size:12px;color:var(--success)">
             ✅ Środowisko wybrane — dostępne narzędzia pokazane powyżej
           </div>
           <h2>Komenda</h2>
           <div class="sub">AI będzie wykonywać tę komendę w izolowanym kontenerze.</div>
 
           <div style="margin-bottom:14px">
-            <div style="font-size:12px;font-weight:700;color:#7ab8d8;margin-bottom:8px">⚡ Gotowe wzorce — kliknij żeby wstawić:</div>
+            <div style="font-size:12px;font-weight:700;color:var(--info);margin-bottom:8px">⚡ Gotowe wzorce — kliknij żeby wstawić:</div>
             <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px">
               <span style="font-size:11px;color:var(--muted);align-self:center;margin-right:4px">Specyficzne:</span>
               <button type="button" class="preset-btn" onclick="setCmd('curl -s -L --max-time 30 ${url}','Wykonaj GET na podanym URL')">🌐 curl GET</button>
@@ -223,26 +223,26 @@
               <button type="button" class="preset-btn" onclick="setCmd('oc logs ${pod} -n ${namespace} --tail ${lines}','Pobierz logi z poda OC')">🔴 oc logs</button>
             </div>
             <div style="display:flex;flex-wrap:wrap;gap:7px">
-              <span style="font-size:11px;color:#f4c163;align-self:center;margin-right:4px">Pełny dostęp:</span>
-              <button type="button" class="preset-btn" style="border-color:#5a420f;color:#f4c163"
+              <span style="font-size:11px;color:var(--warning);align-self:center;margin-right:4px">Pełny dostęp:</span>
+              <button type="button" class="preset-btn" style="border-color:var(--warning-border);color:var(--warning)"
                       onclick="setCmd('curl ${*args}','Wykonaj dowolną komendę curl — AI podaje wszystkie argumenty');setPrefix('curl')">
                 🌐 curl (wszystko)
               </button>
-              <button type="button" class="preset-btn" style="border-color:#5a2020;color:#f47a80"
+              <button type="button" class="preset-btn" style="border-color:var(--danger-border);color:var(--danger)"
                       onclick="setCmd('oc get ${*args}','Wykonaj dowolne oc get — AI podaje zasoby i flagi');setPrefix('oc get')">
                 🔴 oc get (wszystko)
               </button>
-              <button type="button" class="preset-btn" style="border-color:#5a2020;color:#f47a80"
+              <button type="button" class="preset-btn" style="border-color:var(--danger-border);color:var(--danger)"
                       onclick="setCmd('kubectl get ${*args}','Wykonaj dowolne kubectl get — AI podaje zasoby i flagi');setPrefix('kubectl get')">
                 ☸️ kubectl get (wszystko)
               </button>
-              <button type="button" class="preset-btn" style="border-color:#5a2020;color:#f47a80"
+              <button type="button" class="preset-btn" style="border-color:var(--danger-border);color:var(--danger)"
                       onclick="setCmd('kubectl ${*args}','Pełny dostęp do kubectl — ustaw denylist w kroku bezpieczeństwa!');setPrefix('')">
                 ☸️ kubectl (pełny)
               </button>
             </div>
             <div style="margin-top:8px;font-size:11px;color:var(--muted)">
-              💡 <b style="color:#f4c163">${{ '{' }}*args}</b> = AI podaje <b>wszystkie argumenty naraz</b> (np. <code>pods -n production -o json</code>) — skonfiguruj denylist w następnym kroku
+              💡 <b style="color:var(--warning)">${{ '{' }}*args}</b> = AI podaje <b>wszystkie argumenty naraz</b> (np. <code>pods -n production -o json</code>) — skonfiguruj denylist w następnym kroku
             </div>
           </div>
 
@@ -258,7 +258,7 @@
             <label>Co robi ta komenda? (opis dla AI)</label>
             <input name="desc" id="shell-desc-input" placeholder="Pobiera zasoby OpenShift">
           </div>
-          <button type="button" class="qs-big-btn" style="background:#263548;color:white;margin-top:4px"
+          <button type="button" class="qs-big-btn" style="background:var(--surface-3);color:var(--text-strong);margin-top:4px"
                   onclick="goShellSec()">
             Dalej → Ustawienia dostępu 🔒
           </button>
@@ -296,9 +296,9 @@
             </div>
           </div>
 
-          <div style="background:#0d1822;border:1px solid #1a3a50;border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:12px">
-            <b style="color:#7dd3fc">Podgląd konfiguracji zabezpieczeń:</b>
-            <pre id="sec-preview" style="margin-top:6px;font-size:11px;max-height:80px;border:none;background:transparent;padding:0;color:#8ea2b8"></pre>
+          <div style="background:var(--surface-1);border:1px solid var(--border-strong);border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:12px">
+            <b style="color:var(--info)">Podgląd konfiguracji zabezpieczeń:</b>
+            <pre id="sec-preview" style="margin-top:6px;font-size:11px;max-height:80px;border:none;background:transparent;padding:0;color:var(--text-soft)"></pre>
           </div>
 
           <div style="padding-top:18px;border-top:1px solid var(--line);margin-top:6px">
@@ -308,7 +308,7 @@
                      oninput="syncShellName(this.value)">
               <div class="hint">Dowolna nazwa — pojawi się w Continue i OpenWebUI</div>
             </div>
-            <button type="button" class="qs-big-btn" style="background:#1a7a3f" onclick="launchShell()">
+            <button type="button" class="qs-big-btn" style="background:var(--success-solid)" onclick="launchShell()">
               🚀 Stwórz i uruchom serwer MCP
             </button>
           </div>
@@ -317,11 +317,11 @@
 
 <style>
 .preset-btn {
-  background:#0d1822; border:1px solid #2a3a4a; border-radius:6px;
-  padding:5px 10px; font-size:12px; font-weight:600; color:#b0c8e0;
+  background:var(--surface-1); border:1px solid var(--border-strong); border-radius:6px;
+  padding:5px 10px; font-size:12px; font-weight:600; color:var(--text-soft);
   cursor:pointer; transition:.12s; white-space:nowrap;
 }
-.preset-btn:hover { background:#0d2a40; border-color:var(--blue); color:white; transform:none; }
+.preset-btn:hover { background:var(--primary-bg); border-color:var(--blue); color:var(--text-strong); transform:none; }
 </style>
 <script>
 function setCmd(cmd, desc) {
@@ -381,27 +381,27 @@ document.addEventListener('input', function(e) {
             <div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
               <div style="display:flex;align-items:center;gap:8px">
                 <span style="font-size:18px">{{ category_icon }}</span>
-                <div style="font-weight:800;font-size:14px;color:white">{{ p['name'] }}</div>
+                <div style="font-weight:800;font-size:14px;color:var(--text-strong)">{{ p['name'] }}</div>
               </div>
               <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-                <span style="background:#0d1822;border:1px solid {{ risk_color }};color:{{ risk_color }};padding:2px 7px;border-radius:999px;font-size:10px;font-weight:700">{{ risk }}</span>
+                <span style="background:var(--surface-1);border:1px solid {{ risk_color }};color:{{ risk_color }};padding:2px 7px;border-radius:999px;font-size:10px;font-weight:700">{{ risk }}</span>
                 <span class="qs-pkg-chevron" style="color:var(--muted);font-size:12px;transition:.2s">▼</span>
               </div>
             </div>
             <div style="color:var(--muted);font-size:12px;margin-top:4px;margin-left:26px">{{ p['description'][:120] }}</div>
             <div class="qs-pkg-details" style="display:none;margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-                <div style="background:#0a1520;border:1px solid #1a3a50;border-radius:8px;padding:10px 12px">
+                <div style="background:var(--surface-1);border:1px solid var(--border-strong);border-radius:8px;padding:10px 12px">
                   <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:4px">Obraz Docker</div>
-                  <div style="font-size:12px;color:#7dd3fc;font-family:monospace;word-break:break-all">{{ image }}</div>
+                  <div style="font-size:12px;color:var(--info);font-family:monospace;word-break:break-all">{{ image }}</div>
                 </div>
-                <div style="background:#0a1520;border:1px solid #1a3a50;border-radius:8px;padding:10px 12px">
+                <div style="background:var(--surface-1);border:1px solid var(--border-strong);border-radius:8px;padding:10px 12px">
                   <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:4px">Narzędzia</div>
-                  <div style="font-size:13px;color:white;font-weight:700">{{ len(tools) }} tool{% if len(tools) != 1 %}s{% endif %}</div>
+                  <div style="font-size:13px;color:var(--text-strong);font-weight:700">{{ len(tools) }} tool{% if len(tools) != 1 %}s{% endif %}</div>
                 </div>
               </div>
-              <div style="font-size:11px;font-weight:700;color:#aac8e0;margin-bottom:6px;text-transform:uppercase">Tools w tej paczce:</div>
-              <div style="max-height:200px;overflow-y:auto;border:1px solid #1a2a3a;border-radius:8px;padding:6px 10px">{% for t, cmd in tools[:8] %}<div style="padding:7px 0;border-bottom:1px solid #1a2a3a"><div style="display:flex;align-items:center;gap:6px"><span style="color:#5ce89a;font-size:11px;flex-shrink:0">▸</span><div style="font-weight:700;font-size:12px;color:#d0e8ff">{{ t.get('name', '?') }}</div></div><div style="font-size:11px;color:var(--muted);line-height:1.4;margin-left:16px">{{ (t.get('description') or '')[:120] }}</div>{% if cmd %}<div style="margin-top:3px;font-family:monospace;font-size:11px;color:#f4c163;background:#1a1000;border:1px solid #3a2800;border-radius:4px;padding:2px 6px;word-break:break-all">{{ cmd[:180] }}</div>{% endif %}</div>{% else %}<div style="color:var(--muted);font-size:12px">Brak zdefiniowanych tools</div>{% endfor %}{% if len(tools) > 8 %}<div style="font-size:11px;color:var(--muted);margin-top:4px">+ {{ len(tools) - 8 }} więcej...</div>{% endif %}</div>
+              <div style="font-size:11px;font-weight:700;color:var(--text-soft);margin-bottom:6px;text-transform:uppercase">Tools w tej paczce:</div>
+              <div style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px 10px">{% for t, cmd in tools[:8] %}<div style="padding:7px 0;border-bottom:1px solid var(--border)"><div style="display:flex;align-items:center;gap:6px"><span style="color:var(--success);font-size:11px;flex-shrink:0">▸</span><div style="font-weight:700;font-size:12px;color:var(--info)">{{ t.get('name', '?') }}</div></div><div style="font-size:11px;color:var(--muted);line-height:1.4;margin-left:16px">{{ (t.get('description') or '')[:120] }}</div>{% if cmd %}<div style="margin-top:3px;font-family:monospace;font-size:11px;color:var(--warning);background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:4px;padding:2px 6px;word-break:break-all">{{ cmd[:180] }}</div>{% endif %}</div>{% else %}<div style="color:var(--muted);font-size:12px">Brak zdefiniowanych tools</div>{% endfor %}{% if len(tools) > 8 %}<div style="font-size:11px;color:var(--muted);margin-top:4px">+ {{ len(tools) - 8 }} więcej...</div>{% endif %}</div>
             </div>
           </div>
         </div>{% endfor %}
@@ -413,40 +413,40 @@ document.addEventListener('input', function(e) {
         <div class="sub">Wklej JSON, podaj URL (GitHub raw, własny serwer) lub wgraj plik — platforma zainstaluje paczkę i uruchomi serwer.</div>
 
         <!-- ⚠️ Ważna informacja: co można, a czego nie można importować -->
-        <div style="border-radius:10px;overflow:hidden;margin-bottom:16px;border:1px solid #2a3a4a">
+        <div style="border-radius:10px;overflow:hidden;margin-bottom:16px;border:1px solid var(--border-strong)">
 
-          <div style="background:#0d1e2e;padding:12px 16px;border-bottom:1px solid #1a3a50;font-weight:800;font-size:13px;color:#7dd3fc">
+          <div style="background:var(--surface-2);padding:12px 16px;border-bottom:1px solid var(--border-strong);font-weight:800;font-size:13px;color:var(--info)">
             ❓ Co mogę tutaj zaimportować?
           </div>
 
           <!-- ✅ Co działa -->
-          <div style="background:#0a1e10;border-bottom:1px solid #1a3a20;padding:12px 16px">
-            <div style="font-weight:700;color:#5ce89a;font-size:13px;margin-bottom:8px">✅ Działa — Platform Package JSON</div>
-            <div style="color:#a0c8a8;font-size:12px;line-height:1.8">
+          <div style="background:var(--success-bg);border-bottom:1px solid var(--success-border);padding:12px 16px">
+            <div style="font-weight:700;color:var(--success);font-size:13px;margin-bottom:8px">✅ Działa — Platform Package JSON</div>
+            <div style="color:var(--success);font-size:12px;line-height:1.8">
               Plik JSON opisujący <b>tools do uruchomienia wewnątrz platformy</b> — stworzony przez Package Generator, wyeksportowany z innego serwera lub pobrany z repo który ma taki plik.
               <br>Poznasz go po polach: <code>"tools"</code>, <code>"runtime_class"</code>, <code>"policy"</code>
             </div>
           </div>
 
           <!-- ❌ Co nie działa — repo z kodem -->
-          <div style="background:#1e0a0a;border-bottom:1px solid #3a1a1a;padding:12px 16px">
-            <div style="font-weight:700;color:#f47a80;font-size:13px;margin-bottom:8px">❌ Nie działa — repo z kodem aplikacji</div>
-            <div style="color:#c8a0a0;font-size:12px;line-height:1.8">
+          <div style="background:var(--danger-bg);border-bottom:1px solid var(--danger-border);padding:12px 16px">
+            <div style="font-weight:700;color:var(--danger);font-size:13px;margin-bottom:8px">❌ Nie działa — repo z kodem aplikacji</div>
+            <div style="color:var(--danger);font-size:12px;line-height:1.8">
               Repo GitHub z kodem C#, Python, Node.js itp. (<b>np. ustabar/sql-mcp</b>) to gotowa aplikacja serwera MCP —
               nie plik konfiguracji. Platforma nie kompiluje ani nie uruchamia obcego kodu bezpośrednio.
             </div>
             <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
-              <a href="/external-mcp" style="display:flex;align-items:flex-start;gap:8px;background:#0d1822;border:1px solid #2a3a4a;border-radius:8px;padding:10px 12px;text-decoration:none">
+              <a href="/external-mcp" style="display:flex;align-items:flex-start;gap:8px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:8px;padding:10px 12px;text-decoration:none">
                 <span style="font-size:18px;flex-shrink:0">🔗</span>
                 <div>
-                  <div style="font-weight:700;color:white;font-size:12px">Zewnętrzne MCP</div>
+                  <div style="font-weight:700;color:var(--text-strong);font-size:12px">Zewnętrzne MCP</div>
                   <div style="color:var(--muted);font-size:11px;margin-top:2px">Serwer już gdzieś działa? Zarejestruj jego endpoint — platforma odkryje tools i będzie go monitorować.</div>
                 </div>
               </a>
-              <a href="/tool-packages" style="display:flex;align-items:flex-start;gap:8px;background:#0d1822;border:1px solid #2a3a4a;border-radius:8px;padding:10px 12px;text-decoration:none">
+              <a href="/tool-packages" style="display:flex;align-items:flex-start;gap:8px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:8px;padding:10px 12px;text-decoration:none">
                 <span style="font-size:18px;flex-shrink:0">🏗️</span>
                 <div>
-                  <div style="font-weight:700;color:white;font-size:12px">Runtime Image Builder</div>
+                  <div style="font-weight:700;color:var(--text-strong);font-size:12px">Runtime Image Builder</div>
                   <div style="color:var(--muted);font-size:11px;margin-top:2px">Repo ma Dockerfile? Zbuduj custom obraz i uruchom go jako kontener w platformie.</div>
                 </div>
               </a>
@@ -458,50 +458,50 @@ document.addEventListener('input', function(e) {
         <div style="display:grid;gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:14px">
 
           <!-- Tab: URL -->
-          <label style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);cursor:pointer;background:#0d1822"
+          <label style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);cursor:pointer;background:var(--surface-1)"
                  onclick="switchImportTab('url')">
             <input type="radio" name="import_source" value="url" id="isrc-url" style="width:auto;flex-shrink:0" checked>
             <div>
-              <div style="font-weight:700;font-size:13px;color:white">🔗 Z URL (GitHub, własny serwer)</div>
+              <div style="font-weight:700;font-size:13px;color:var(--text-strong)">🔗 Z URL (GitHub, własny serwer)</div>
               <div class="hint" style="margin:0">np. <code>https://raw.githubusercontent.com/org/repo/main/mcp-package.json</code></div>
             </div>
           </label>
-          <div id="itab-url" style="padding:14px 16px;border-bottom:1px solid var(--line);background:#0b1420">
+          <div id="itab-url" style="padding:14px 16px;border-bottom:1px solid var(--line);background:var(--surface-1)">
             <input name="import_url" id="import-url-input" placeholder="https://raw.githubusercontent.com/.../.../mcp-package.json"
                    style="font-size:13px">
             <div class="hint">GitHub: otwórz plik JSON → kliknij Raw → skopiuj URL</div>
           </div>
 
           <!-- Tab: Paste -->
-          <label style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);cursor:pointer;background:#0d1822"
+          <label style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);cursor:pointer;background:var(--surface-1)"
                  onclick="switchImportTab('paste')">
             <input type="radio" name="import_source" value="paste" id="isrc-paste" style="width:auto;flex-shrink:0">
             <div>
-              <div style="font-weight:700;font-size:13px;color:white">📋 Wklej JSON</div>
+              <div style="font-weight:700;font-size:13px;color:var(--text-strong)">📋 Wklej JSON</div>
               <div class="hint" style="margin:0">Skopiuj zawartość pliku JSON i wklej tutaj</div>
             </div>
           </label>
-          <div id="itab-paste" style="padding:14px 16px;border-bottom:1px solid var(--line);background:#0b1420;display:none">
+          <div id="itab-paste" style="padding:14px 16px;border-bottom:1px solid var(--line);background:var(--surface-1);display:none">
             <textarea name="import_json" id="import-json-input" placeholder='{&#10;  "id": "my-mcp-server",&#10;  "name": "My MCP Server",&#10;  "tools": [...]&#10;}'
                       style="min-height:140px;font-family:monospace;font-size:12px"></textarea>
           </div>
 
           <!-- Tab: File -->
-          <label style="display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer;background:#0d1822"
+          <label style="display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer;background:var(--surface-1)"
                  onclick="switchImportTab('file')">
             <input type="radio" name="import_source" value="file" id="isrc-file" style="width:auto;flex-shrink:0">
             <div>
-              <div style="font-weight:700;font-size:13px;color:white">📂 Wgraj plik .json</div>
+              <div style="font-weight:700;font-size:13px;color:var(--text-strong)">📂 Wgraj plik .json</div>
               <div class="hint" style="margin:0">Wybierz plik z dysku — musi być w formacie Package JSON</div>
             </div>
           </label>
-          <div id="itab-file" style="padding:14px 16px;background:#0b1420;display:none">
+          <div id="itab-file" style="padding:14px 16px;background:var(--surface-1);display:none">
             <input type="file" name="import_file" id="import-file-input" accept=".json,application/json" style="font-size:13px">
           </div>
         </div>
 
-        <details style="background:#0b1a10;border:1px solid #1a3a20;border-radius:8px;padding:12px 14px">
-          <summary style="font-size:12px;color:#5a9a6a;list-style:none;cursor:pointer;font-weight:700">📄 Jak wygląda format Package JSON?</summary>
+        <details style="background:var(--success-bg);border:1px solid var(--success-border);border-radius:8px;padding:12px 14px">
+          <summary style="font-size:12px;color:var(--success);list-style:none;cursor:pointer;font-weight:700">📄 Jak wygląda format Package JSON?</summary>
           <div style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.7">
             Package JSON to plik definiujący kompletny serwer MCP. Możesz go dostać przez:<br>
             • <b>Eksport istniejącego serwera</b> → otwórz runtime → sekcja Lifecycle → "Eksportuj jako Package JSON"<br>
@@ -519,29 +519,29 @@ document.addEventListener('input', function(e) {
           <div class="hint">Dowolna nazwa — pojawi się w Continue i OpenWebUI</div>
         </div>
 
-        <details style="background:#0d1822;border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-top:4px">
-          <summary style="cursor:pointer;font-weight:700;font-size:13px;color:#7ab8d8;list-style:none">
+        <details style="background:var(--surface-1);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-top:4px">
+          <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--info);list-style:none">
             🔒 Ustawienia bezpieczeństwa <span style="color:var(--muted);font-weight:400">(domyślnie: maksymalne)</span>
           </summary>
           <div style="margin-top:14px;display:grid;gap:12px">
             <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer">
               <input type="checkbox" name="policy_read_only" value="1" checked style="width:auto;margin-top:2px;flex-shrink:0">
               <div>
-                <div style="font-weight:700;font-size:13px;color:white">🔒 Tylko odczyt</div>
+                <div style="font-weight:700;font-size:13px;color:var(--text-strong)">🔒 Tylko odczyt</div>
                 <div style="color:var(--muted);font-size:12px;margin-top:2px">Serwer może tylko czytać dane — nie może niczego modyfikować ani usuwać</div>
               </div>
             </label>
             <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer">
               <input type="checkbox" name="policy_block_write" value="1" checked style="width:auto;margin-top:2px;flex-shrink:0">
               <div>
-                <div style="font-weight:700;font-size:13px;color:white">🚫 Blokuj zapis</div>
+                <div style="font-weight:700;font-size:13px;color:var(--text-strong)">🚫 Blokuj zapis</div>
                 <div style="color:var(--muted);font-size:12px;margin-top:2px">Dodatkowa warstwa blokująca operacje zapisu na poziomie policy</div>
               </div>
             </label>
             <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer">
               <input type="checkbox" name="policy_block_destructive" value="1" checked style="width:auto;margin-top:2px;flex-shrink:0">
               <div>
-                <div style="font-weight:700;font-size:13px;color:white">⛔ Blokuj operacje destruktywne</div>
+                <div style="font-weight:700;font-size:13px;color:var(--text-strong)">⛔ Blokuj operacje destruktywne</div>
                 <div style="color:var(--muted);font-size:12px;margin-top:2px">Zapobiega usuwaniu danych, resetowaniu konfiguracji, drop/truncate</div>
               </div>
             </label>
@@ -557,9 +557,9 @@ document.addEventListener('input', function(e) {
                 <div class="hint">Maks. rozmiar danych które AI dostanie</div>
               </div>
             </div>
-            <div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:6px;padding:10px 12px;margin-top:4px">
-              <div style="color:#4ac86a;font-size:12px;font-weight:700;margin-bottom:4px">🛡️ Zawsze aktywne (nie można wyłączyć):</div>
-              <div style="color:#7ab890;font-size:12px;line-height:1.7">
+            <div style="background:var(--success-bg);border:1px solid var(--success-border);border-radius:6px;padding:10px 12px;margin-top:4px">
+              <div style="color:var(--success);font-size:12px;font-weight:700;margin-bottom:4px">🛡️ Zawsze aktywne (nie można wyłączyć):</div>
+              <div style="color:var(--success);font-size:12px;line-height:1.7">
                 ✅ Kontener bez roota (user 1000:1000)<br>
                 ✅ Read-only filesystem<br>
                 ✅ Brak uprawnień systemowych (cap_drop: ALL)<br>
@@ -572,14 +572,14 @@ document.addEventListener('input', function(e) {
         </details>
 
         <!-- ENV vars -->
-        <details style="background:#1a1200;border:1px solid #3a2800;border-radius:8px;padding:14px 16px;margin-top:10px" id="qs-env-details">
-          <summary style="cursor:pointer;font-weight:700;font-size:13px;color:#d4a820;list-style:none">
+        <details style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:8px;padding:14px 16px;margin-top:10px" id="qs-env-details">
+          <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--warning);list-style:none">
             🔑 Zmienne środowiskowe ENV <span style="color:var(--muted);font-weight:400">(opcjonalne — tokeny, klucze API, hasła)</span>
           </summary>
           <div style="margin-top:12px">
-            <div style="font-size:12px;color:#a08020;margin-bottom:10px">Zmienne są wstrzykiwane do kontenera. Użyj dla tokenów API, kluczy SSH, URL baz danych.</div>
+            <div style="font-size:12px;color:var(--warning);margin-bottom:10px">Zmienne są wstrzykiwane do kontenera. Użyj dla tokenów API, kluczy SSH, URL baz danych.</div>
             <div id="qs-env-list" style="display:grid;gap:6px;margin-bottom:8px"></div>
-            <button type="button" onclick="qsAddEnv()" style="background:#0d1000;border:1px solid #3a2800;color:#d4a820;padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer">+ Dodaj zmienną ENV</button>
+            <button type="button" onclick="qsAddEnv()" style="background:var(--surface-0);border:1px solid var(--warning-border);color:var(--warning);padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer">+ Dodaj zmienną ENV</button>
           </div>
         </details>
       </div>
@@ -656,9 +656,9 @@ window.qsAddEnv = function() {
   var row = document.createElement('div');
   row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center';
   row.innerHTML =
-    '<input placeholder="NAZWA_ZMIENNEJ" name="env_key_' + i + '" style="padding:8px 10px;border:1px solid #3a2800;border-radius:6px;background:#0d1000;color:var(--text);font-size:12px;font-family:monospace;width:100%;box-sizing:border-box">' +
-    '<input type="password" placeholder="wartość / token" name="env_val_' + i + '" style="padding:8px 10px;border:1px solid #3a2800;border-radius:6px;background:#0d1000;color:var(--text);font-size:12px;width:100%;box-sizing:border-box">' +
-    '<button type="button" onclick="this.parentNode.remove()" style="background:#3a1010;border:1px solid #6a2020;color:#f47a80;padding:6px 10px;border-radius:6px;font-size:12px;cursor:pointer;flex-shrink:0">✕</button>';
+    '<input placeholder="NAZWA_ZMIENNEJ" name="env_key_' + i + '" style="padding:8px 10px;border:1px solid var(--warning-border);border-radius:6px;background:var(--surface-0);color:var(--text);font-size:12px;font-family:monospace;width:100%;box-sizing:border-box">' +
+    '<input type="password" placeholder="wartość / token" name="env_val_' + i + '" style="padding:8px 10px;border:1px solid var(--warning-border);border-radius:6px;background:var(--surface-0);color:var(--text);font-size:12px;width:100%;box-sizing:border-box">' +
+    '<button type="button" onclick="this.parentNode.remove()" style="background:var(--danger-bg);border:1px solid var(--danger-border);color:var(--danger);padding:6px 10px;border-radius:6px;font-size:12px;cursor:pointer;flex-shrink:0">✕</button>';
   document.getElementById('qs-env-list').appendChild(row);
   document.getElementById('qs-env-details').open = true;
 };
@@ -723,17 +723,17 @@ window.startBuild = function() {
           var errMsg = d.error || 'nieznany błąd';
           var hint = '';
           if (errMsg.indexOf('non-zero code: 100') !== -1 || errMsg.indexOf('Unable to locate package') !== -1) {
-            hint = '<br><br>💡 <b>Błąd 100 = paczka nie istnieje w Debian APT.</b><br>Sprawdź nazwę — np. <code>postgres-client</code> ❌ → <code>postgresql-client</code> ✅<br>Szukaj na <a href="https://packages.debian.org" target="_blank" style="color:#7dd3fc">packages.debian.org</a>';
+            hint = '<br><br>💡 <b>Błąd 100 = paczka nie istnieje w Debian APT.</b><br>Sprawdź nazwę — np. <code>postgres-client</code> ❌ → <code>postgresql-client</code> ✅<br>Szukaj na <a href="https://packages.debian.org" target="_blank" style="color:var(--info)">packages.debian.org</a>';
           } else if (errMsg.indexOf('non-zero code: 1') !== -1) {
-            hint = '<br><br>💡 Sprawdź nazwy pakietów na <a href="https://packages.debian.org" target="_blank" style="color:#7dd3fc">packages.debian.org</a>';
+            hint = '<br><br>💡 Sprawdź nazwy pakietów na <a href="https://packages.debian.org" target="_blank" style="color:var(--info)">packages.debian.org</a>';
           }
           document.getElementById('build-progress').innerHTML =
-            '<div style="background:#2a0a0a;border:2px solid #8a2020;border-radius:8px;padding:14px 16px">' +
-            '<div style="font-weight:800;color:#f47a80;font-size:14px;margin-bottom:8px">❌ Budowanie nie powiodło się</div>' +
-            '<code style="font-size:11px;color:#f4c163;word-break:break-all;line-height:1.6">' + errMsg.slice(0, 300) + '</code>' +
+            '<div style="background:var(--danger-bg);border:2px solid var(--danger-border);border-radius:8px;padding:14px 16px">' +
+            '<div style="font-weight:800;color:var(--danger);font-size:14px;margin-bottom:8px">❌ Budowanie nie powiodło się</div>' +
+            '<code style="font-size:11px;color:var(--warning);word-break:break-all;line-height:1.6">' + errMsg.slice(0, 300) + '</code>' +
             hint +
             '<br><br><button type="button" onclick="qsBuildReset()" ' +
-            'style="background:#1a3a5a;border:none;color:white;padding:8px 14px;border-radius:6px;font-size:12px;cursor:pointer;margin-top:8px">← Popraw i spróbuj ponownie</button>' +
+            'style="background:var(--surface-3);border:none;color:var(--text-strong);padding:8px 14px;border-radius:6px;font-size:12px;cursor:pointer;margin-top:8px">← Popraw i spróbuj ponownie</button>' +
             '</div>';
           document.getElementById('build-btn').disabled = false;
         } else if (polls > 90) { clearInterval(t); document.getElementById('build-status-text').textContent = 'Timeout — sprawdź logi w Paczki tools.'; }

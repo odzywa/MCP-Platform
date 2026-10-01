@@ -18,7 +18,7 @@
   <table style="margin:14px 0">
     <tr><th style="width:170px">Serwer MCP</th><td><a href="/runtimes/{{ req['runtime_id'] }}">{{ runtime_name }}</a></td></tr>
     <tr><th>Narzędzie</th><td><b style="color:var(--blue)">{{ req['tool_name'] }}</b> <span class="risk {% if req['mode'] in ('write', 'destructive') %}{{ req['mode'] }}{% else %}low{% endif %}" style="font-size:11px;margin-left:6px">{{ req['mode'] }}</span></td></tr>
-    {% if command %}<tr><th>Komenda</th><td><pre style="margin:0;white-space:pre-wrap;word-break:break-all;color:#f0b429">{{ command }}</pre></td></tr>{% endif %}
+    {% if command %}<tr><th>Komenda</th><td><pre style="margin:0;white-space:pre-wrap;word-break:break-all;color:var(--warning)">{{ command }}</pre></td></tr>{% endif %}
     <tr><th>Argumenty</th><td><pre style="margin:0;font-size:12px;max-height:220px">{{ arguments }}</pre></td></tr>
     <tr><th>Zgłoszono</th><td class="muted">{{ req['created_at'][:19].replace('T', ' ') }}{% if req['caller_ip'] %} · IP {{ req['caller_ip'] }}{% endif %}{% if req['model'] %} · {{ req['model'] }}{% endif %}</td></tr>
   </table>
@@ -28,7 +28,7 @@
     <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
       <form method="post" action="/approve/{{ req['id'] }}">
         <input type="hidden" name="decision" value="approve">
-        <button style="background:#1a7a3f;padding:11px 22px;font-size:14px">✅ Zatwierdź wykonanie</button>
+        <button style="background:var(--success-solid);padding:11px 22px;font-size:14px">✅ Zatwierdź wykonanie</button>
       </form>
       <form method="post" action="/approve/{{ req['id'] }}" style="display:flex;gap:8px;align-items:flex-end">
         <input type="hidden" name="decision" value="reject">

@@ -789,6 +789,11 @@ user="1000:1000"</code></pre>
         <td>Klient MCP zgłasza obsługę elicitation</td>
       </tr>
       <tr>
+        <td><strong>Kod jednorazowy w czacie</strong></td>
+        <td>Użytkownik wpisuje w czacie 6-cyfrowy kod z aplikacji uwierzytelniającej (konfiguracja w Ustawieniach konta); AI wywołuje narzędzie ponownie z <code>approval_code</code>. Kod działa raz; komendę pokazuje wtedy model, nie platforma.</td>
+        <td>Pozostałe klienty, gdy ktoś ma włączoną aplikację i polityka na to pozwala</td>
+      </tr>
+      <tr>
         <td><strong>Link do zatwierdzenia</strong></td>
         <td>Narzędzie zwraca w czacie link do strony platformy. Zalogowany użytkownik (rola read_write lub admin) zatwierdza albo odrzuca; potem AI wywołuje narzędzie ponownie. Jedna zgoda = jedno wykonanie.</td>
         <td>Pozostałe klienty, m.in. OpenWebUI</td>

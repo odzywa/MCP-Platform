@@ -108,30 +108,43 @@ _PAGE_DESCRIPTIONS: dict[str, tuple[str, str]] = {
 }
 
 
-_NAV_TABS: list[tuple[str, str, str, str, str]] = [
-    # (key, label, href, description, minimal role)
-    ("dashboard",  "🏠  Dashboard",          "/",                "Przegląd stanu platformy — działające serwery, ostatnie operacje i logi", "read_only"),
-    ("quickstart", "⚡  Szybki start",         "/quick-start",     "Utwórz gotowy serwer MCP w 2 krokach — bez pisania kodu",                "read_write"),
-    ("create",     "🛠️  Kreator zaawansowany", "/create",          "Kreator krok po kroku z pełną kontrolą — wybór paczki, silnika, polityki","read_write"),
-    ("runtimes",   "🖥️  Moje serwery",         "/runtimes",        "Lista wszystkich serwerów MCP — status, endpointy, zarządzanie",          "read_only"),
-    ("external",   "🔗  Zewnętrzne MCP",       "/external-mcp",    "Rejestruj i monitoruj serwery MCP uruchomione poza platformą",            "read_only"),
-    ("webhooks",   "🔔  Webhooki",              "/webhooks",        "Powiadomienia gdy serwer padnie lub tool zwróci błąd",                     "admin"),
-    ("packages",   "🏗️  Build",                "/tool-packages",   "Wdrażaj serwery MCP z gotowych paczek, importuj własne paczki",           "read_only"),
-    ("adapters",   "⚙️  Silniki wykonania",    "/tool-types",      "Globalne typy egzekucji (http_request, shell…)",                          "admin"),
-    ("classes",    "🏗️  Typy środowisk",       "/runtime-classes", "Docker images i klasy runtime — definiują jakie binarki są dostępne",     "admin"),
-    ("images",     "🐳  Budowanie obrazów",    "/runtime-images",  "Własne obrazy: obraz bazowy + doinstalowane narzędzia",                    "admin"),
-    ("security",   "🔒  Bezpieczeństwo",       "/security",        "Przegląd polityk i hardening kontenerów",                                 "read_only"),
-    ("audit",      "🔍  Audit",                "/audit",           "Historia wszystkich operacji — deploy, stop, reload, błędy",               "read_only"),
-    ("logs",       "📋  Logi",                 "/logs",            "Logi runtimeów — informacje diagnostyczne i błędy kontenerów",            "read_only"),
-    ("admin",      "👥  Użytkownicy",           "/admin/users",     "Zarządzanie użytkownikami — role, rejestracje, hasła",                    "admin"),
-    ("docs",       "📖  Jak to działa?",       "/docs",            "Przewodnik po platformie dla użytkowników technicznych i nietech",         "read_only"),
+# Sidebar: (section title, [(key, label, icon, href, description, minimal role)]).
+# Icons are names from templates/partials/icons.html.
+_NAV_GROUPS: list[tuple[str, list[tuple[str, str, str, str, str, str]]]] = [
+    ("", [
+        ("dashboard",  "Dashboard",            "home",      "/",                "Przegląd stanu platformy — działające serwery, ostatnie operacje i logi", "read_only"),
+    ]),
+    ("Serwery MCP", [
+        ("quickstart", "Szybki start",         "zap",       "/quick-start",     "Utwórz gotowy serwer MCP w 2 krokach — bez pisania kodu",                "read_write"),
+        ("create",     "Kreator zaawansowany", "sliders",   "/create",          "Kreator krok po kroku z pełną kontrolą — wybór paczki, silnika, polityki", "read_write"),
+        ("runtimes",   "Moje serwery",         "server",    "/runtimes",        "Lista wszystkich serwerów MCP — status, endpointy, zarządzanie",          "read_only"),
+        ("external",   "Zewnętrzne MCP",       "link",      "/external-mcp",    "Rejestruj i monitoruj serwery MCP uruchomione poza platformą",            "read_only"),
+    ]),
+    ("Katalog", [
+        ("packages",   "Build",                "package",   "/tool-packages",   "Wdrażaj serwery MCP z gotowych paczek, importuj własne paczki",           "read_only"),
+        ("adapters",   "Silniki wykonania",    "cpu",       "/tool-types",      "Globalne typy egzekucji (http_request, shell…)",                          "admin"),
+        ("classes",    "Typy środowisk",       "layers",    "/runtime-classes", "Docker images i klasy runtime — definiują jakie binarki są dostępne",     "admin"),
+        ("images",     "Budowanie obrazów",    "boxes",     "/runtime-images",  "Własne obrazy: obraz bazowy + doinstalowane narzędzia",                   "admin"),
+    ]),
+    ("Nadzór", [
+        ("security",   "Bezpieczeństwo",       "shield",    "/security",        "Przegląd polityk i hardening kontenerów",                                 "read_only"),
+        ("audit",      "Audit",                "clipboard", "/audit",           "Historia wszystkich operacji — deploy, stop, reload, błędy",              "read_only"),
+        ("logs",       "Logi",                 "file",      "/logs",            "Logi runtimeów — informacje diagnostyczne i błędy kontenerów",            "read_only"),
+        ("webhooks",   "Webhooki",             "bell",      "/webhooks",        "Powiadomienia gdy serwer padnie lub tool zwróci błąd",                    "admin"),
+    ]),
+    ("Administracja", [
+        ("admin",      "Użytkownicy",          "users",     "/admin/users",     "Zarządzanie użytkownikami — role, rejestracje, hasła",                    "admin"),
+        ("docs",       "Jak to działa?",       "book",      "/docs",            "Przewodnik po platformie dla użytkowników technicznych i nietech",        "read_only"),
+    ]),
 ]
-
-
+_PAGE_TITLES = {"settings": ("Ustawienia konta", "Hasło i aplikacja uwierzytelniająca do zatwierdzania operacji")}
 _ROLE_ORDER = {"read_only": 0, "read_write": 1, "admin": 2}
-
-
-_ROLE_COLORS = {"admin": ("#c084fc", "#2a1040"), "read_write": ("#5ce89a", "#0e2e1e"), "read_only": ("#7a92a8", "#1e252e")}
+# role -> (text, background, border) CSS variables of the badge next to the user name
+_ROLE_COLORS = {
+    "admin": ("--purple", "--purple-bg", "--purple-border"),
+    "read_write": ("--success", "--success-bg", "--success-border"),
+    "read_only": ("--muted", "--surface-3", "--border-strong"),
+}
 
 
 _lang_js_cache: str = ""
@@ -154,25 +167,31 @@ def _shell_context(active: str) -> dict[str, Any]:
     user = current_user.get()
     role = (user or {}).get("role", "admin")
     user_level = _ROLE_ORDER.get(role, 2)
-    tabs = []
-    for key, label, href, desc, min_role in _NAV_TABS:
-        if _ROLE_ORDER.get(min_role, 0) > user_level:
-            continue
-        tabs.append({"key": key, "label": label, "href": href, "desc": desc})
-    page_title, page_sub = next(
-        ((t["label"].split("  ", 1)[-1].strip(), t["desc"]) for t in tabs if t["key"] == active), ("MCP Platform", "")
-    )
-    role_color, role_bg = _ROLE_COLORS.get(role, ("#7a92a8", "#1e252e"))
+    nav_groups = []
+    page_title, page_sub = _PAGE_TITLES.get(active, ("MCP Platform", ""))
+    for title, items in _NAV_GROUPS:
+        tabs = [
+            {"key": key, "label": label, "icon": icon, "href": href, "desc": desc}
+            for key, label, icon, href, desc, min_role in items
+            if _ROLE_ORDER.get(min_role, 0) <= user_level
+        ]
+        if tabs:
+            nav_groups.append({"title": title, "tabs": tabs})
+        for tab in tabs:
+            if tab["key"] == active:
+                # the long description (if any) explains the page better than the nav tooltip
+                page_title, page_sub = tab["label"], (_PAGE_DESCRIPTIONS.get(active) or ("", tab["desc"]))[1]
+    role_color, role_bg, role_border = _ROLE_COLORS.get(role, _ROLE_COLORS["read_only"])
     return {
         "active": active,
-        "tabs": tabs,
+        "nav_groups": nav_groups,
         "page_title": page_title,
         "page_sub": page_sub,
-        "description": _PAGE_DESCRIPTIONS.get(active),
         "username": (user or {}).get("username", ""),
         "role": role,
         "role_color": role_color,
         "role_bg": role_bg,
+        "role_border": role_border,
     }
 
 

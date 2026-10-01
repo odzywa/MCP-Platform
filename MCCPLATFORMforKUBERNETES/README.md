@@ -320,6 +320,14 @@ Two paths, chosen automatically:
      → once approved the command runs — one approval = one execution
 ```
 
+Clients without the dialog can also approve with a **one-time code** typed in the chat: each user
+enables an authenticator app (Google Authenticator, Authy, …) under *Account settings*; the tool then
+asks for the current 6-digit code and the agent re-calls it with `approval_code="<code>"`. Codes are
+accepted only from `read_write`/`admin` users, work once, and 5 wrong codes lock code approval for
+that runtime for 15 minutes (the link keeps working). Disable per runtime with policy
+`"approval_allow_code": false`. Note the difference: the dialog and the link page show the command
+straight from the server, while with a code the command is shown to the user by the model.
+
 An approval given through the link covers exactly that command (tool + arguments), requires a
 logged-in `read_write` or `admin` user and a form POST — opening the link or using the service API
 token (`X-API-Key`) approves nothing. Decisions are written to the audit log.

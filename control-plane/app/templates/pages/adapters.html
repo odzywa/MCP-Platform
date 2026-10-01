@@ -2,7 +2,7 @@
 {% block content %}{% macro adapter_toggle(adapter) %}{% if not adapter['implemented'] %}<button class="disabled" disabled title="This tool type is planned, but no runtime plugin exists yet.">Planned</button>{% else %}<form method="post" action="/api/adapters/{{ adapter['name'] }}/toggle"><button>{% if adapter['enabled'] %}Disable{% else %}Enable{% endif %}</button></form>{% endif %}{% endmacro %}
 
       {% if error %}<div class="alert">{{ error }}</div>{% endif %}
-      <div style="background:#0a1a2a;border:1px solid #1a3a50;border-radius:10px;padding:14px 18px;margin-bottom:4px;font-size:13px;color:#7ab8d8">
+      <div style="background:var(--surface-1);border:1px solid var(--border-strong);border-radius:10px;padding:14px 18px;margin-bottom:4px;font-size:13px;color:var(--info)">
         ℹ️ <b>To NIE jest miejsce do tworzenia tools</b> dla serwera MCP.
         Tutaj widoczne są globalne silniki platformy (http_request, shell…).
         Żeby dodać tool — użyj <a href="/tool-packages/generate">Package Generator</a> lub <a href="/quick-start">Szybkiego startu</a>.
@@ -14,7 +14,7 @@
             <div style="background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:16px 18px">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
                 <div style="flex:1">
-                  <div style="font-weight:800;font-size:14px;color:white">{{ icon }} {{ disp }}</div>
+                  <div style="font-weight:800;font-size:14px;color:var(--text-strong)">{{ icon }} {{ disp }}</div>
                   <div class="muted" style="font-size:12px;margin-top:3px">{{ item['description'] }}</div>
                   <div style="margin-top:6px;display:flex;gap:6px">
                     <span class="risk {{ item['risk_level'] }}" style="font-size:11px;padding:2px 7px">{{ item['risk_level'] }}</span>
@@ -24,7 +24,7 @@
                 </div>
                 <div style="display:flex;gap:8px;flex-shrink:0">
                   <button onclick="toggleAdapterEdit('{{ item['name'] }}')"
-                    style="background:#1a2a3a;border:1px solid #2a4a6a;color:#7dd3fc;padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer">
+                    style="background:var(--surface-2);border:1px solid var(--border-strong);color:var(--info);padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer">
                     ✏️ Edytuj
                   </button>
                   {{ adapter_toggle(item) }}
@@ -39,33 +39,33 @@
                 <form method="post" action="/api/adapters/{{ item['name'] }}/update">
                   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
                     <div>
-                      <label style="font-size:11px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Ryzyko</label>
-                      <select name="risk_level" style="width:100%;padding:8px 10px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:13px">
+                      <label style="font-size:11px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Ryzyko</label>
+                      <select name="risk_level" style="width:100%;padding:8px 10px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:13px">
                         <option {% if item['risk_level'] == 'low' %}selected{% endif %} value="low">niski (low)</option>
                         <option {% if item['risk_level'] == 'medium' %}selected{% endif %} value="medium">średni (medium)</option>
                         <option {% if item['risk_level'] == 'high' %}selected{% endif %} value="high">wysoki (high)</option>
                       </select>
                     </div>
                     <div>
-                      <label style="font-size:11px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Tryb</label>
-                      <select name="mode" style="width:100%;padding:8px 10px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:13px">
+                      <label style="font-size:11px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Tryb</label>
+                      <select name="mode" style="width:100%;padding:8px 10px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:13px">
                         <option {% if item['mode'] == 'read-only' %}selected{% endif %} value="read-only">read-only</option>
                         <option {% if item['mode'] == 'read-write' %}selected{% endif %} value="read-write">read-write</option>
                         <option {% if item['mode'] == 'write' %}selected{% endif %} value="write">write</option>
                       </select>
                     </div>
                     <div>
-                      <label style="font-size:11px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Obraz Docker</label>
-                      <input name="runtime_image" value="{{ item['runtime_image'] }}" style="width:100%;box-sizing:border-box;padding:8px 10px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:12px;font-family:monospace">
+                      <label style="font-size:11px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Obraz Docker</label>
+                      <input name="runtime_image" value="{{ item['runtime_image'] }}" style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:12px;font-family:monospace">
                     </div>
                   </div>
                   <div style="margin-bottom:10px">
-                    <label style="font-size:11px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Opis</label>
-                    <input name="description" value="{{ item['description'] }}" style="width:100%;box-sizing:border-box;padding:8px 10px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:13px">
+                    <label style="font-size:11px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Opis</label>
+                    <input name="description" value="{{ item['description'] }}" style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:13px">
                   </div>
                   <div style="display:flex;gap:8px">
-                    <button type="submit" style="background:var(--blue);border:none;color:white;padding:7px 16px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">💾 Zapisz</button>
-                    <button type="button" onclick="toggleAdapterEdit('{{ item['name'] }}')" style="background:#263548;border:none;color:#c9d7e6;padding:7px 12px;border-radius:6px;font-size:12px;cursor:pointer">Anuluj</button>
+                    <button type="submit" style="background:var(--blue);border:none;color:var(--text-strong);padding:7px 16px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">💾 Zapisz</button>
+                    <button type="button" onclick="toggleAdapterEdit('{{ item['name'] }}')" style="background:var(--surface-3);border:none;color:var(--text);padding:7px 12px;border-radius:6px;font-size:12px;cursor:pointer">Anuluj</button>
                   </div>
                 </form>
               </div>
@@ -73,24 +73,24 @@
       </section>
 
       {% if planned %}<section><h2>Planowane silniki</h2><div style="display:grid;gap:8px">{% for item in planned %}{% set disp = adapter_contract(item['name']).get('display_name') or item['name'] %}{% set icon = adapter_icons.get(item['name'], '⚙️') %}
-            <div style="background:#0b1420;border:1px solid #1e2d3d;border-radius:10px;padding:14px 18px">
+            <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:14px 18px">
               <div style="display:flex;gap:12px;align-items:center">
                 <span style="font-size:24px;opacity:.5">{{ icon }}</span>
                 <div style="flex:1;opacity:.7">
-                  <div style="font-weight:700;font-size:13px;color:#607083">{{ disp }}</div>
-                  <div style="color:#3d5268;font-size:12px;margin-top:2px">{{ (item['description'] or 'planowany — jeszcze nie zaimplementowany') }}</div>
+                  <div style="font-weight:700;font-size:13px;color:var(--muted)">{{ disp }}</div>
+                  <div style="color:var(--faint);font-size:12px;margin-top:2px">{{ (item['description'] or 'planowany — jeszcze nie zaimplementowany') }}</div>
                   <div style="margin-top:4px;display:flex;gap:6px">
                     <span class="risk {{ item['risk_level'] }}" style="font-size:10px;padding:2px 6px">{{ item['risk_level'] }}</span>
-                    <span style="background:#1e2d3d;color:#607083;padding:2px 7px;border-radius:999px;font-size:10px">planowany</span>
+                    <span style="background:var(--surface-3);color:var(--muted);padding:2px 7px;border-radius:999px;font-size:10px">planowany</span>
                   </div>
                 </div>
                 <div style="display:flex;gap:6px;flex-shrink:0">
                   <button onclick="toggleAdapterEdit('p-{{ item['name'] }}')"
-                    style="background:#1a2030;border:1px solid #2a3a50;color:#607083;padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer">
+                    style="background:var(--surface-2);border:1px solid var(--border-strong);color:var(--muted);padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer">
                     ✏️ Edytuj
                   </button>
                   <form method="post" action="/api/adapters/{{ item['name'] }}/toggle">
-                    <button style="background:#1a2a1a;border:1px solid #2a4a2a;color:#4a8a4a;padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer">✅ Aktywuj</button>
+                    <button style="background:var(--success-bg);border:1px solid var(--success-border);color:var(--success);padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer">✅ Aktywuj</button>
                   </form>
                   <form method="post" action="/api/adapters/{{ item['name'] }}/delete"
                         onsubmit="return confirm('Usunąć silnik {{ item['name'] }}?')">
@@ -99,36 +99,36 @@
                 </div>
               </div>
               <!-- Inline edit form for planned -->
-              <div id="edit-p-{{ item['name'] }}" style="display:none;margin-top:14px;border-top:1px solid #1e2d3d;padding-top:14px">
+              <div id="edit-p-{{ item['name'] }}" style="display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
                 <form method="post" action="/api/adapters/{{ item['name'] }}/update">
                   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
                     <div>
-                      <label style="font-size:11px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Ryzyko</label>
-                      <select name="risk_level" style="width:100%;padding:8px 10px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:13px">
+                      <label style="font-size:11px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Ryzyko</label>
+                      <select name="risk_level" style="width:100%;padding:8px 10px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:13px">
                         <option {% if item['risk_level'] == 'low' %}selected{% endif %} value="low">niski</option>
                         <option {% if item['risk_level'] == 'medium' %}selected{% endif %} value="medium">średni</option>
                         <option {% if item['risk_level'] == 'high' %}selected{% endif %} value="high">wysoki</option>
                       </select>
                     </div>
                     <div>
-                      <label style="font-size:11px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Tryb</label>
-                      <select name="mode" style="width:100%;padding:8px 10px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:13px">
+                      <label style="font-size:11px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Tryb</label>
+                      <select name="mode" style="width:100%;padding:8px 10px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:13px">
                         <option {% if item['mode'] == 'read-only' %}selected{% endif %} value="read-only">read-only</option>
                         <option {% if item['mode'] == 'read-write' %}selected{% endif %} value="read-write">read-write</option>
                       </select>
                     </div>
                     <div>
-                      <label style="font-size:11px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Obraz Docker</label>
-                      <input name="runtime_image" value="{{ item['runtime_image'] }}" style="width:100%;box-sizing:border-box;padding:8px 10px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:12px;font-family:monospace">
+                      <label style="font-size:11px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Obraz Docker</label>
+                      <input name="runtime_image" value="{{ item['runtime_image'] }}" style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:12px;font-family:monospace">
                     </div>
                   </div>
                   <div style="margin-bottom:10px">
-                    <label style="font-size:11px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Opis</label>
-                    <input name="description" value="{{ item['description'] }}" style="width:100%;box-sizing:border-box;padding:8px 10px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:13px">
+                    <label style="font-size:11px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Opis</label>
+                    <input name="description" value="{{ item['description'] }}" style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:13px">
                   </div>
                   <div style="display:flex;gap:8px">
-                    <button type="submit" style="background:var(--blue);border:none;color:white;padding:7px 16px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">💾 Zapisz</button>
-                    <button type="button" onclick="toggleAdapterEdit('p-{{ item['name'] }}')" style="background:#263548;border:none;color:#c9d7e6;padding:7px 12px;border-radius:6px;font-size:12px;cursor:pointer">Anuluj</button>
+                    <button type="submit" style="background:var(--blue);border:none;color:var(--text-strong);padding:7px 16px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">💾 Zapisz</button>
+                    <button type="button" onclick="toggleAdapterEdit('p-{{ item['name'] }}')" style="background:var(--surface-3);border:none;color:var(--text);padding:7px 12px;border-radius:6px;font-size:12px;cursor:pointer">Anuluj</button>
                   </div>
                 </form>
               </div>
@@ -143,20 +143,20 @@ function toggleAdapterEdit(name) {
 
       <section>
         <h2>➕ Dodaj nowy silnik</h2>
-        <div style="background:#0a1520;border:1px solid #1a3a50;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--muted)">
-          💡 <b style="color:white">Kiedy dodawać nowy silnik?</b> Gdy masz własny obraz Docker który implementuje protokół MCP lub chcesz zarejestrować nowy typ adaptera do użycia w pączkach. Zaznacz <b>Zaimplementowany</b> jeśli obraz już działa — wtedy silnik pojawi się w sekcji "Działające".
+        <div style="background:var(--surface-1);border:1px solid var(--border-strong);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--muted)">
+          💡 <b style="color:var(--text-strong)">Kiedy dodawać nowy silnik?</b> Gdy masz własny obraz Docker który implementuje protokół MCP lub chcesz zarejestrować nowy typ adaptera do użycia w pączkach. Zaznacz <b>Zaimplementowany</b> jeśli obraz już działa — wtedy silnik pojawi się w sekcji "Działające".
         </div>
         <div style="background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:20px 22px">
           <form method="post" action="/api/adapters">
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
               <div>
-                <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Nazwa (id)</label>
-                <input name="name" placeholder="my_adapter" style="width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:13px">
+                <label style="font-size:12px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Nazwa (id)</label>
+                <input name="name" placeholder="my_adapter" style="width:100%;box-sizing:border-box;padding:9px 11px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:13px">
                 <div style="font-size:11px;color:var(--muted);margin-top:3px">Małe litery, bez spacji</div>
               </div>
               <div>
-                <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Typ adaptera</label>
-                <select name="adapter_type" style="width:100%;padding:9px 11px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:13px">
+                <label style="font-size:12px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Typ adaptera</label>
+                <select name="adapter_type" style="width:100%;padding:9px 11px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:13px">
                   <option value="http">http — REST API</option>
                   <option value="shell">shell — komendy CLI</option>
                   <option value="python">python — skrypty Python</option>
@@ -166,8 +166,8 @@ function toggleAdapterEdit(name) {
                 </select>
               </div>
               <div>
-                <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Poziom ryzyka</label>
-                <select name="risk_level" style="width:100%;padding:9px 11px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:13px">
+                <label style="font-size:12px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Poziom ryzyka</label>
+                <select name="risk_level" style="width:100%;padding:9px 11px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:13px">
                   <option value="low">niski (low)</option>
                   <option value="medium">średni (medium)</option>
                   <option value="high">wysoki (high)</option>
@@ -176,34 +176,34 @@ function toggleAdapterEdit(name) {
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
               <div>
-                <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Opis</label>
-                <input name="description" placeholder="Opis działania silnika" style="width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:13px">
+                <label style="font-size:12px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Opis</label>
+                <input name="description" placeholder="Opis działania silnika" style="width:100%;box-sizing:border-box;padding:9px 11px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:13px">
               </div>
               <div>
-                <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Obraz Docker</label>
-                <input name="runtime_image" placeholder="mcp-runtime-shell:latest" style="width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:13px;font-family:monospace">
+                <label style="font-size:12px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Obraz Docker</label>
+                <input name="runtime_image" placeholder="mcp-runtime-shell:latest" style="width:100%;box-sizing:border-box;padding:9px 11px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:13px;font-family:monospace">
               </div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
               <div>
-                <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Tryb dostępu</label>
-                <select name="mode" style="width:100%;padding:9px 11px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:13px">
+                <label style="font-size:12px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Tryb dostępu</label>
+                <select name="mode" style="width:100%;padding:9px 11px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:13px">
                   <option value="read-only">read-only</option>
                   <option value="read-write">read-write</option>
                 </select>
               </div>
               <div>
-                <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:8px">Status</label>
-                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;background:#0d1822;border:1px solid var(--line);border-radius:8px;padding:10px 12px">
+                <label style="font-size:12px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:8px">Status</label>
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;background:var(--surface-1);border:1px solid var(--line);border-radius:8px;padding:10px 12px">
                   <input type="checkbox" name="implemented" value="1" style="width:16px;height:16px">
                   <div>
-                    <div style="font-weight:700;font-size:13px;color:white">✅ Zaimplementowany</div>
+                    <div style="font-weight:700;font-size:13px;color:var(--text-strong)">✅ Zaimplementowany</div>
                     <div style="font-size:11px;color:var(--muted)">Zaznacz jeśli obraz Docker już działa — silnik pojawi się w "Działające"</div>
                   </div>
                 </label>
               </div>
             </div>
-            <button type="submit" style="background:var(--blue);border:none;color:white;padding:10px 22px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">➕ Dodaj silnik</button>
+            <button type="submit" style="background:var(--blue);border:none;color:var(--text-strong);padding:10px 22px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">➕ Dodaj silnik</button>
           </form>
         </div>
       </section>

@@ -8,24 +8,24 @@
 .adv-step h2 { margin:0 0 6px; font-size:20px; font-weight:800; }
 .adv-step .sub { color:var(--muted); font-size:14px; margin-bottom:20px; }
 .adv-field { margin-bottom:14px; }
-.adv-field label { display:block; font-weight:700; font-size:13px; color:#aac8e0; margin-bottom:5px; }
-.adv-field input, .adv-field select, .adv-field textarea { width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #34465b; border-radius:6px; background:#0d1420; color:var(--text); font-size:14px; }
+.adv-field label { display:block; font-weight:700; font-size:13px; color:var(--text-soft); margin-bottom:5px; }
+.adv-field input, .adv-field select, .adv-field textarea { width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid var(--border-strong); border-radius:6px; background:var(--surface-1); color:var(--text); font-size:14px; }
 .adv-field .hint { color:var(--muted); font-size:12px; margin-top:4px; }
-.adv-big-btn { width:100%; padding:14px; font-size:16px; font-weight:800; border:none; border-radius:8px; background:var(--blue); color:white; cursor:pointer; margin-top:8px; }
+.adv-big-btn { width:100%; padding:14px; font-size:16px; font-weight:800; border:none; border-radius:8px; background:var(--blue); color:var(--text-strong); cursor:pointer; margin-top:8px; }
 .adv-big-btn:hover { background:var(--blue-dark); }
-.adv-back { background:#263548; color:#c9d7e6; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-size:13px; margin-bottom:16px; }
+.adv-back { background:var(--surface-3); color:var(--text); border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-size:13px; margin-bottom:16px; }
 .adv-type-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-.adv-type-btn { background:#0d1822; border:2px solid var(--line); border-radius:10px; padding:20px 16px; cursor:pointer; text-align:center; transition:.15s; color:var(--text); }
-.adv-type-btn:hover { border-color:var(--blue); background:#0d2a40; }
+.adv-type-btn { background:var(--surface-1); border:2px solid var(--line); border-radius:10px; padding:20px 16px; cursor:pointer; text-align:center; transition:.15s; color:var(--text); }
+.adv-type-btn:hover { border-color:var(--blue); background:var(--primary-bg); }
 .adv-type-btn .icon { font-size:34px; margin-bottom:10px; }
 .adv-type-btn .name { font-weight:800; font-size:15px; margin-bottom:6px; }
 .adv-type-btn .desc { color:var(--muted); font-size:12px; line-height:1.5; }
 .prog-bar { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:4px; }
 .prog-step { padding:10px; border-radius:8px; text-align:center; background:var(--panel-2); border:1px solid var(--line); font-size:12px; font-weight:700; color:var(--muted); transition:.2s; }
-.prog-step.done { background:#0e2e1e; color:#5ce89a; border-color:#1a5a38; }
-.prog-step.current { background:#0d3a55; color:white; border-color:var(--blue); }
+.prog-step.done { background:var(--success-bg); color:var(--success); border-color:var(--success-border); }
+.prog-step.current { background:var(--primary-bg); color:var(--text-strong); border-color:var(--blue); }
 .qs-pkg-card { display:block; cursor:pointer; margin-bottom:8px; }
-.qs-pkg-inner { background:#0d1822; border:2px solid var(--line); border-radius:8px; padding:12px 16px; transition:.15s; }
+.qs-pkg-inner { background:var(--surface-1); border:2px solid var(--line); border-radius:8px; padding:12px 16px; transition:.15s; }
 .qs-pkg-inner:hover { border-color:var(--blue); }
 .qs-pkg-card input:checked + .qs-pkg-inner { border-color:var(--blue); background:rgba(0,120,212,0.13); box-shadow:0 0 0 2px var(--blue); }
 </style>
@@ -63,19 +63,19 @@
           <div class="name">Od zera</div>
           <div class="desc">Wybierz silnik wykonania i zdefiniuj tools ręcznie po utworzeniu</div>
         </button>{% endif %}
-        {% if _can_shell %}{% else %}<div class="adv-type-btn" style="opacity:.45;cursor:not-allowed;border-color:#3a2020;pointer-events:none"><div class="icon">🔒</div><div class="name">Od zera</div><div class="desc" style="color:#8a6060">Niedostępne dla roli read_write — tylko gotowe paczki</div></div>{% endif %}
+        {% if _can_shell %}{% else %}<div class="adv-type-btn" style="opacity:.45;cursor:not-allowed;border-color:var(--danger-border);pointer-events:none"><div class="icon">🔒</div><div class="name">Od zera</div><div class="desc" style="color:var(--danger)">Niedostępne dla roli read_write — tylko gotowe paczki</div></div>{% endif %}
       </div>
 
       <!-- Package picker (hidden until "package" chosen) -->
       <div id="pkg-picker" style="display:none;margin-top:16px">
-        <div style="font-weight:700;font-size:13px;color:#aac8e0;margin-bottom:8px">Wybierz paczkę:</div>
+        <div style="font-weight:700;font-size:13px;color:var(--text-soft);margin-bottom:8px">Wybierz paczkę:</div>
         <div style="display:grid;gap:8px;max-height:340px;overflow-y:auto;padding-right:4px">{% for p in packages %}
         <label class="qs-pkg-card" onclick="pkgChosen('{{ p['id'] }}', this)">
           <input type="radio" name="package_id" value="{{ p['id'] }}" form="adv-form" style="display:none">
           <div class="qs-pkg-inner">
             <div style="display:flex;align-items:center;gap:8px">
-              <span class="pkg-check" style="display:none;color:#4caf50;font-size:16px;flex-shrink:0">&#10003;</span>
-              <div style="font-weight:800;font-size:14px;color:white">{{ p['name'] }}</div>
+              <span class="pkg-check" style="display:none;color:var(--success);font-size:16px;flex-shrink:0">&#10003;</span>
+              <div style="font-weight:800;font-size:14px;color:var(--text-strong)">{{ p['name'] }}</div>
             </div>
             <div style="color:var(--muted);font-size:12px;margin-top:4px">{{ (p['description'] or '')[:80] }}</div>
           </div>
@@ -87,7 +87,7 @@
 
       <!-- Blank engine picker (hidden until "blank" chosen) -->
       <div id="engine-picker" style="display:none;margin-top:16px">
-        <div style="font-weight:700;font-size:13px;color:#aac8e0;margin-bottom:10px">Wybierz silnik wykonania:</div>
+        <div style="font-weight:700;font-size:13px;color:var(--text-soft);margin-bottom:10px">Wybierz silnik wykonania:</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
           <button type="button" class="adv-type-btn" onclick="chooseEngine('http_request','http-gateway')" id="eng-http">
             <div class="icon">🌐</div>
@@ -107,11 +107,11 @@
         </div>
 
         <!-- OpenAPI config (shown when OpenAPI engine chosen) -->
-        <div id="openapi-cfg" style="display:none;margin-top:16px;background:#0a1a2a;border:1px solid #1a4060;border-radius:10px;padding:16px 18px">
-          <div style="font-weight:800;color:#7dd3fc;font-size:14px;margin-bottom:4px">📄 Konfiguracja OpenAPI</div>
+        <div id="openapi-cfg" style="display:none;margin-top:16px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:10px;padding:16px 18px">
+          <div style="font-weight:800;color:var(--info);font-size:14px;margin-bottom:4px">📄 Konfiguracja OpenAPI</div>
           <div style="color:var(--muted);font-size:12px;margin-bottom:14px">Podaj URL serwisu — tools zostaną wygenerowane automatycznie ze specyfikacji OpenAPI przy starcie kontenera.</div>
           <div class="adv-field" style="margin-bottom:10px">
-            <label>🔗 URL serwisu (base URL) <span style="color:#f47a80">*</span></label>
+            <label>🔗 URL serwisu (base URL) <span style="color:var(--danger)">*</span></label>
             <input id="oa-backend-url" name="openapi_backend_url" form="adv-form"
                    placeholder="http://moja-api:8000" autocomplete="off"
                    style="font-family:monospace;font-size:13px">
@@ -166,8 +166,8 @@
       </div>
 
       <!-- Shell env builder (shown when shell engine selected) -->
-      <div id="adv-shell-env" style="display:none;background:#0d1a0a;border:1px solid #2a4a1a;border-radius:10px;padding:16px 18px;margin-top:12px">
-        <div style="font-weight:800;color:#5ce89a;margin-bottom:4px;font-size:14px">🛠️ Dostępne narzędzia w kontenerze</div>
+      <div id="adv-shell-env" style="display:none;background:var(--success-bg);border:1px solid var(--success-border);border-radius:10px;padding:16px 18px;margin-top:12px">
+        <div style="font-weight:800;color:var(--success);margin-bottom:4px;font-size:14px">🛠️ Dostępne narzędzia w kontenerze</div>
         <div class="muted" style="font-size:12px;margin-bottom:12px">Standardowy obraz ma już: <code>oc</code> <code>kubectl</code> <code>curl</code> <code>jq</code>. Potrzebujesz innych? Zbuduj własny obraz poniżej.</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
           <div class="adv-field" style="margin:0">
@@ -176,7 +176,7 @@
               {{ _adv_base_opts }}
             </select>
             <input id="adv-build-base-custom" placeholder="np. ubuntu:22.04" style="display:none;font-size:13px;margin-top:6px">
-            <div id="adv-base-hint" class="hint" style="color:#7dd3fc">✅ Zawiera oc, kubectl, curl, jq + Python 3.12 UBI9 (RHEL 9)</div>
+            <div id="adv-base-hint" class="hint" style="color:var(--info)">✅ Zawiera oc, kubectl, curl, jq + Python 3.12 UBI9 (RHEL 9)</div>
           </div>
           <div class="adv-field" style="margin:0">
             <label>Dodatkowe pakiety APT (spacja)</label>
@@ -194,12 +194,12 @@
         </div>
         <div style="display:flex;gap:10px;align-items:center">
           <button type="button" id="adv-build-btn" onclick="advStartBuild()"
-                  style="background:#1a7a3f;color:white;border:none;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
+                  style="background:var(--success-solid);color:var(--text-strong);border:none;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
             🔨 Zbuduj własne środowisko
           </button>
           <span class="muted" style="font-size:12px">lub pomiń i użyj standardowego</span>
         </div>
-        <div id="adv-build-progress" style="display:none;margin-top:10px;padding:10px 12px;background:#0b1420;border-radius:6px;font-size:13px">
+        <div id="adv-build-progress" style="display:none;margin-top:10px;padding:10px 12px;background:var(--surface-1);border-radius:6px;font-size:13px">
           <span id="adv-build-spinner">⏳</span> <span id="adv-build-status">Budowanie...</span>
         </div>
       </div>
@@ -214,20 +214,20 @@
       <div class="sub" id="s3-sub">Dodaj jedno lub więcej narzędzi — AI użyje ich definicji do wywołań.</div>
 
       <!-- OpenAPI auto-gen info (shown only in openapi mode) -->
-      <div id="s3-openapi-info" style="display:none;background:#0a1a2a;border:1px solid #1a4060;border-radius:10px;padding:18px 20px;margin-bottom:16px">
+      <div id="s3-openapi-info" style="display:none;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:10px;padding:18px 20px;margin-bottom:16px">
         <div style="font-size:22px;margin-bottom:8px">📄</div>
-        <div style="font-weight:800;color:#7dd3fc;font-size:15px;margin-bottom:6px">Tools generowane automatycznie z OpenAPI spec</div>
+        <div style="font-weight:800;color:var(--info);font-size:15px;margin-bottom:6px">Tools generowane automatycznie z OpenAPI spec</div>
         <div style="color:var(--muted);font-size:13px;line-height:1.6">
           Przy starcie kontenera runtime pobierze <code>openapi.json</code> z podanego serwisu
           i automatycznie wygeneruje z niego wszystkie narzędzia MCP.<br><br>
-          <span id="s3-oa-summary" style="color:#5ce89a;font-family:monospace;font-size:12px"></span>
+          <span id="s3-oa-summary" style="color:var(--success);font-family:monospace;font-size:12px"></span>
         </div>
       </div>
 
       <!-- Dynamic tool list -->
       <div id="s3-tools-list" style="display:grid;gap:12px;margin-bottom:12px"></div>
 
-      <button type="button" onclick="s3AddTool()" style="background:#1a2e1a;border:1px dashed #2a5a2a;color:#5ce89a;padding:10px 18px;border-radius:8px;font-size:13px;cursor:pointer;width:100%;margin-bottom:16px">
+      <button type="button" onclick="s3AddTool()" style="background:var(--success-bg);border:1px dashed var(--success-border);color:var(--success);padding:10px 18px;border-radius:8px;font-size:13px;cursor:pointer;width:100%;margin-bottom:16px">
         + Dodaj kolejne narzędzie
       </button>
 
@@ -252,24 +252,24 @@
       <!-- Tryby -->
       <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Tryb dostępu</div>
       <div style="display:grid;gap:10px;margin-bottom:20px">
-        <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;background:#0d1822;border:1px solid var(--line);border-radius:8px;padding:12px 14px">
+        <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;background:var(--surface-1);border:1px solid var(--line);border-radius:8px;padding:12px 14px">
           <input type="checkbox" name="policy_read_only" value="1" checked form="adv-form" style="width:auto;margin-top:2px;flex-shrink:0">
           <div>
-            <div style="font-weight:700;font-size:13px;color:white">🔒 Tylko odczyt</div>
+            <div style="font-weight:700;font-size:13px;color:var(--text-strong)">🔒 Tylko odczyt</div>
             <div style="color:var(--muted);font-size:12px;margin-top:2px">Serwer może tylko czytać dane — nie modyfikuje ani nie usuwa niczego</div>
           </div>
         </label>
-        <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;background:#0d1822;border:1px solid var(--line);border-radius:8px;padding:12px 14px">
+        <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;background:var(--surface-1);border:1px solid var(--line);border-radius:8px;padding:12px 14px">
           <input type="checkbox" name="policy_block_write" value="1" form="adv-form" style="width:auto;margin-top:2px;flex-shrink:0">
           <div>
-            <div style="font-weight:700;font-size:13px;color:white">🚫 Blokuj zapis</div>
+            <div style="font-weight:700;font-size:13px;color:var(--text-strong)">🚫 Blokuj zapis</div>
             <div style="color:var(--muted);font-size:12px;margin-top:2px">Blokuje narzędzia w trybie <code>write</code> — zapis do baz, API PUT/POST/DELETE</div>
           </div>
         </label>
-        <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;background:#0d1822;border:1px solid var(--line);border-radius:8px;padding:12px 14px">
+        <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;background:var(--surface-1);border:1px solid var(--line);border-radius:8px;padding:12px 14px">
           <input type="checkbox" name="policy_block_destructive" value="1" form="adv-form" style="width:auto;margin-top:2px;flex-shrink:0">
           <div>
-            <div style="font-weight:700;font-size:13px;color:white">⛔ Blokuj destruktywne</div>
+            <div style="font-weight:700;font-size:13px;color:var(--text-strong)">⛔ Blokuj destruktywne</div>
             <div style="color:var(--muted);font-size:12px;margin-top:2px">Zapobiega usuwaniu danych i operacjom nieodwracalnym (<code>delete</code>, <code>drop</code>)</div>
           </div>
         </label>
@@ -296,7 +296,7 @@
       </div>
 
       <!-- Kontrola komend (shell) -->
-      <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Kontrola komend <span style="color:#3a6a8a;font-weight:400;text-transform:none">(dla shell tools)</span></div>
+      <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Kontrola komend <span style="color:var(--faint);font-weight:400;text-transform:none">(dla shell tools)</span></div>
       <div style="display:grid;gap:12px;margin-bottom:20px">
         <div class="adv-field" style="margin:0">
           <label>✅ Dozwolone binarki</label>
@@ -311,22 +311,22 @@
         <div class="adv-field" style="margin:0">
           <label>🚫 Zablokowane komendy (denylist)</label>
           <textarea name="blocked_prefixes" rows="3" placeholder="kubectl delete&#10;kubectl exec&#10;oc delete" form="adv-form"
-            style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #34465b;border-radius:6px;background:#0d1420;color:var(--text);font-size:13px;resize:vertical;font-family:monospace"></textarea>
+            style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface-1);color:var(--text);font-size:13px;resize:vertical;font-family:monospace"></textarea>
           <div class="hint">Jedna komenda na linię. Każda komenda <b>zaczynająca się</b> od tego prefiksu zostanie zablokowana.</div>
         </div>
       </div>
 
       <!-- ENV vars -->
-      <div style="font-size:11px;font-weight:800;color:#f59e0b;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">🔑 Zmienne środowiskowe (ENV) <span style="color:var(--muted);font-weight:400;text-transform:none">— tokeny, klucze API, hasła</span></div>
-      <div style="background:#1a1200;border:1px solid #3a2800;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:12px;color:#d4a820">
+      <div style="font-size:11px;font-weight:800;color:var(--warning);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">🔑 Zmienne środowiskowe (ENV) <span style="color:var(--muted);font-weight:400;text-transform:none">— tokeny, klucze API, hasła</span></div>
+      <div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:12px;color:var(--warning)">
         Zmienne ENV są dostępne wewnątrz kontenera jako zmienne środowiskowe. Użyj ich dla tokenów API, kluczy SSH, URL baz danych — wszystkiego co nie powinno być w kodzie.
       </div>
       <div id="adv-env-list" style="display:grid;gap:6px;margin-bottom:8px"></div>
-      <button type="button" onclick="advAddEnv()" style="background:#1a1200;border:1px solid #3a2800;color:#d4a820;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer">+ Dodaj zmienną ENV</button>
+      <button type="button" onclick="advAddEnv()" style="background:var(--warning-bg);border:1px solid var(--warning-border);color:var(--warning);padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer">+ Dodaj zmienną ENV</button>
 
-      <div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:8px;padding:10px 14px;margin:16px 0">
-        <div style="color:#4ac86a;font-size:12px;font-weight:700;margin-bottom:4px">🛡️ Zawsze aktywne (nie można wyłączyć):</div>
-        <div style="color:#7ab890;font-size:12px;line-height:1.8">
+      <div style="background:var(--success-bg);border:1px solid var(--success-border);border-radius:8px;padding:10px 14px;margin:16px 0">
+        <div style="color:var(--success);font-size:12px;font-weight:700;margin-bottom:4px">🛡️ Zawsze aktywne (nie można wyłączyć):</div>
+        <div style="color:var(--success);font-size:12px;line-height:1.8">
           ✅ user 1000:1000 (bez roota) &nbsp;·&nbsp; ✅ read-only filesystem &nbsp;·&nbsp; ✅ cap_drop ALL &nbsp;·&nbsp; ✅ 512MB RAM limit &nbsp;·&nbsp; ✅ no-new-privileges
         </div>
       </div>
@@ -340,19 +340,19 @@
       <h2>✅ Gotowe do utworzenia</h2>
       <div class="sub">Sprawdź podsumowanie i kliknij Utwórz serwer MCP.</div>
 
-      <div id="summary" style="background:#0d1822;border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:16px;font-size:13px;line-height:2"></div>
+      <div id="summary" style="background:var(--surface-1);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:16px;font-size:13px;line-height:2"></div>
 
-      <div style="background:#0a1520;border:1px solid #1a3a50;border-radius:8px;padding:12px 14px;margin-bottom:14px">
+      <div style="background:var(--surface-1);border:1px solid var(--border-strong);border-radius:8px;padding:12px 14px;margin-bottom:14px">
         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px">
           <input type="checkbox" name="deploy_after_create" value="true" form="adv-form" checked style="width:auto">
           <div>
-            <div style="font-weight:700;color:white">🚀 Uruchom od razu po utworzeniu</div>
+            <div style="font-weight:700;color:var(--text-strong)">🚀 Uruchom od razu po utworzeniu</div>
             <div style="color:var(--muted);font-size:12px">Serwer zostanie automatycznie zdeplojowany — będzie działać za kilka sekund</div>
           </div>
         </label>
       </div>
 
-      <button type="submit" class="adv-big-btn" style="background:#1a7a3f">🚀 Utwórz serwer MCP</button>
+      <button type="submit" class="adv-big-btn" style="background:var(--success-solid)">🚀 Utwórz serwer MCP</button>
       <p style="text-align:center;color:var(--muted);font-size:12px;margin-top:8px">
         Możesz edytować tools i politykę po utworzeniu na stronie serwera.
       </p>
@@ -383,29 +383,29 @@
     var presets = '';
     if (isShell) {
       var _pLabel = (localStorage.getItem('mcp_lang')==='en') ? 'Patterns:' : 'Wzorce:';
-      presets = '<div style="font-size:11px;color:#7dd3fc;font-weight:700;margin-bottom:6px">⚡ '+_pLabel+'</div><div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">';
+      presets = '<div style="font-size:11px;color:var(--info);font-weight:700;margin-bottom:6px">⚡ '+_pLabel+'</div><div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">';
       for (var pi=0; pi<_s3ShellPresets.length; pi++) {
         var pcmd = _s3ShellPresets[pi][0], plbl = _s3ShellPresets[pi][1];
-        presets += '<button type="button" onclick="s3ToolPreset('+idx+',this.dataset.cmd)" data-cmd="'+pcmd+'" style="background:#1a2a3a;border:1px solid #2a4a6a;color:#7dd3fc;padding:3px 9px;border-radius:5px;font-size:11px;cursor:pointer">'+plbl+'</button>';
+        presets += '<button type="button" onclick="s3ToolPreset('+idx+',this.dataset.cmd)" data-cmd="'+pcmd+'" style="background:var(--surface-2);border:1px solid var(--border-strong);color:var(--info);padding:3px 9px;border-radius:5px;font-size:11px;cursor:pointer">'+plbl+'</button>';
       }
       presets += '</div>';
     }
-    var inputStyle = 'width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:13px';
+    var inputStyle = 'width:100%;box-sizing:border-box;padding:9px 11px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:13px';
     var cmdField = isShell
       ? '<label style="font-size:12px;color:var(--muted)">Komenda</label>' + presets +
         '<input id="s3t-cmd-'+idx+'" placeholder="curl -s ${url}" style="'+inputStyle+';font-family:monospace;margin-bottom:4px">' +
-        '<div style="font-size:11px;color:var(--muted);margin-bottom:8px"><code style="background:#0d1420;padding:1px 5px;border-radius:3px">${zmienna}</code> = jeden parametr &nbsp;|&nbsp; <code style="background:#0d1420;padding:1px 5px;border-radius:3px">${*args}</code> = AI podaje wszystkie argumenty naraz</div>'
+        '<div style="font-size:11px;color:var(--muted);margin-bottom:8px"><code style="background:var(--surface-1);padding:1px 5px;border-radius:3px">${zmienna}</code> = jeden parametr &nbsp;|&nbsp; <code style="background:var(--surface-1);padding:1px 5px;border-radius:3px">${*args}</code> = AI podaje wszystkie argumenty naraz</div>'
       : '<div style="display:grid;grid-template-columns:80px 1fr;gap:8px;margin-bottom:8px">' +
         '<div><label style="font-size:12px;color:var(--muted)">Metoda</label>' +
         '<select id="s3t-method-'+idx+'" style="'+inputStyle+'"><option>POST</option><option>GET</option></select></div>' +
         '<div><label style="font-size:12px;color:var(--muted)">URL</label>' +
         '<input id="s3t-url-'+idx+'" placeholder="https://api.example.com/v1/search" style="'+inputStyle+'"></div></div>';
     var delBtn = idx > 0
-      ? '<button type="button" onclick="s3RemoveTool('+idx+')" style="background:none;border:none;color:#f47a80;font-size:20px;cursor:pointer;padding:0;line-height:1">×</button>'
+      ? '<button type="button" onclick="s3RemoveTool('+idx+')" style="background:none;border:none;color:var(--danger);font-size:20px;cursor:pointer;padding:0;line-height:1">×</button>'
       : '';
-    return '<div id="s3-card-'+idx+'" style="background:#0d1822;border:1px solid #2a3a4a;border-radius:10px;padding:14px 16px">' +
+    return '<div id="s3-card-'+idx+'" style="background:var(--surface-1);border:1px solid var(--border-strong);border-radius:10px;padding:14px 16px">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
-      '<span style="font-weight:700;font-size:13px;color:#7dd3fc">Narzędzie '+(idx+1)+'</span>'+delBtn+'</div>' +
+      '<span style="font-weight:700;font-size:13px;color:var(--info)">Narzędzie '+(idx+1)+'</span>'+delBtn+'</div>' +
       cmdField +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
       '<div><label style="font-size:12px;color:var(--muted)">Nazwa</label>' +
@@ -578,7 +578,7 @@
     var btns = document.querySelectorAll('.adv-type-grid .adv-type-btn');
     if (btns[idx]) {
       btns[idx].style.borderColor = 'var(--blue)';
-      btns[idx].style.background = '#0d2a40';
+      btns[idx].style.background = 'var(--primary-bg)';
     }
   };
 
@@ -623,7 +623,7 @@
     var url = (document.getElementById('oa-backend-url')||{}).value || '';
     if (!url.trim()) {
       var el = document.getElementById('oa-backend-url');
-      if (el) { el.style.borderColor = '#f47a80'; el.focus(); }
+      if (el) { el.style.borderColor = 'var(--danger)'; el.focus(); }
       return;
     }
     document.getElementById('rc-field').style.display = 'none';
@@ -697,17 +697,17 @@
             var errMsg = (d.error || 'nieznany błąd');
             var hint = '';
             if (errMsg.indexOf('non-zero code: 100') !== -1 || errMsg.indexOf('Unable to locate package') !== -1) {
-              hint = '<br><br>💡 <b>Błąd 100 = paczka nie istnieje w Debian APT.</b><br>Sprawdź nazwę — np. <code>postgres-client</code> ❌ → <code>postgresql-client</code> ✅<br>Szukaj na <a href="https://packages.debian.org" target="_blank" style="color:#7dd3fc">packages.debian.org</a>';
+              hint = '<br><br>💡 <b>Błąd 100 = paczka nie istnieje w Debian APT.</b><br>Sprawdź nazwę — np. <code>postgres-client</code> ❌ → <code>postgresql-client</code> ✅<br>Szukaj na <a href="https://packages.debian.org" target="_blank" style="color:var(--info)">packages.debian.org</a>';
             } else if (errMsg.indexOf('non-zero code: 1') !== -1) {
-              hint = '<br><br>💡 Sprawdź nazwy pakietów na <a href="https://packages.debian.org" target="_blank" style="color:#7dd3fc">packages.debian.org</a>';
+              hint = '<br><br>💡 Sprawdź nazwy pakietów na <a href="https://packages.debian.org" target="_blank" style="color:var(--info)">packages.debian.org</a>';
             }
             document.getElementById('adv-build-progress').innerHTML =
-              '<div style="background:#2a0a0a;border:2px solid #8a2020;border-radius:8px;padding:14px 16px">' +
-              '<div style="font-weight:800;color:#f47a80;margin-bottom:6px">❌ Budowanie nie powiodło się</div>' +
-              '<code style="font-size:11px;color:#f4c163;word-break:break-all;line-height:1.6">' + errMsg.slice(0, 300) + '</code>' +
+              '<div style="background:var(--danger-bg);border:2px solid var(--danger-border);border-radius:8px;padding:14px 16px">' +
+              '<div style="font-weight:800;color:var(--danger);margin-bottom:6px">❌ Budowanie nie powiodło się</div>' +
+              '<code style="font-size:11px;color:var(--warning);word-break:break-all;line-height:1.6">' + errMsg.slice(0, 300) + '</code>' +
               hint +
               '<br><br><button type="button" onclick="advBuildReset()" ' +
-              'style="background:#1a3a5a;border:none;color:white;padding:8px 14px;border-radius:6px;font-size:12px;cursor:pointer;margin-top:8px">← Popraw i spróbuj ponownie</button>' +
+              'style="background:var(--surface-3);border:none;color:var(--text-strong);padding:8px 14px;border-radius:6px;font-size:12px;cursor:pointer;margin-top:8px">← Popraw i spróbuj ponownie</button>' +
               '</div>';
           } else if (polls > 90) { clearInterval(t); document.getElementById('adv-build-status').textContent = 'Timeout — odśwież stronę i sprawdź Runtime Image Builds.'; }
         }).catch(function(){});
@@ -721,9 +721,9 @@
     var row = document.createElement('div');
     row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center';
     row.innerHTML =
-      '<input placeholder="NAZWA_ZMIENNEJ" value="'+(key||'')+'" style="padding:8px 10px;border:1px solid #3a2800;border-radius:6px;background:#0d1000;color:var(--text);font-size:13px;font-family:monospace" oninput="syncEnvHidden('+i+',this,null)">' +
-      '<input type="password" placeholder="wartość / token / klucz" value="'+(val||'')+'" style="padding:8px 10px;border:1px solid #3a2800;border-radius:6px;background:#0d1000;color:var(--text);font-size:13px" oninput="syncEnvHidden('+i+',null,this)">' +
-      '<button type="button" onclick="this.parentNode.remove()" style="background:#3a1010;border:1px solid #6a2020;color:#f47a80;padding:6px 10px;border-radius:6px;font-size:12px;cursor:pointer">✕</button>';
+      '<input placeholder="NAZWA_ZMIENNEJ" value="'+(key||'')+'" style="padding:8px 10px;border:1px solid var(--warning-border);border-radius:6px;background:var(--surface-0);color:var(--text);font-size:13px;font-family:monospace" oninput="syncEnvHidden('+i+',this,null)">' +
+      '<input type="password" placeholder="wartość / token / klucz" value="'+(val||'')+'" style="padding:8px 10px;border:1px solid var(--warning-border);border-radius:6px;background:var(--surface-0);color:var(--text);font-size:13px" oninput="syncEnvHidden('+i+',null,this)">' +
+      '<button type="button" onclick="this.parentNode.remove()" style="background:var(--danger-bg);border:1px solid var(--danger-border);color:var(--danger);padding:6px 10px;border-radius:6px;font-size:12px;cursor:pointer">✕</button>';
     document.getElementById('adv-env-list').appendChild(row);
     // hidden inputs for form submit
     var hk = document.createElement('input'); hk.type='hidden'; hk.name='env_key_'+i; hk.id='env_hk_'+i; hk.value=key||'';

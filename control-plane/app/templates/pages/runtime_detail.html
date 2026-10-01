@@ -1,50 +1,23 @@
-{% set _tool_config_preview %}{% for t in payload['tools'][:5] %}<div style="margin-bottom:12px;padding:10px;background:#060e18;border-radius:6px"><div style="font-weight:700;color:var(--blue);margin-bottom:4px">{{ t['name'] }}</div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">{{ t['description'][:80] }}</div><pre style="font-size:11px;color:#8ea2b8;margin:0">{{ t['config_json'][:300] }}</pre></div>{% else %}<p class="muted">Brak toolów.</p>{% endfor %}{% endset %}
+{% extends "base.html" %}
+{% block page_title %}{{ payload['name'] }}{% endblock %}
+{% block page_sub %}<a href="/runtimes">Moje serwery</a> &rsaquo; {{ payload['id'] }} &nbsp;·&nbsp; <span class="badge {{ payload['status'] }}" id="rt-status-badge">{{ payload['status'] }}</span> &nbsp;·&nbsp; {{ payload['runtime_class'] }} &nbsp;·&nbsp; {{ (payload['endpoint_url'] or 'brak endpointu') }}{% endblock %}
+{% block content %}
+{% set _tool_config_preview %}{% for t in payload['tools'][:5] %}<div style="margin-bottom:12px;padding:10px;background:var(--surface-0);border-radius:6px"><div style="font-weight:700;color:var(--blue);margin-bottom:4px">{{ t['name'] }}</div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">{{ t['description'][:80] }}</div><pre style="font-size:11px;color:var(--text-soft);margin:0">{{ t['config_json'][:300] }}</pre></div>{% else %}<p class="muted">Brak toolów.</p>{% endfor %}{% endset %}
 
-    <!doctype html><html><head><title>{{ payload['name'] }} — MCP Platform</title>{{ _FAVICON_TAG }}<style>
-    :root { --blue:#1f9bd1; --blue-dark:#157aa8; --line:#2b394a; --text:#dce7f3; --muted:#8ea2b8; --bg:#111820; --panel:#182230; --panel-2:#1d2a3a; --field:#101722; --danger:#d0343f; --warn:#b96521; }
-    body { font-family: Arial, system-ui, sans-serif; margin:0; background:var(--bg); color:var(--text); font-size:14px; }
-    header { background:#0f1722; color:var(--text); padding:18px 28px; border-bottom:1px solid var(--line); }
-    header h1 { margin:0 0 18px; font-size:28px; }
-    main { padding:24px; display:grid; gap:18px; }
-    section { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:18px; box-shadow:0 1px 2px rgba(0,0,0,.25); }
-    input,select,textarea { width:100%; box-sizing:border-box; padding:9px; border:1px solid #34465b; border-radius:6px; background:var(--field); color:var(--text); }
-    textarea { min-height:84px; }
-    button { padding:8px 12px; border:0; border-radius:6px; background:var(--blue-dark); color:white; font-weight:600; cursor:pointer; }
-    button:hover { background:var(--blue); }
-    button.delete { background:var(--danger); }
-    button.stop { background:var(--warn); }
-    button.health, button.logs { background:#475569; }
-    .actions { display:flex; flex-wrap:wrap; gap:8px; }
-    .actions form { display:inline; }
-    table { width:100%; border-collapse:collapse; }
-    th,td { text-align:left; border-bottom:1px solid var(--line); padding:10px; font-size:14px; }
-    th { color:#c6d7e8; background:#162232; text-transform:uppercase; font-size:12px; }
-    details { border:1px solid var(--line); border-radius:8px; padding:12px; background:var(--panel-2); }
-    summary { cursor:pointer; font-weight:700; margin-bottom:12px; }
-    .muted { color:var(--muted); font-size:14px; }
-    .grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
-    pre { background:#0b1420; color:#dce7f3; border:1px solid var(--line); padding:12px; border-radius:6px; overflow:auto; }
-    a { color:#5db7ee; text-decoration:none; }
-    a:hover { text-decoration:underline; }
-    @media (max-width:900px) { .grid { grid-template-columns:1fr; } }
-    </style></head><body>
-    <header><h1>{{ payload['name'] }}</h1><div>{{ payload['status'] }} | {{ payload['runtime_class'] }} | {{ (payload['endpoint_url'] or 'no endpoint yet') }}</div></header>
-    <main>
-      <p><a href="/">← Powrót do dashboardu</a></p>
       {% if welcome %}
-      <div style="background:linear-gradient(135deg,#0d2a1a,#0d1a2a);border:2px solid #2a8a4a;border-radius:12px;padding:20px 24px;display:flex;gap:20px;align-items:flex-start">
+      <div style="background:linear-gradient(135deg,var(--success-bg),var(--surface-1));border:2px solid var(--success-border);border-radius:12px;padding:20px 24px;display:flex;gap:20px;align-items:flex-start">
         <div style="font-size:36px">🎉</div>
         <div>
-          <div style="font-size:18px;font-weight:800;color:white;margin-bottom:6px">Serwer MCP gotowy!</div>
-          <div style="color:#a0c8b0;font-size:14px;margin-bottom:12px">Za chwilę uruchomi się automatycznie. Gdy status zmieni się na <b>running</b>, skopiuj adres endpointu i wklej do Continue lub OpenWebUI.</div>
-          <div style="font-size:13px;color:#7ab0c0">
-            💡 <b>Następny krok:</b> Znajdź pole <b>Endpoint</b> poniżej → skopiuj URL → wklej do konfiguracji AI jako <code style="background:#0d1a2a;padding:2px 6px;border-radius:4px">mcpServers</code>
+          <div style="font-size:18px;font-weight:800;color:var(--text-strong);margin-bottom:6px">Serwer MCP gotowy!</div>
+          <div style="color:var(--success);font-size:14px;margin-bottom:12px">Za chwilę uruchomi się automatycznie. Gdy status zmieni się na <b>running</b>, skopiuj adres endpointu i wklej do Continue lub OpenWebUI.</div>
+          <div style="font-size:13px;color:var(--muted)">
+            💡 <b>Następny krok:</b> Znajdź pole <b>Endpoint</b> poniżej → skopiuj URL → wklej do konfiguracji AI jako <code style="background:var(--surface-1);padding:2px 6px;border-radius:4px">mcpServers</code>
           </div>
         </div>
       </div>
       {% endif %}
 
-      {% if tool_added %}<div style="background:linear-gradient(135deg,#1a1a00,#1a0d00);border:2px solid #8a7a00;border-radius:12px;padding:16px 20px;display:flex;gap:16px;align-items:flex-start;margin-bottom:16px" id="tool-added-banner"><div style="font-size:28px">🔧</div><div style="flex:1"><div style="font-size:15px;font-weight:800;color:white;margin-bottom:6px">Tool dodany — sprawdź politykę</div><div style="color:#e0c060;font-size:13px;margin-bottom:10px">{% if tool_added == 'shell' %}Dodałeś <b>shell tool</b>. Upewnij się że binarka jest w <b>Polityka &rarr; Dozwolone binarki</b> (teraz: <code style="background:#0d0d00;padding:1px 5px;border-radius:3px">{{ (payload['policy'].get('allowed_binaries') or [])|join(', ') or 'brak' }}</code>), inaczej tool będzie blokowany przez policy.{% else %}Dodałeś <b>HTTP tool</b>. Sprawdź URL i metodę w konfiguracji.{% endif %}</div><div style="display:flex;gap:8px;flex-wrap:wrap"><a href="#" onclick="rtTab('security');return false;" style="background:#4a3a00;border:1px solid #8a7a00;color:#e0c060;padding:5px 12px;border-radius:6px;font-size:12px;text-decoration:none">🔒 Otwórz Politykę</a><a href="#" onclick="rtTab('tools');return false;" style="background:#1a2a1a;border:1px solid #2a5a2a;color:#80c880;padding:5px 12px;border-radius:6px;font-size:12px;text-decoration:none">🔧 Narzędzia</a><button onclick="document.getElementById('tool-added-banner').remove()" style="background:none;border:1px solid #4a4a00;color:#8a8a40;padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer">✕</button></div></div></div>{% endif %}
+      {% if tool_added %}<div style="background:linear-gradient(135deg,var(--warning-bg),var(--warning-bg));border:2px solid var(--warning-border);border-radius:12px;padding:16px 20px;display:flex;gap:16px;align-items:flex-start;margin-bottom:16px" id="tool-added-banner"><div style="font-size:28px">🔧</div><div style="flex:1"><div style="font-size:15px;font-weight:800;color:var(--text-strong);margin-bottom:6px">Tool dodany — sprawdź politykę</div><div style="color:var(--warning);font-size:13px;margin-bottom:10px">{% if tool_added == 'shell' %}Dodałeś <b>shell tool</b>. Upewnij się że binarka jest w <b>Polityka &rarr; Dozwolone binarki</b> (teraz: <code style="background:var(--surface-0);padding:1px 5px;border-radius:3px">{{ (payload['policy'].get('allowed_binaries') or [])|join(', ') or 'brak' }}</code>), inaczej tool będzie blokowany przez policy.{% else %}Dodałeś <b>HTTP tool</b>. Sprawdź URL i metodę w konfiguracji.{% endif %}</div><div style="display:flex;gap:8px;flex-wrap:wrap"><a href="#" onclick="rtTab('security');return false;" style="background:var(--warning-bg);border:1px solid var(--warning-border);color:var(--warning);padding:5px 12px;border-radius:6px;font-size:12px;text-decoration:none">🔒 Otwórz Politykę</a><a href="#" onclick="rtTab('tools');return false;" style="background:var(--success-bg);border:1px solid var(--success-border);color:var(--success);padding:5px 12px;border-radius:6px;font-size:12px;text-decoration:none">🔧 Narzędzia</a><button onclick="document.getElementById('tool-added-banner').remove()" style="background:none;border:1px solid var(--warning-border);color:var(--warning);padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer">✕</button></div></div></div>{% endif %}
 
       <section>
         <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:14px">
@@ -52,21 +25,21 @@
             <h2 style="margin:0 0 4px">Zarządzanie serwerem</h2>
             <div class="muted" style="font-size:12px">
               Kontener: <code id="rt-container">{{ str((payload['container_name'] or '—')) }}</code>
-              &nbsp;·&nbsp; Endpoint: <code id="rt-endpoint" style="color:#3ab8f5">{{ str((payload['endpoint_url'] or '—')) }}</code>
-              {% if payload.get('last_error') %}&nbsp;·&nbsp; <span style='color:#f47a80'>⚠️ {{ str(payload['last_error'])[:80] }}</span>{% endif %}
+              &nbsp;·&nbsp; Endpoint: <code id="rt-endpoint" style="color:var(--primary)">{{ str((payload['endpoint_url'] or '—')) }}</code>
+              {% if payload.get('last_error') %}&nbsp;·&nbsp; <span style='color:var(--danger)'>⚠️ {{ str(payload['last_error'])[:80] }}</span>{% endif %}
             </div>
           </div>
-          <a href="/api/runtimes/{{ runtime_id }}/export-package" style="padding:6px 12px;background:#263548;border-radius:6px;color:#dce7f3;font-size:12px;font-weight:600;white-space:nowrap">⬇ Export JSON</a>
+          <a href="/api/runtimes/{{ runtime_id }}/export-package" style="padding:6px 12px;background:var(--surface-3);border-radius:6px;color:var(--text);font-size:12px;font-weight:600;white-space:nowrap">⬇ Export JSON</a>
         </div>
         {{ action_forms(runtime_id) }}
       </section>
 
       <!-- TAB NAV -->
-      <div style="display:flex;gap:4px;flex-wrap:wrap;border-bottom:2px solid var(--line);margin-bottom:20px;padding-bottom:0">
+      <div class="rt-tabs">
         <button class="rt-tab rt-tab-active" onclick="rtTab('connect')" id="tab-connect">🔌 Podłącz</button>
         <button class="rt-tab" onclick="rtTab('tools')" id="tab-tools">🔧 Narzędzia ({{ len(payload['tools']) }})</button>
         <button class="rt-tab" onclick="rtTab('policy')" id="tab-policy">🔒 Polityka</button>
-        <button class="rt-tab" onclick="rtTab('auth')" id="tab-auth">🔐 Auth {% if payload.get('mcp_auth_token') %}<span style="background:#0a2a14;color:#22c55e;font-size:10px;padding:1px 5px;border-radius:999px;margin-left:4px">ON</span>{% endif %}</button>
+        <button class="rt-tab" onclick="rtTab('auth')" id="tab-auth">🔐 Auth {% if payload.get('mcp_auth_token') %}<span style="background:var(--success-bg);color:var(--success);font-size:10px;padding:1px 5px;border-radius:999px;margin-left:4px">ON</span>{% endif %}</button>
         <button class="rt-tab" onclick="rtTab('creds')" id="tab-creds">🔑 Sekrety ({{ len(credentials) }})</button>
         <button class="rt-tab" onclick="rtTab('adapters')" id="tab-adapters">⚙️ Silniki ({{ len(runtime_adapters) }})</button>
         <button class="rt-tab" onclick="rtTab('logs')" id="tab-logs">📋 Logi</button>
@@ -75,35 +48,32 @@
         <button class="rt-tab" onclick="rtTab('clone')" id="tab-clone">🔁 Klonuj</button>
       </div>
 <style>
-.rt-tab{background:none;border:none;border-bottom:3px solid transparent;padding:8px 14px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;margin-bottom:-2px;transition:.15s;border-radius:6px 6px 0 0}
-.rt-tab:hover{color:var(--text);background:var(--panel-2)}
-.rt-tab.rt-tab-active{color:white;border-bottom-color:var(--blue);background:var(--panel-2)}
-.rt-pane{display:none}.rt-pane.active{display:block}
+.rt-tab.rt-pane{display:none}.rt-pane.active{display:block}
 </style>
 
       <!-- PANE: Podłącz -->
       <div class="rt-pane active" id="pane-connect">
-      <details id="sec-connect" style="border-radius:12px;border-color:#1a4a6a;background:linear-gradient(135deg,#0d1e2e,#0a1a2a)" open>
-        <summary style="font-size:16px;font-weight:800;padding:4px 0;color:#7dd3fc">
+      <details id="sec-connect" style="border-radius:12px;border-color:var(--border-strong);background:linear-gradient(135deg,var(--surface-2),var(--surface-1))" open>
+        <summary style="font-size:16px;font-weight:800;padding:4px 0;color:var(--info)">
           🔌 Jak podłączyć do klienta AI?
-          {% if payload.get('endpoint_url') %}<code style="font-size:12px;background:#0b1520;padding:3px 10px;border-radius:5px;color:#3ab8f5;cursor:pointer;border:1px solid #1a3a50;margin-left:12px;font-weight:400" onclick="event.stopPropagation();navigator.clipboard.writeText(this.textContent).then(()=>{this.style.background='#0d2a1a';setTimeout(()=>this.style.background='',1500)})" title="Kliknij żeby skopiować">{{ payload['endpoint_url'] }}</code><span style="margin-left:10px;font-size:11px;font-weight:400;color:var(--muted)">OpenWebUI: </span><code style="font-size:12px;background:#060e06;padding:3px 10px;border-radius:5px;color:#4ac86a;cursor:pointer;border:1px solid #1a5a2a;font-weight:400" onclick="event.stopPropagation();navigator.clipboard.writeText(this.textContent).then(()=>{this.style.background='#0d2a1a';setTimeout(()=>this.style.background='',1500)})" title="Kliknij żeby skopiować">{{ _base_url }}/openwebui</code>{% else %}<span class="muted" style="font-size:13px;font-weight:400;margin-left:10px">— uruchom serwer żeby zobaczyć endpoint</span>{% endif %}
+          {% if payload.get('endpoint_url') %}<code style="font-size:12px;background:var(--surface-1);padding:3px 10px;border-radius:5px;color:var(--primary);cursor:pointer;border:1px solid var(--border-strong);margin-left:12px;font-weight:400" onclick="event.stopPropagation();navigator.clipboard.writeText(this.textContent).then(()=>{this.style.background='var(--success-bg)';setTimeout(()=>this.style.background='',1500)})" title="Kliknij żeby skopiować">{{ payload['endpoint_url'] }}</code><span style="margin-left:10px;font-size:11px;font-weight:400;color:var(--muted)">OpenWebUI: </span><code style="font-size:12px;background:var(--success-bg);padding:3px 10px;border-radius:5px;color:var(--success);cursor:pointer;border:1px solid var(--success-border);font-weight:400" onclick="event.stopPropagation();navigator.clipboard.writeText(this.textContent).then(()=>{this.style.background='var(--success-bg)';setTimeout(()=>this.style.background='',1500)})" title="Kliknij żeby skopiować">{{ _base_url }}/openwebui</code>{% else %}<span class="muted" style="font-size:13px;font-weight:400;margin-left:10px">— uruchom serwer żeby zobaczyć endpoint</span>{% endif %}
         </summary>
         <div style="margin-top:16px">
         {% if payload.get('endpoint_url') %}
         <!-- OpenWebUI Tool Server -->
-        <div style="background:#0b1e10;border:2px solid #1a5a2a;border-radius:10px;padding:14px;margin-bottom:12px">
-          <div style="font-weight:800;color:white;margin-bottom:3px;font-size:13px">🌐 OpenWebUI <span style="color:#4ac86a;font-size:11px;font-weight:400">— Tool Server URL</span></div>
+        <div style="background:var(--success-bg);border:2px solid var(--success-border);border-radius:10px;padding:14px;margin-bottom:12px">
+          <div style="font-weight:800;color:var(--text-strong);margin-bottom:3px;font-size:13px">🌐 OpenWebUI <span style="color:var(--success);font-size:11px;font-weight:400">— Tool Server URL</span></div>
           <div class="muted" style="font-size:11px;margin-bottom:8px">Admin Panel → Settings → Tools → wklej poniższy URL</div>
-          <pre style="font-size:12px;margin:0 0 6px;cursor:pointer;border-color:#1a5a2a;background:#060e06" onclick="copySnippet(this)" title="Kliknij żeby skopiować">{{ _base_url }}/openwebui</pre>
-          <div style="font-size:11px;color:#4ac86a;margin-bottom:10px">✅ OpenWebUI automatycznie doda <code>/openapi.json</code></div>
-          <div style="border-top:1px solid #1a5a2a;padding-top:10px">
-            <div style="font-weight:700;color:#a0d8b0;font-size:11px;margin-bottom:6px">📥 Albo importuj jako Python tool (Workspace → Narzędzia → Importuj z linku):</div>
+          <pre style="font-size:12px;margin:0 0 6px;cursor:pointer;border-color:var(--success-border);background:var(--success-bg)" onclick="copySnippet(this)" title="Kliknij żeby skopiować">{{ _base_url }}/openwebui</pre>
+          <div style="font-size:11px;color:var(--success);margin-bottom:10px">✅ OpenWebUI automatycznie doda <code>/openapi.json</code></div>
+          <div style="border-top:1px solid var(--success-border);padding-top:10px">
+            <div style="font-weight:700;color:var(--success);font-size:11px;margin-bottom:6px">📥 Albo importuj jako Python tool (Workspace → Narzędzia → Importuj z linku):</div>
             <div style="display:flex;align-items:center;gap:8px">
-              <code style="font-size:11px;background:#060e06;border:1px solid #2a5a3a;border-radius:5px;padding:4px 8px;color:#5ce89a;flex:1;word-break:break-all;cursor:pointer"
-                    onclick="navigator.clipboard.writeText(this.textContent).then(()=>{this.style.background='#0d2a1a';setTimeout(()=>this.style.background='',1500)})"
+              <code style="font-size:11px;background:var(--success-bg);border:1px solid var(--success-border);border-radius:5px;padding:4px 8px;color:var(--success);flex:1;word-break:break-all;cursor:pointer"
+                    onclick="navigator.clipboard.writeText(this.textContent).then(()=>{this.style.background='var(--success-bg)';setTimeout(()=>this.style.background='',1500)})"
                     title="Kliknij żeby skopiować">{{ _platform_base }}/api/runtimes/{{ payload['id'] }}/openwebui-tool.py</code>
               <a href="/api/runtimes/{{ payload['id'] }}/openwebui-tool.py" download
-                 style="background:#1a5a2a;color:#5ce89a;border:1px solid #2a7a3a;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;text-decoration:none;flex-shrink:0;white-space:nowrap">
+                 style="background:var(--success-solid);color:var(--success);border:1px solid var(--success-border);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;text-decoration:none;flex-shrink:0;white-space:nowrap">
                 ⬇ Pobierz .py
               </a>
             </div>
@@ -112,10 +82,10 @@
 
         <!-- MCP JSON snippets: Streamable-HTTP + SSE -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-          <div style="background:#0b1520;border:2px solid #1a5a6a;border-radius:10px;padding:14px">
-            <div style="font-weight:800;color:#3ab8f5;margin-bottom:3px;font-size:14px">⚡ Streamable-HTTP <span style="font-size:11px;font-weight:400;color:#4ac86a">(zalecane)</span></div>
+          <div style="background:var(--surface-1);border:2px solid var(--border-strong);border-radius:10px;padding:14px">
+            <div style="font-weight:800;color:var(--primary);margin-bottom:3px;font-size:14px">⚡ Streamable-HTTP <span style="font-size:11px;font-weight:400;color:var(--success)">(zalecane)</span></div>
             <div class="muted" style="font-size:11px;margin-bottom:8px">Continue, Cline, Claude Code, Claude Desktop, OpenChamber i inne klienty MCP</div>
-            <pre style="font-size:12px;margin:0;cursor:pointer;border-color:#1a5a6a" onclick="copySnippet(this)" title="Kliknij żeby skopiować">{
+            <pre style="font-size:12px;margin:0;cursor:pointer;border-color:var(--border-strong)" onclick="copySnippet(this)" title="Kliknij żeby skopiować">{
   "mcpServers": {
     "{{ payload['name'].lower().replace(' ', '-') }}": {
       "url": "{{ payload['endpoint_url'] }}",
@@ -124,10 +94,10 @@
   }
 }</pre>
           </div>
-          <div style="background:#0b1520;border:1px solid #3a3a50;border-radius:10px;padding:14px">
-            <div style="font-weight:800;color:#b0a0d0;margin-bottom:3px;font-size:14px">📡 SSE</div>
+          <div style="background:var(--surface-1);border:1px solid var(--border-strong);border-radius:10px;padding:14px">
+            <div style="font-weight:800;color:var(--purple);margin-bottom:3px;font-size:14px">📡 SSE</div>
             <div class="muted" style="font-size:11px;margin-bottom:8px">Starsze klienty lub gdy streamable-http nie działa</div>
-            <pre style="font-size:12px;margin:0;cursor:pointer;border-color:#3a3a50" onclick="copySnippet(this)" title="Kliknij żeby skopiować">{
+            <pre style="font-size:12px;margin:0;cursor:pointer;border-color:var(--border-strong)" onclick="copySnippet(this)" title="Kliknij żeby skopiować">{
   "mcpServers": {
     "{{ payload['name'].lower().replace(' ', '-') }}": {
       "url": "{{ payload['endpoint_url'] }}",
@@ -137,8 +107,8 @@
 }</pre>
           </div>
         </div>
-        <details style="margin-top:10px;background:rgba(0,0,0,.2);border-color:#1a3a50">
-          <summary style="font-size:12px;color:#7ab8d8">🔧 Pełny przykład .continue/config.json</summary>
+        <details style="margin-top:10px;background:rgba(0,0,0,.2);border-color:var(--border-strong)">
+          <summary style="font-size:12px;color:var(--info)">🔧 Pełny przykład .continue/config.json</summary>
           <pre style="font-size:11px;margin-top:8px;cursor:pointer" onclick="copySnippet(this)" title="Kliknij żeby skopiować">{
   "models": [ ... ],
   "mcpServers": {
@@ -153,7 +123,7 @@
         <div style="display:flex;align-items:center;gap:14px;padding:8px 0">
           <div style="font-size:28px">🔌</div>
           <div>
-            <div style="font-weight:700;color:#607083;margin-bottom:3px">Endpoint pojawi się po uruchomieniu</div>
+            <div style="font-weight:700;color:var(--muted);margin-bottom:3px">Endpoint pojawi się po uruchomieniu</div>
             <div class="muted" style="font-size:12px">Kliknij <b>Deploy</b> → status zmieni się na <b>running</b> → tutaj pojawi się config dla Continue i OpenWebUI</div>
           </div>
         </div>
@@ -176,7 +146,7 @@
           <td style="font-size:12px">{{ t['risk_level'] }}</td>
           <td style="font-size:12px">{{ t['mode'] }}</td>
           <td><a href="#tool-{{ t['id'] }}" style="font-size:12px">✏️ Edytuj</a></td>
-          {% if _is_admin %}<td><form method="post" action="/api/runtimes/{{ runtime_id }}/tools/{{ str(t['id']) }}/delete" onsubmit="return confirm('Usunąć tool {{ t['name'] }}? Operacja jest nieodwracalna.')"><button style="background:#3a1010;border:1px solid #6a2020;color:#f47a80;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">🗑️ Usuń</button></form></td>{% else %}<td></td>{% endif %}
+          {% if _is_admin %}<td><form method="post" action="/api/runtimes/{{ runtime_id }}/tools/{{ str(t['id']) }}/delete" onsubmit="return confirm('Usunąć tool {{ t['name'] }}? Operacja jest nieodwracalna.')"><button style="background:var(--danger-bg);border:1px solid var(--danger-border);color:var(--danger);padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">🗑️ Usuń</button></form></td>{% else %}<td></td>{% endif %}
         </tr>{% endfor %}</table>
           </section>
           {% for tool in payload['tools'] %}<section id="tool-{{ tool['id'] }}"><h3>✏️ Edytuj tool</h3>{{ tool_edit_form(runtime_id, tool) }}</section>{% endfor %}
@@ -186,13 +156,13 @@
               <!-- Type selector -->
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
                 <button type="button" id="nt-http-btn" onclick="ntSetType('http')"
-                  style="background:#0d2a40;border:2px solid var(--blue);border-radius:8px;padding:12px;cursor:pointer;color:white;text-align:left">
+                  style="background:var(--primary-bg);border:2px solid var(--blue);border-radius:8px;padding:12px;cursor:pointer;color:var(--text-strong);text-align:left">
                   <div style="font-size:16px;margin-bottom:4px">🌐</div>
                   <div style="font-weight:700;font-size:13px">HTTP Request</div>
                   <div style="color:var(--muted);font-size:11px">Wywołuje REST API — GitLab, Jira, własny serwis</div>
                 </button>
                 <button type="button" id="nt-shell-btn" onclick="ntSetType('shell')"
-                  style="background:#0d1822;border:2px solid var(--line);border-radius:8px;padding:12px;cursor:pointer;color:white;text-align:left">
+                  style="background:var(--surface-1);border:2px solid var(--line);border-radius:8px;padding:12px;cursor:pointer;color:var(--text-strong);text-align:left">
                   <div style="font-size:16px;margin-bottom:4px">⌨️</div>
                   <div style="font-weight:700;font-size:13px">Shell</div>
                   <div style="color:var(--muted);font-size:11px">Wykonuje komendy — psql, curl, oc, kubectl, własne CLI</div>
@@ -203,12 +173,12 @@
                 <input type="hidden" name="execution_type" id="nt-exec-type" value="http_request">
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
                   <div>
-                    <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Nazwa toola</label>
-                    <input name="name" placeholder="psql_query / call_api / get_pods" style="width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:13px">
+                    <label style="font-size:12px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Nazwa toola</label>
+                    <input name="name" placeholder="psql_query / call_api / get_pods" style="width:100%;box-sizing:border-box;padding:9px 11px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:13px">
                   </div>
                   <div>
-                    <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Status</label>
-                    <select name="enabled" style="width:100%;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:13px">
+                    <label style="font-size:12px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Status</label>
+                    <select name="enabled" style="width:100%;padding:9px 11px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:13px">
                       <option value="true">✅ Aktywny</option>
                       <option value="false">⏸ Wyłączony</option>
                     </select>
@@ -216,32 +186,32 @@
                 </div>
 
                 <div style="margin-bottom:12px">
-                  <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Opis (dla AI)</label>
-                  <input name="description" placeholder="Wykonuje zapytanie SQL / Pobiera dane z API / Listuje zasoby" style="width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:13px">
+                  <label style="font-size:12px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Opis (dla AI)</label>
+                  <input name="description" placeholder="Wykonuje zapytanie SQL / Pobiera dane z API / Listuje zasoby" style="width:100%;box-sizing:border-box;padding:9px 11px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:13px">
                 </div>
 
                 <!-- HTTP fields -->
                 <div id="nt-http-fields">
                   <div style="display:grid;grid-template-columns:1fr auto;gap:10px;margin-bottom:12px">
                     <div>
-                      <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">URL endpointu</label>
-                      <input name="url" placeholder="https://api.example.com/v1/search" style="width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:13px">
+                      <label style="font-size:12px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">URL endpointu</label>
+                      <input name="url" placeholder="https://api.example.com/v1/search" style="width:100%;box-sizing:border-box;padding:9px 11px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:13px">
                     </div>
                     <div>
-                      <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Metoda</label>
-                      <select name="method" style="padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:13px">
+                      <label style="font-size:12px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Metoda</label>
+                      <select name="method" style="padding:9px 11px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:13px">
                         <option>POST</option><option>GET</option><option>PUT</option><option>DELETE</option>
                       </select>
                     </div>
                   </div>
                   <div>
-                    <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Body JSON (parametry)</label>
-                    <textarea name="body_json" rows="3" style="width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:12px;font-family:monospace;resize:vertical">{"query":"${query}"}</textarea>
+                    <label style="font-size:12px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Body JSON (parametry)</label>
+                    <textarea name="body_json" rows="3" style="width:100%;box-sizing:border-box;padding:9px 11px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:12px;font-family:monospace;resize:vertical">{"query":"${query}"}</textarea>
                     <div style="font-size:11px;color:var(--muted);margin-top:4px">Użyj <code>${zmienna}</code> dla parametrów które AI będzie podawać</div>
                   </div>
                   <div style="margin-top:10px">
-                    <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Headers JSON (opcjonalnie)</label>
-                    <textarea name="headers_json" rows="2" style="width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:12px;font-family:monospace;resize:vertical" placeholder='{"Authorization": "Bearer ${API_TOKEN}"}'></textarea>
+                    <label style="font-size:12px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Headers JSON (opcjonalnie)</label>
+                    <textarea name="headers_json" rows="2" style="width:100%;box-sizing:border-box;padding:9px 11px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:12px;font-family:monospace;resize:vertical" placeholder='{"Authorization": "Bearer ${API_TOKEN}"}'></textarea>
                     <div style="font-size:11px;color:var(--muted);margin-top:4px">Wartości <code>${ZMIENNA}</code> podstawiane z ENV kontenera (zakładka 🔑 Sekrety) — np. tokeny API</div>
                   </div>
                 </div>
@@ -249,26 +219,26 @@
                 <!-- Shell fields -->
                 <div id="nt-shell-fields" style="display:none">
                   <div style="margin-bottom:12px">
-                    <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Komenda</label>
+                    <label style="font-size:12px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Komenda</label>
                     <input id="nt-cmd" name="cmd" placeholder='psql -h ${host} -U ${user} -d ${database} -c "${query}"'
-                      style="width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:13px;font-family:monospace">
+                      style="width:100%;box-sizing:border-box;padding:9px 11px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:13px;font-family:monospace">
                     <div style="font-size:11px;color:var(--muted);margin-top:4px"><code>${zmienna}</code> = jeden parametr &nbsp;|&nbsp; <code>${*args}</code> = wiele argumentów naraz</div>
                   </div>
                   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
                     <div>
-                      <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Timeout (s)</label>
-                      <input name="timeout_seconds" type="number" value="30" min="5" max="300" style="width:100%;box-sizing:border-box;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:13px">
+                      <label style="font-size:12px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Timeout (s)</label>
+                      <input name="timeout_seconds" type="number" value="30" min="5" max="300" style="width:100%;box-sizing:border-box;padding:9px 11px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:13px">
                     </div>
                     <div>
-                      <label style="font-size:12px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Ryzyko</label>
-                      <select name="risk_level" style="width:100%;padding:9px 11px;background:#0d1420;border:1px solid #2a4a6a;border-radius:6px;color:var(--text);font-size:13px">
+                      <label style="font-size:12px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Ryzyko</label>
+                      <select name="risk_level" style="width:100%;padding:9px 11px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:13px">
                         <option value="low">niski</option><option value="medium">średni</option><option value="high">wysoki</option>
                       </select>
                     </div>
                   </div>
                   <!-- Quick presets for shell -->
                   <div style="margin-bottom:10px">
-                    <div style="font-size:11px;color:#7dd3fc;font-weight:700;margin-bottom:6px">⚡ Szybkie wzorce:</div>
+                    <div style="font-size:11px;color:var(--info);font-weight:700;margin-bottom:6px">⚡ Szybkie wzorce:</div>
                     <div style="display:flex;flex-wrap:wrap;gap:6px">
                       <button type="button" onclick="ntPreset('psql -h ${host} -U ${user} -d ${database} -c "${query}"','Wykonaj zapytanie SQL na bazie PostgreSQL')" class="preset-btn">🐘 psql query</button>
                       <button type="button" onclick="ntPreset('psql ${*args}','Wykonaj dowolne polecenie psql')" class="preset-btn">🐘 psql (pełny)</button>
@@ -279,7 +249,7 @@
                   </div>
                 </div>
 
-                <button type="submit" style="background:var(--blue);border:none;color:white;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;margin-top:8px">➕ Dodaj narzędzie</button>
+                <button type="submit" style="background:var(--blue);border:none;color:var(--text-strong);padding:10px 20px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;margin-top:8px">➕ Dodaj narzędzie</button>
               </form>
             </div>
 
@@ -289,9 +259,9 @@ function ntSetType(t) {
   document.getElementById('nt-exec-type').value = isShell ? 'shell' : 'http_request';
   document.getElementById('nt-http-fields').style.display = isShell ? 'none' : 'block';
   document.getElementById('nt-shell-fields').style.display = isShell ? 'block' : 'none';
-  document.getElementById('nt-http-btn').style.background = isShell ? '#0d1822' : '#0d2a40';
+  document.getElementById('nt-http-btn').style.background = isShell ? 'var(--surface-1)' : 'var(--primary-bg)';
   document.getElementById('nt-http-btn').style.borderColor = isShell ? 'var(--line)' : 'var(--blue)';
-  document.getElementById('nt-shell-btn').style.background = isShell ? '#0d2a40' : '#0d1822';
+  document.getElementById('nt-shell-btn').style.background = isShell ? 'var(--primary-bg)' : 'var(--surface-1)';
   document.getElementById('nt-shell-btn').style.borderColor = isShell ? 'var(--blue)' : 'var(--line)';
 }
 function ntPreset(cmd, desc) {
@@ -362,21 +332,21 @@ function ntPreset(cmd, desc) {
         <h2>🔐 Bearer Token Authentication</h2>
         <p class="muted">Włącz uwierzytelnianie Bearer Token, aby wymagać klucza API od klientów AI (Claude Desktop, Cline, Continue). Po wygenerowaniu tokenu podaj go jako nagłówek <code>Authorization: Bearer &lt;token&gt;</code> lub <code>X-API-Key: &lt;token&gt;</code>.</p>
 
-        {% if payload.get('mcp_auth_token') %}<div style="background:#0a2a14;border:1px solid #155228;border-radius:10px;padding:20px;margin-bottom:20px">{% else %}<div style="background:#1a1000;border:1px solid #3a2800;border-radius:10px;padding:20px;margin-bottom:20px">{% endif %}
+        {% if payload.get('mcp_auth_token') %}<div style="background:var(--success-bg);border:1px solid var(--success-border);border-radius:10px;padding:20px;margin-bottom:20px">{% else %}<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:10px;padding:20px;margin-bottom:20px">{% endif %}
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-            {% if payload.get('mcp_auth_token') %}<span style="background:#155228;color:#4ade80;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700">● AKTYWNE</span>{% else %}<span style="background:#2a1800;color:#a06020;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700">○ WYŁĄCZONE</span>{% endif %}
+            {% if payload.get('mcp_auth_token') %}<span style="background:var(--success-solid);color:var(--success);padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700">● AKTYWNE</span>{% else %}<span style="background:var(--warning-bg);color:var(--warning);padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700">○ WYŁĄCZONE</span>{% endif %}
             <span style="color:var(--muted);font-size:13px">{% if payload.get('mcp_auth_token') %}Token wygenerowany — uwierzytelnianie włączone{% else %}Brak tokenu — serwer MCP jest otwarty dla wszystkich klientów{% endif %}</span>
           </div>
-          {% if payload.get('mcp_auth_token') %}<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><code id="auth-token-display" data-secret="{{ payload.get('mcp_auth_token', '') }}" style="flex:1;padding:9px 12px;background:#0d1a0d;border:1px solid #1a5f2e;border-radius:6px;font-size:13px;color:#4ade80;letter-spacing:1px">••••••••••••••••••••••••</code><button onclick="toggleSecret(this.previousElementSibling)" title="Pokaż/ukryj" style="background:none;border:1px solid #1a5f2e;color:#4ade80;padding:7px 12px;border-radius:6px;cursor:pointer">👁</button><button onclick="navigator.clipboard.writeText(document.getElementById('auth-token-display').dataset.secret).then(()=>{{ '{' }}{let b=event.target;let t=b.textContent;b.textContent='✓';setTimeout(()=>b.textContent=t,1500)}})" style="background:#155228;border:1px solid #1a5f2e;color:#4ade80;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:13px">Kopiuj</button></div>{% endif %}
+          {% if payload.get('mcp_auth_token') %}<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><code id="auth-token-display" data-secret="{{ payload.get('mcp_auth_token', '') }}" style="flex:1;padding:9px 12px;background:var(--success-bg);border:1px solid var(--success-border);border-radius:6px;font-size:13px;color:var(--success);letter-spacing:1px">••••••••••••••••••••••••</code><button onclick="toggleSecret(this.previousElementSibling)" title="Pokaż/ukryj" style="background:none;border:1px solid var(--success-border);color:var(--success);padding:7px 12px;border-radius:6px;cursor:pointer">👁</button><button onclick="navigator.clipboard.writeText(document.getElementById('auth-token-display').dataset.secret).then(()=>{{ '{' }}{let b=event.target;let t=b.textContent;b.textContent='✓';setTimeout(()=>b.textContent=t,1500)}})" style="background:var(--success-solid);border:1px solid var(--success-border);color:var(--success);padding:7px 14px;border-radius:6px;cursor:pointer;font-size:13px">Kopiuj</button></div>{% endif %}
           <div style="display:flex;gap:10px;flex-wrap:wrap">
             <form method="post" action="/api/runtimes/{{ runtime_id }}/generate-mcp-token" style="display:inline">
-              <button type="submit" style="background:#1f6b35;border:1px solid #27a147;color:#d1fae5;padding:8px 18px;border-radius:7px;cursor:pointer;font-size:13px">{% if payload.get('mcp_auth_token') %}↻ Regeneruj token{% else %}+ Generuj token{% endif %}</button>
+              <button type="submit" style="background:var(--success-solid);border:1px solid var(--success-border);color:var(--success);padding:8px 18px;border-radius:7px;cursor:pointer;font-size:13px">{% if payload.get('mcp_auth_token') %}↻ Regeneruj token{% else %}+ Generuj token{% endif %}</button>
             </form>
-            {% if payload.get('mcp_auth_token') %}<form method="post" action="/api/runtimes/{{ runtime_id }}/revoke-mcp-token" style="display:inline" onsubmit="return confirm('Usunąć token? Klienci z obecnym tokenem stracą dostęp.')"><button type="submit" style="background:#3a1010;border:1px solid #6a2020;color:#f47a80;padding:8px 18px;border-radius:7px;cursor:pointer;font-size:13px">✕ Usuń token</button></form>{% endif %}
+            {% if payload.get('mcp_auth_token') %}<form method="post" action="/api/runtimes/{{ runtime_id }}/revoke-mcp-token" style="display:inline" onsubmit="return confirm('Usunąć token? Klienci z obecnym tokenem stracą dostęp.')"><button type="submit" style="background:var(--danger-bg);border:1px solid var(--danger-border);color:var(--danger);padding:8px 18px;border-radius:7px;cursor:pointer;font-size:13px">✕ Usuń token</button></form>{% endif %}
           </div>
         </div>
 
-        {% if payload.get('mcp_auth_token') %}<div style="background:#0d1117;border:1px solid #30363d;border-radius:10px;padding:20px"><h3 style="margin-top:0;font-size:15px;color:var(--text)">Konfiguracja klientów</h3><p class="muted" style="font-size:13px">Skopiuj poniższe konfiguracje do swojego klienta AI.</p><div style="margin-bottom:18px"><div style="font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.5px;margin-bottom:6px">CLAUDE DESKTOP (~/.claude.json)</div><pre style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:14px;margin:0;overflow-x:auto;font-size:12px;color:#e6edf3">{'{'}
+        {% if payload.get('mcp_auth_token') %}<div style="background:var(--surface-0);border:1px solid var(--border-strong);border-radius:10px;padding:20px"><h3 style="margin-top:0;font-size:15px;color:var(--text)">Konfiguracja klientów</h3><p class="muted" style="font-size:13px">Skopiuj poniższe konfiguracje do swojego klienta AI.</p><div style="margin-bottom:18px"><div style="font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.5px;margin-bottom:6px">CLAUDE DESKTOP (~/.claude.json)</div><pre style="background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;padding:14px;margin:0;overflow-x:auto;font-size:12px;color:var(--text)">{'{'}
   "mcpServers": {'{'}
     "{{ payload.get('name', 'runtime') }}": {'{'}
       "type": "http",
@@ -386,7 +356,7 @@ function ntPreset(cmd, desc) {
       {'}'}
     {'}'}
   {'}'}
-{'}'}</pre></div><div style="margin-bottom:18px"><div style="font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.5px;margin-bottom:6px">CLINE / CONTINUE (settings.json)</div><pre style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:14px;margin:0;overflow-x:auto;font-size:12px;color:#e6edf3">{'{'}
+{'}'}</pre></div><div style="margin-bottom:18px"><div style="font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.5px;margin-bottom:6px">CLINE / CONTINUE (settings.json)</div><pre style="background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;padding:14px;margin:0;overflow-x:auto;font-size:12px;color:var(--text)">{'{'}
   "mcp.servers": [{'{'}
     "name": "{{ payload.get('name', 'runtime') }}",
     "transport": "streamable-http",
@@ -395,7 +365,7 @@ function ntPreset(cmd, desc) {
       "Authorization": "Bearer <TWÓJ_TOKEN>"
     {'}'}
   {'}'}]
-{'}'}</pre></div><div><div style="font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.5px;margin-bottom:6px">CURL (testowanie)</div><pre style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:14px;margin:0;overflow-x:auto;font-size:12px;color:#e6edf3">curl -H "Authorization: Bearer &lt;TWÓJ_TOKEN&gt;" {{ (payload.get('endpoint_url') or '') }}/health</pre></div></div>{% endif %}
+{'}'}</pre></div><div><div style="font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.5px;margin-bottom:6px">CURL (testowanie)</div><pre style="background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;padding:14px;margin:0;overflow-x:auto;font-size:12px;color:var(--text)">curl -H "Authorization: Bearer &lt;TWÓJ_TOKEN&gt;" {{ (payload.get('endpoint_url') or '') }}/health</pre></div></div>{% endif %}
 
       </div><!-- /pane-auth -->
 
@@ -405,21 +375,21 @@ function ntPreset(cmd, desc) {
         <!-- ENV VARS section -->
         <h2>🔑 Zmienne środowiskowe (ENV)</h2>
         <p class="muted">Zmienne są wstrzykiwane do kontenera przy następnym deploy. Po zmianie kliknij <b>Redeploy</b>.</p>
-        <div style="background:#1a1200;border:1px solid #3a2800;border-radius:8px;padding:14px;margin-bottom:16px">
+        <div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:8px;padding:14px;margin-bottom:16px">
           <div id="env-rows" style="display:grid;gap:6px;margin-bottom:10px">
             {% for k, v in _env_vars.items() %}<div id="env-row-{{ k }}" style="display:grid;grid-template-columns:160px 1fr auto auto auto;gap:8px;align-items:center">
-              <code style="padding:6px 10px;background:#0d1000;border:1px solid #3a2800;border-radius:6px;font-size:12px;color:#d4a820">{{ k }}</code>
-              <span id="env-display-{{ k }}" data-secret="{{ v }}" style="padding:6px 10px;background:#0d1000;border:1px solid #3a2800;border-radius:6px;font-size:12px;color:var(--muted)">{% if v %}{{ ('*' * min(len(v), 8)) }}{% else %}(puste){% endif %}</span>
-              <button onclick="toggleSecret(this)" data-target="env-display-{{ k }}" title="Pokaż/ukryj" style="background:none;border:1px solid #3a2800;color:var(--muted);padding:4px 8px;border-radius:6px;font-size:13px;cursor:pointer">👁</button>
-              <button onclick="startEditEnv('{{ runtime_id }}','{{ k }}')" title="Edytuj wartość" style="background:none;border:1px solid #1a3a5a;color:#5a9fd4;padding:4px 8px;border-radius:6px;font-size:13px;cursor:pointer">✏️</button>
-              <button onclick="delEnvVar('{{ runtime_id }}','{{ k }}')" title="Usuń" style="background:#3a1010;border:1px solid #6a2020;color:#f47a80;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">✕</button>
+              <code style="padding:6px 10px;background:var(--surface-0);border:1px solid var(--warning-border);border-radius:6px;font-size:12px;color:var(--warning)">{{ k }}</code>
+              <span id="env-display-{{ k }}" data-secret="{{ v }}" style="padding:6px 10px;background:var(--surface-0);border:1px solid var(--warning-border);border-radius:6px;font-size:12px;color:var(--muted)">{% if v %}{{ ('*' * min(len(v), 8)) }}{% else %}(puste){% endif %}</span>
+              <button onclick="toggleSecret(this)" data-target="env-display-{{ k }}" title="Pokaż/ukryj" style="background:none;border:1px solid var(--warning-border);color:var(--muted);padding:4px 8px;border-radius:6px;font-size:13px;cursor:pointer">👁</button>
+              <button onclick="startEditEnv('{{ runtime_id }}','{{ k }}')" title="Edytuj wartość" style="background:none;border:1px solid var(--border-strong);color:var(--primary);padding:4px 8px;border-radius:6px;font-size:13px;cursor:pointer">✏️</button>
+              <button onclick="delEnvVar('{{ runtime_id }}','{{ k }}')" title="Usuń" style="background:var(--danger-bg);border:1px solid var(--danger-border);color:var(--danger);padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">✕</button>
             </div>{% else %}<p class="muted" style="margin:0">Brak zmiennych ENV — dodaj poniżej.</p>{% endfor %}
           </div>
           <div style="display:grid;grid-template-columns:160px 1fr auto auto auto;gap:8px;align-items:center">
-            <input id="new-env-key" placeholder="NAZWA_ZMIENNEJ" style="padding:7px 10px;border:1px solid #3a2800;border-radius:6px;background:#0d1000;color:var(--text);font-size:12px;font-family:monospace">
-            <input id="new-env-val" type="password" placeholder="wartość / token" style="padding:7px 10px;border:1px solid #3a2800;border-radius:6px;background:#0d1000;color:var(--text);font-size:12px">
-            <button onclick="var i=document.getElementById('new-env-val');i.type=i.type==='password'?'text':'password'" title="Pokaż/ukryj" style="background:none;border:1px solid #3a2800;color:var(--muted);padding:7px 8px;border-radius:6px;font-size:13px;cursor:pointer">👁</button>
-            <button onclick="addEnvVar('{{ runtime_id }}')" style="background:#1a2800;border:1px solid #3a5000;color:#8ac840;padding:7px 12px;border-radius:6px;font-size:12px;cursor:pointer">+ Dodaj</button>
+            <input id="new-env-key" placeholder="NAZWA_ZMIENNEJ" style="padding:7px 10px;border:1px solid var(--warning-border);border-radius:6px;background:var(--surface-0);color:var(--text);font-size:12px;font-family:monospace">
+            <input id="new-env-val" type="password" placeholder="wartość / token" style="padding:7px 10px;border:1px solid var(--warning-border);border-radius:6px;background:var(--surface-0);color:var(--text);font-size:12px">
+            <button onclick="var i=document.getElementById('new-env-val');i.type=i.type==='password'?'text':'password'" title="Pokaż/ukryj" style="background:none;border:1px solid var(--warning-border);color:var(--muted);padding:7px 8px;border-radius:6px;font-size:13px;cursor:pointer">👁</button>
+            <button onclick="addEnvVar('{{ runtime_id }}')" style="background:var(--success-bg);border:1px solid var(--success-border);color:var(--success);padding:7px 12px;border-radius:6px;font-size:12px;cursor:pointer">+ Dodaj</button>
             <span></span>
           </div>
         </div>
@@ -474,7 +444,7 @@ function ntPreset(cmd, desc) {
           <details style="border-radius:6px;border:1px solid var(--line);padding:14px;margin-top:4px" {% if payload['policy'].get('require_approval_for') %}open{% endif %}>
             <summary style="font-size:14px;font-weight:700;cursor:pointer;color:var(--text)">✅ Zatwierdzenia (Human-in-the-Loop)</summary>
             <div style="margin-top:14px;display:grid;gap:12px">
-              <p class="muted" style="font-size:12px;margin:0">Operację wymagającą zatwierdzenia zawsze akceptuje <b>człowiek</b> — model nie może zatwierdzić jej sam. Jeśli klient AI obsługuje okno potwierdzenia (MCP elicitation), pytanie pojawia się w czacie i wywołanie czeka na odpowiedź. W pozostałych klientach narzędzie zwraca w czacie link do strony zatwierdzenia na platformie; po akceptacji model wywołuje narzędzie ponownie.</p>
+              <p class="muted" style="font-size:12px;margin:0">Operację wymagającą zatwierdzenia zawsze akceptuje <b>człowiek</b> — model nie może zatwierdzić jej sam. Jeśli klient AI obsługuje okno potwierdzenia (MCP elicitation), pytanie pojawia się w czacie i wywołanie czeka na odpowiedź. W pozostałych klientach narzędzie prosi w czacie o jednorazowy kod z aplikacji uwierzytelniającej albo podaje link do strony zatwierdzenia na platformie.</p>
               <label style="display:grid;gap:6px;font-size:13px;font-weight:600">
                 Wymagaj zatwierdzenia dla
                 <select name="require_approval_for" form="shell-policy-form" style="padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel-2);color:var(--text);font-size:13px">
@@ -489,6 +459,12 @@ function ntPreset(cmd, desc) {
                 <textarea name="require_approval_for_prefixes" form="shell-policy-form" placeholder="oc delete&#10;oc apply&#10;kubectl delete" style="min-height:80px;font-family:monospace;font-size:12px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel-2);color:var(--text)">{{ chr(10).join((payload['policy'].get('require_approval_for_prefixes') or [])) }}</textarea>
                 <span style="font-size:11px;color:var(--muted)">Komendy pasujące do tych prefiksów zatrzymają się i poczekają na zatwierdzenie. <strong>Nie dodawaj ich do Zablokowanych prefiksów</strong> — zatwierdzenie działa zamiast blokady.</span>
               </label>
+              <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;font-weight:600">
+                <input type="checkbox" name="approval_allow_code" value="1" form="shell-policy-form" style="width:auto;margin-top:2px" {% if payload['policy'].get('approval_allow_code', true) %}checked{% endif %}>
+                <span>Pozwól zatwierdzać kodem jednorazowym w czacie
+                  <span style="display:block;font-size:11px;font-weight:400;color:var(--muted)">Użytkownik wpisuje w czacie 6-cyfrowy kod z aplikacji uwierzytelniającej (konfiguracja: ⚙️ Ustawienia konta). Wygodniejsze niż link, ale komendę pokazuje wtedy model, a nie platforma — dla najbardziej wrażliwych serwerów wyłącz i zostaw sam link.</span>
+                </span>
+              </label>
               <label style="display:grid;gap:6px;font-size:13px;font-weight:600">
                 Limit czasu zatwierdzenia (sekundy)
                 <input type="number" name="approval_timeout_seconds" form="shell-policy-form" min="30" max="3600" value="{{ payload['policy'].get('approval_timeout_seconds', 300) }}" style="padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel-2);color:var(--text);font-size:13px;width:140px">
@@ -497,7 +473,7 @@ function ntPreset(cmd, desc) {
             </div>
           </details>
           <div style="padding:8px 0">
-            <button type="submit" form="shell-policy-form" style="background:#1a7a3f;padding:9px 20px;font-size:13px;font-weight:700;border-radius:8px;border:none;color:#fff;cursor:pointer">💾 Zapisz politykę shell</button>
+            <button type="submit" form="shell-policy-form" style="background:var(--success-solid);padding:9px 20px;font-size:13px;font-weight:700;border-radius:8px;border:none;color:var(--text-strong);cursor:pointer">💾 Zapisz politykę shell</button>
           </div>
           <details style="border-radius:6px">
             <summary style="font-size:13px;color:var(--muted)">Zaawansowane: edytuj policy JSON bezpośrednio</summary>
@@ -516,9 +492,9 @@ function ntPreset(cmd, desc) {
       <div class="rt-pane" id="pane-logs">
         <div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
           <h2 style="margin:0">📋 Logi kontenera</h2>
-          <button onclick="doAct('{{ runtime_id }}','logs')" style="background:#263548;border:1px solid #34465b;color:#c9d7e6;padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer">🔄 Odśwież logi</button>
+          <button onclick="doAct('{{ runtime_id }}','logs')" style="background:var(--surface-3);border:1px solid var(--border-strong);color:var(--text);padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer">🔄 Odśwież logi</button>
         </div>
-        <pre style="max-height:600px;overflow:auto;background:#060e18;border:1px solid #1a2e45;border-radius:8px;padding:14px;font-size:12px;line-height:1.7">{% if logs_text %}{{ logs_text }}{% else %}<span style="color:var(--muted)">Brak logów — uruchom serwer i odśwież.</span>{% endif %}</pre>
+        <pre style="max-height:600px;overflow:auto;background:var(--surface-0);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12px;line-height:1.7">{% if logs_text %}{{ logs_text }}{% else %}<span style="color:var(--muted)">Brak logów — uruchom serwer i odśwież.</span>{% endif %}</pre>
       </div>
 
       <!-- PANE: Wywołania AI -->
@@ -552,8 +528,8 @@ function ntPreset(cmd, desc) {
 
         {% if payload['status'] == 'running' %}{% else %}
         <!-- Pre-deploy dry-run mode -->
-        <div style="background:#1a1000;border:1px solid #3a2800;border-radius:8px;padding:12px 16px;margin-bottom:16px">
-          <div style="font-weight:700;color:#d4a820;margin-bottom:6px">⚠️ Serwer nie jest uruchomiony (status: {{ payload['status'] }})</div>
+        <div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:8px;padding:12px 16px;margin-bottom:16px">
+          <div style="font-weight:700;color:var(--warning);margin-bottom:6px">⚠️ Serwer nie jest uruchomiony (status: {{ payload['status'] }})</div>
           <p class="muted" style="font-size:12px;margin:0">Tryb <b>dry-run</b>: możesz sprawdzić konfigurację toola lub wywołać go przez własny endpoint.</p>
         </div>
         <details style="margin-bottom:16px;border:1px solid var(--line);border-radius:8px">
@@ -562,13 +538,13 @@ function ntPreset(cmd, desc) {
             {{ _tool_config_preview }}
           </div>
         </details>
-        <div style="background:#0a1520;border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:16px">
+        <div style="background:var(--surface-1);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:16px">
           <div style="font-weight:700;font-size:13px;margin-bottom:8px">🌐 Test przez własny endpoint</div>
           <div class="grid" style="grid-template-columns:1fr auto;gap:8px;margin-bottom:8px">
-            <input id="tt-ext-url" placeholder="http://localhost:8080/tools/my_tool" style="padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:#0d1420;color:var(--text);font-size:13px">
-            <button onclick="runExtTest()" style="background:var(--blue);border:none;color:white;padding:8px 14px;border-radius:6px;font-size:13px;cursor:pointer">Test</button>
+            <input id="tt-ext-url" placeholder="http://localhost:8080/tools/my_tool" style="padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface-1);color:var(--text);font-size:13px">
+            <button onclick="runExtTest()" style="background:var(--blue);border:none;color:var(--text-strong);padding:8px 14px;border-radius:6px;font-size:13px;cursor:pointer">Test</button>
           </div>
-          <label style="font-size:12px">Payload JSON<textarea id="tt-ext-body" style="width:100%;box-sizing:border-box;min-height:60px;font-family:monospace;font-size:12px;padding:8px;border:1px solid var(--line);border-radius:6px;background:#0d1420;color:var(--text)">{}</textarea></label>
+          <label style="font-size:12px">Payload JSON<textarea id="tt-ext-body" style="width:100%;box-sizing:border-box;min-height:60px;font-family:monospace;font-size:12px;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--surface-1);color:var(--text)">{}</textarea></label>
         </div>
         {% endif %}
 
@@ -596,7 +572,6 @@ function ntPreset(cmd, desc) {
         </form>
       </div><!-- /pane-clone -->
 
-    </main>
     <script>
     (function() {
       const TRANSITIONAL = new Set(['deploying','building','starting','stopping','restarting','deleting','checking','syncing_logs','draft']);
@@ -752,28 +727,28 @@ function ntPreset(cmd, desc) {
         inp.id = 'env-edit-input-' + key;
         inp.type = 'password';
         inp.value = currentValue;
-        inp.style.cssText = 'padding:6px 10px;border:1px solid #1a3a5a;border-radius:6px;background:#0d1a2a;color:var(--text);font-size:12px;width:100%;box-sizing:border-box';
+        inp.style.cssText = 'padding:6px 10px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface-1);color:var(--text);font-size:12px;width:100%;box-sizing:border-box';
         inp.onkeydown = function(e) { if (e.key === 'Enter') window.saveEnvVar(rid, key); };
         spanEl.replaceWith(inp);
 
         var toggleBtn = document.createElement('button');
         toggleBtn.textContent = '👁';
         toggleBtn.title = 'Pokaż/ukryj';
-        toggleBtn.style.cssText = 'background:none;border:1px solid #3a2800;color:var(--muted);padding:4px 8px;border-radius:6px;font-size:13px;cursor:pointer';
+        toggleBtn.style.cssText = 'background:none;border:1px solid var(--warning-border);color:var(--muted);padding:4px 8px;border-radius:6px;font-size:13px;cursor:pointer';
         toggleBtn.onclick = function() { inp.type = inp.type === 'password' ? 'text' : 'password'; };
         toggleEl.replaceWith(toggleBtn);
 
         var saveBtn = document.createElement('button');
         saveBtn.textContent = '💾';
         saveBtn.title = 'Zapisz';
-        saveBtn.style.cssText = 'background:#0d2a0d;border:1px solid #1a5a1a;color:#4ade80;padding:4px 8px;border-radius:6px;font-size:13px;cursor:pointer';
+        saveBtn.style.cssText = 'background:var(--success-bg);border:1px solid var(--success-border);color:var(--success);padding:4px 8px;border-radius:6px;font-size:13px;cursor:pointer';
         saveBtn.onclick = function() { window.saveEnvVar(rid, key); };
         editEl.replaceWith(saveBtn);
 
         var cancelBtn = document.createElement('button');
         cancelBtn.textContent = '✕';
         cancelBtn.title = 'Anuluj';
-        cancelBtn.style.cssText = 'background:none;border:1px solid #4a2800;color:#8a6040;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer';
+        cancelBtn.style.cssText = 'background:none;border:1px solid var(--warning-border);color:var(--warning);padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer';
         cancelBtn.onclick = function() { location.reload(); };
         delEl.replaceWith(cancelBtn);
 
@@ -798,13 +773,11 @@ function ntPreset(cmd, desc) {
         var text = el.textContent || el.innerText;
         navigator.clipboard.writeText(text).then(function() {
           var orig = el.style.background;
-          el.style.background = '#0d2a1a';
+          el.style.background = 'var(--success-bg)';
           el.title = '✅ Skopiowano!';
           setTimeout(function() { el.style.background = orig; el.title = 'Kliknij żeby skopiować'; }, 1500);
         });
       };
     })();
     </script>
-    <script src="/api/lang.js"></script>
-    </body></html>
-    
+{% endblock %}

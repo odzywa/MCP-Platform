@@ -2,7 +2,7 @@
 {% block content %}
     {% if ok %}<div class="success">{{ ok }}</div>{% endif %}
     {% if requests %}
-    <section style="border-color:#5a420f;background:#1a1000">
+    <section style="border-color:var(--warning-border);background:var(--warning-bg)">
       <h2>⏳ Oczekujące prośby o konto ({{ len(requests) }})</h2>
       {% if not requests %}<p class='muted'>Brak oczekujących próśb.</p>{% else %}
       <table>
@@ -16,11 +16,11 @@
             <div style="display:flex;gap:6px">
               <form method="post" action="/admin/users/approve/{{ r['id'] }}">
                 <input type="hidden" name="role" value="{{ r['requested_role'] }}">
-                <button style="background:#1a7a3f;border:none;padding:5px 10px;border-radius:5px;color:white;font-size:12px;cursor:pointer">✅ Akceptuj</button>
+                <button style="background:var(--success-solid);border:none;padding:5px 10px;border-radius:5px;color:var(--text-strong);font-size:12px;cursor:pointer">✅ Akceptuj</button>
               </form>
               <form method="post" action="/admin/users/approve/{{ r['id'] }}">
                 <input type="hidden" name="role" value="read_only">
-                <button style="background:#263548;border:none;padding:5px 10px;border-radius:5px;color:#c9d7e6;font-size:12px;cursor:pointer">👁 Akceptuj jako read_only</button>
+                <button style="background:var(--surface-3);border:none;padding:5px 10px;border-radius:5px;color:var(--text);font-size:12px;cursor:pointer">👁 Akceptuj jako read_only</button>
               </form>
               <form method="post" action="/admin/users/reject/{{ r['id'] }}">
                 <button class="delete" style="padding:5px 10px;font-size:12px">❌ Odrzuć</button>
@@ -39,14 +39,14 @@
           <td><b>{{ u['username'] }}</b></td>
           <td>
             <form method="post" action="/admin/users/role/{{ u['id'] }}" style="display:flex;gap:6px">
-              <select name="role" style="padding:5px 8px;font-size:12px;background:#0d1420;border:1px solid #34465b;border-radius:5px;color:#dce7f3">{% for r in ['read_only', 'read_write', 'admin'] %}<option value="{{ r }}" {% if r == u['role'] %}selected{% endif %}>{{ r }}</option>{% endfor %}</select>
-              <button style="background:#263548;border:none;padding:5px 10px;border-radius:5px;color:#c9d7e6;font-size:12px;cursor:pointer">Zmień</button>
+              <select name="role" style="padding:5px 8px;font-size:12px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:5px;color:var(--text)">{% for r in ['read_only', 'read_write', 'admin'] %}<option value="{{ r }}" {% if r == u['role'] %}selected{% endif %}>{{ r }}</option>{% endfor %}</select>
+              <button style="background:var(--surface-3);border:none;padding:5px 10px;border-radius:5px;color:var(--text);font-size:12px;cursor:pointer">Zmień</button>
             </form>
           </td>
           <td class="muted" style="font-size:12px">{{ u['created_at'][:16].replace('T', ' ') }}</td>
           <td>
             <form method="post" action="/admin/users/toggle/{{ u['id'] }}">
-              <button style="background:{% if u['active'] %}#263548{% else %}#1a7a3f{% endif %};border:none;padding:5px 10px;border-radius:5px;color:#c9d7e6;font-size:12px;cursor:pointer">
+              <button style="background:{% if u['active'] %}var(--border-strong){% else %}var(--success-border){% endif %};border:none;padding:5px 10px;border-radius:5px;color:var(--text);font-size:12px;cursor:pointer">
                 {% if u['active'] %}⛔ Dezaktywuj{% else %}✅ Aktywuj{% endif %}
               </button>
             </form>

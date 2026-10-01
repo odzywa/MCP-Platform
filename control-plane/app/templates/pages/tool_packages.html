@@ -11,7 +11,7 @@
           <div class="pkg-card-meta">
             <span class="badge" style="font-size:11px;padding:2px 7px">⚙️ {{ rc_name }}</span>
             <span class="badge" style="font-size:11px;padding:2px 7px">🔧 {{ tools_count }} tool{% if tools_count != 1 %}e{% endif %}</span>
-            {% if enabled %}<span class="badge" style="font-size:11px;padding:2px 7px;background:#1a2a1a;color:#5a9a5a">✅ aktywna</span>{% else %}<span class="badge" style="font-size:11px;padding:2px 7px;background:#2a1a1a;color:#9a5a5a">⛔ wyłączona</span>{% endif %}
+            {% if enabled %}<span class="badge" style="font-size:11px;padding:2px 7px;background:var(--success-bg);color:var(--success)">✅ aktywna</span>{% else %}<span class="badge" style="font-size:11px;padding:2px 7px;background:var(--danger-bg);color:var(--danger)">⛔ wyłączona</span>{% endif %}
           </div>
           {% if tool_names %}<div class="muted" style="font-size:11px">{{ tool_names }}</div>{% endif %}
           <div class="pkg-card-actions">
@@ -20,7 +20,7 @@
               <input type="hidden" name="deploy" value="true">
               <button {% if not enabled %}disabled class="disabled"{% endif %} style="white-space:nowrap;padding:7px 12px;font-size:12px">🚀 Stwórz MCP</button>
             </form>
-            <a href="/tool-packages/{{ package['id'] }}/edit" style="padding:7px 10px;font-size:12px;background:#1a2a3a;border:1px solid #2a4a6a;border-radius:6px;color:#7dd3fc;text-decoration:none;white-space:nowrap">✏️ Edytuj</a>
+            <a href="/tool-packages/{{ package['id'] }}/edit" style="padding:7px 10px;font-size:12px;background:var(--surface-2);border:1px solid var(--border-strong);border-radius:6px;color:var(--info);text-decoration:none;white-space:nowrap">✏️ Edytuj</a>
             <form method="post" action="/api/tool-packages/{{ package['id'] }}/toggle">
               <button class="secondary" style="padding:7px 10px;font-size:12px">{% if enabled %}Wyłącz{% else %}Włącz{% endif %}</button>
             </form>
@@ -31,18 +31,18 @@
       {% if error %}<div class="alert">{{ error }}</div>{% endif %}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
         <div>
-          <div style="font-size:15px;font-weight:800;color:white">🏗️ Build</div>
+          <div style="font-size:15px;font-weight:800;color:var(--text-strong)">🏗️ Build</div>
           <div class="muted">Wbudowane szablony + serwery z Kreatora. Wdróż jednym kliknięciem lub zbuduj własny obraz Docker.</div>
         </div>
         <div style="display:flex;gap:8px">
-          <a href="/create" style="background:var(--blue);color:white;padding:8px 14px;border-radius:8px;font-weight:700;font-size:13px;white-space:nowrap;text-decoration:none">+ Kreator zaawansowany</a>
-          <a href="/tool-packages/generate" style="background:#1a7a3f;color:white;padding:8px 14px;border-radius:8px;font-weight:700;font-size:13px;white-space:nowrap;text-decoration:none">✨ Generuj paczkę</a>
+          <a href="/create" style="background:var(--blue);color:var(--text-strong);padding:8px 14px;border-radius:8px;font-weight:700;font-size:13px;white-space:nowrap;text-decoration:none">+ Kreator zaawansowany</a>
+          <a href="/tool-packages/generate" style="background:var(--success-solid);color:var(--text-strong);padding:8px 14px;border-radius:8px;font-weight:700;font-size:13px;white-space:nowrap;text-decoration:none">✨ Generuj paczkę</a>
         </div>
       </div>
 
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:24px">
         {% for pkg in deploy_packages %}{% if not loop.first %}
-{% endif %}{% set tools_list = json.loads(pkg['package_json'] or '{}').get('tools') or [] %}{% set cat = pkg['category'] or 'other' %}{% set icon = cat_icons_big.get(cat, '📦') %}{% set is_custom = pkg['source'] in ('advanced-creator', 'user') %}{% set badge_text = '🛠️ Twój kreator' if is_custom else '✅ Wbudowany' %}{% set badge_bg = '#1a2a0a' if is_custom else '#0a1a2a' %}{% set badge_bd = '#3a5a1a' if is_custom else '#1a3a5a' %}{% set deployed_name = runtime_names.get(pkg['id'], '') %}<div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:8px"><div style="display:flex;justify-content:space-between;align-items:flex-start"><span style="font-size:20px">{{ icon }}</span><span style="background:{{ badge_bg }};border:1px solid {{ badge_bd }};color:#8ac840;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px">{{ badge_text }}</span></div><div style="font-weight:800;font-size:14px;color:white">{{ pkg['name'] }}</div><div style="color:var(--muted);font-size:12px">{{ (pkg['description'] or '')[:90] }}</div><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="badge" style="font-size:11px">{{ cat }}</span><span class="badge" style="font-size:11px;background:#0d1a2a">🔧 {{ len(tools_list) }} tools</span></div>{% if deployed_name %}<div style="font-size:11px;color:#4ac86a">✅ {{ deployed_name }}</div>{% endif %}<button onclick="mktDeploy('{{ pkg['id'] }}','{{ pkg['name'] }}')" style="margin-top:auto;background:var(--blue);border:none;color:white;padding:8px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">🚀 Wdróż</button></div>{% else %}<p class="muted">Brak dostępnych paczek.</p>{% endfor %}
+{% endif %}{% set tools_list = json.loads(pkg['package_json'] or '{}').get('tools') or [] %}{% set cat = pkg['category'] or 'other' %}{% set icon = cat_icons_big.get(cat, '📦') %}{% set is_custom = pkg['source'] in ('advanced-creator', 'user') %}{% set badge_text = '🛠️ Twój kreator' if is_custom else '✅ Wbudowany' %}{% set badge_bg = 'var(--success-bg)' if is_custom else 'var(--surface-1)' %}{% set badge_bd = 'var(--success-border)' if is_custom else 'var(--border-strong)' %}{% set deployed_name = runtime_names.get(pkg['id'], '') %}<div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:8px"><div style="display:flex;justify-content:space-between;align-items:flex-start"><span style="font-size:20px">{{ icon }}</span><span style="background:{{ badge_bg }};border:1px solid {{ badge_bd }};color:var(--success);font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px">{{ badge_text }}</span></div><div style="font-weight:800;font-size:14px;color:var(--text-strong)">{{ pkg['name'] }}</div><div style="color:var(--muted);font-size:12px">{{ (pkg['description'] or '')[:90] }}</div><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="badge" style="font-size:11px">{{ cat }}</span><span class="badge" style="font-size:11px;background:var(--surface-1)">🔧 {{ len(tools_list) }} tools</span></div>{% if deployed_name %}<div style="font-size:11px;color:var(--success)">✅ {{ deployed_name }}</div>{% endif %}<button onclick="mktDeploy('{{ pkg['id'] }}','{{ pkg['name'] }}')" style="margin-top:auto;background:var(--blue);border:none;color:var(--text-strong);padding:8px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">🚀 Wdróż</button></div>{% else %}<p class="muted">Brak dostępnych paczek.</p>{% endfor %}
       </div>
 
       <details style="margin-bottom:8px">
@@ -73,7 +73,7 @@
       </details>
 
       {% if is_admin %}<a class="card" href="/runtime-images" style="margin-top:4px">
-        <div style="font-weight:800;color:white;margin-bottom:4px">🐳 Budowanie obrazów</div>
+        <div style="font-weight:800;color:var(--text-strong);margin-bottom:4px">🐳 Budowanie obrazów</div>
         <div class="muted">Potrzebujesz narzędzi, których nie ma w obrazach platformy (psql, git, awscli…)? Zbuduj własny obraz: obraz bazowy + doinstalowane narzędzia.</div>
       </a>{% endif %}
 <!-- Deploy modal -->
@@ -82,12 +82,12 @@
     <h3 style="margin:0 0 6px">🚀 Wdrażanie: <span id="mkt-pkg-name"></span></h3>
     <p class="muted" style="font-size:12px;margin-bottom:16px">Wpisz nazwę i opcjonalne zmienne ENV (tokeny, klucze API).</p>
     <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Nazwa serwera</label>
-    <input id="mkt-name" placeholder="moj-serwer" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid var(--line);border-radius:6px;background:#0d1420;color:var(--text);font-size:13px;margin-bottom:14px">
+    <input id="mkt-name" placeholder="moj-serwer" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid var(--line);border-radius:6px;background:var(--surface-1);color:var(--text);font-size:13px;margin-bottom:14px">
     <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">🔑 Zmienne ENV <span style="color:var(--muted);font-weight:400">(opcjonalne)</span></label>
     <div id="mkt-env-list" style="display:grid;gap:6px;margin-bottom:8px"></div>
-    <button type="button" onclick="mktAddEnv()" style="background:#1a1200;border:1px solid #3a2800;color:#d4a820;padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer;margin-bottom:16px">+ Dodaj ENV</button>
+    <button type="button" onclick="mktAddEnv()" style="background:var(--warning-bg);border:1px solid var(--warning-border);color:var(--warning);padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer;margin-bottom:16px">+ Dodaj ENV</button>
     <div style="display:flex;gap:10px">
-      <button onclick="mktDoDeploy()" style="flex:1;background:var(--blue);border:none;color:white;padding:10px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">🚀 Wdróż</button>
+      <button onclick="mktDoDeploy()" style="flex:1;background:var(--blue);border:none;color:var(--text-strong);padding:10px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">🚀 Wdróż</button>
       <button onclick="document.getElementById('mkt-modal').style.display='none'" style="flex:1;background:var(--panel-2);border:1px solid var(--line);color:var(--muted);padding:10px;border-radius:8px;font-size:14px;cursor:pointer">Anuluj</button>
     </div>
     <div id="mkt-status" style="margin-top:10px;font-size:12px;color:var(--muted)"></div>
@@ -107,9 +107,9 @@ window.mktAddEnv = function() {
   var i = _mktEnvCount++;
   var row = document.createElement('div');
   row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:center';
-  row.innerHTML = '<input placeholder="NAZWA_ZMIENNEJ" style="padding:7px 8px;border:1px solid #3a2800;border-radius:6px;background:#0d1000;color:var(--text);font-size:12px;font-family:monospace">' +
-    '<input type="password" placeholder="wartość" style="padding:7px 8px;border:1px solid #3a2800;border-radius:6px;background:#0d1000;color:var(--text);font-size:12px">' +
-    '<button type="button" onclick="this.parentNode.remove()" style="background:#3a1010;border:1px solid #6a2020;color:#f47a80;padding:5px 8px;border-radius:5px;font-size:11px;cursor:pointer">✕</button>';
+  row.innerHTML = '<input placeholder="NAZWA_ZMIENNEJ" style="padding:7px 8px;border:1px solid var(--warning-border);border-radius:6px;background:var(--surface-0);color:var(--text);font-size:12px;font-family:monospace">' +
+    '<input type="password" placeholder="wartość" style="padding:7px 8px;border:1px solid var(--warning-border);border-radius:6px;background:var(--surface-0);color:var(--text);font-size:12px">' +
+    '<button type="button" onclick="this.parentNode.remove()" style="background:var(--danger-bg);border:1px solid var(--danger-border);color:var(--danger);padding:5px 8px;border-radius:5px;font-size:11px;cursor:pointer">✕</button>';
   document.getElementById('mkt-env-list').appendChild(row);
 };
 window.mktDoDeploy = function() {

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-    {% if error %}<div class="alert">{{ error }}</div>{% endif %}{% if ok %}<div class="alert" style="border-color:#1a7a3f;background:#0d2e1a;color:#8ee7b3">{{ ok }}</div>{% endif %}
+    {% if error %}<div class="alert">{{ error }}</div>{% endif %}{% if ok %}<div class="alert" style="border-color:var(--success-border);background:var(--success-bg);color:var(--success)">{{ ok }}</div>{% endif %}
     <section>
       <h2>External MCP Servers</h2>
       <p class="muted">

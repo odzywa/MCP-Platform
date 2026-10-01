@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}{% macro rc_adapter_checks(item) %}{% set current = json.loads(item['allowed_execution_types_json'] or '[]') %}{% for a in implemented_adapters %}<label style="display:inline-flex;gap:5px;align-items:center;margin-right:12px;font-size:12px"><input type="checkbox" name="allowed_adapters" value="{{ a['name'] }}"{% if a['name'] in current %} checked{% endif %}> {{ a['name'] }}</label>{% endfor %}{% endmacro %}
 
-      {% if error %}<div class="alert">{{ error }}</div>{% endif %}{% if ok %}<div class="alert" style="border-color:#1a7a3f;background:#0d2e1a;color:#8ee7b3">{{ ok }}</div>{% endif %}
+      {% if error %}<div class="alert">{{ error }}</div>{% endif %}{% if ok %}<div class="alert" style="border-color:var(--success-border);background:var(--success-bg);color:var(--success)">{{ ok }}</div>{% endif %}
       <section>
         <h2>Typy środowisk (Runtime Classes)</h2>
         <p class="muted">
@@ -22,9 +22,9 @@
           <td style="white-space:nowrap">
             <div style="display:flex;gap:6px">
               <button onclick="toggleRCEdit('{{ item['name'] }}')"
-                style="background:#1a2a3a;border:1px solid #2a4a6a;color:#7dd3fc;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">✏️ Edytuj</button>
+                style="background:var(--surface-2);border:1px solid var(--border-strong);color:var(--info);padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">✏️ Edytuj</button>
               <form method="post" action="/api/runtime-classes/{{ item['name'] }}/toggle" style="display:inline">
-                <button style="font-size:11px;padding:4px 8px;background:#263548;border:1px solid #34465b;border-radius:6px;cursor:pointer">
+                <button style="font-size:11px;padding:4px 8px;background:var(--surface-3);border:1px solid var(--border-strong);border-radius:6px;cursor:pointer">
                   {% if item['enabled'] %}Wyłącz{% else %}Włącz{% endif %}
                 </button>
               </form>
@@ -37,36 +37,36 @@
         </tr>
         <tr id="rcedit-{{ item['name'] }}" style="display:none">
           <td colspan="6" style="padding:0">
-            <div style="background:#0a1520;border-top:1px solid #1a3a50;padding:16px 18px">
+            <div style="background:var(--surface-1);border-top:1px solid var(--border-strong);padding:16px 18px">
               <form method="post" action="/api/runtime-classes/{{ item['name'] }}/update">
                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
                   <div>
-                    <label style="font-size:11px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Obraz Docker</label>
-                    <input name="runtime_image" value="{{ item['runtime_image'] }}" style="width:100%;box-sizing:border-box;padding:8px 10px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:12px;font-family:monospace">
+                    <label style="font-size:11px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Obraz Docker</label>
+                    <input name="runtime_image" value="{{ item['runtime_image'] }}" style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:12px;font-family:monospace">
                   </div>
                   <div>
-                    <label style="font-size:11px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Ryzyko</label>
-                    <select name="risk_level" style="width:100%;padding:8px 10px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:13px">
+                    <label style="font-size:11px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Ryzyko</label>
+                    <select name="risk_level" style="width:100%;padding:8px 10px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:13px">
                       <option {% if item['risk_level'] == 'low' %}selected{% endif %} value="low">niski (low)</option>
                       <option {% if item['risk_level'] == 'medium' %}selected{% endif %} value="medium">średni (medium)</option>
                       <option {% if item['risk_level'] == 'high' %}selected{% endif %} value="high">wysoki (high)</option>
                     </select>
                   </div>
                   <div>
-                    <label style="font-size:11px;font-weight:700;color:#aac8e0;display:block;margin-bottom:4px">Security profile</label>
-                    <select name="security_profile" style="width:100%;padding:8px 10px;background:#0d1420;border:1px solid #34465b;border-radius:6px;color:var(--text);font-size:13px">
+                    <label style="font-size:11px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:4px">Security profile</label>
+                    <select name="security_profile" style="width:100%;padding:8px 10px;background:var(--surface-1);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:13px">
                       <option {% if item['security_profile'] == 'restricted' %}selected{% endif %} value="restricted">restricted</option>
                       <option {% if item['security_profile'] == 'standard' %}selected{% endif %} value="standard">standard</option>
                     </select>
                   </div>
                 </div>
                 <div style="margin-bottom:12px">
-                  <label style="font-size:11px;font-weight:700;color:#aac8e0;display:block;margin-bottom:6px">Dozwolone silniki</label>
+                  <label style="font-size:11px;font-weight:700;color:var(--text-soft);display:block;margin-bottom:6px">Dozwolone silniki</label>
                   <div style="display:flex;flex-wrap:wrap;gap:4px">{{ rc_adapter_checks(item) }}</div>
                 </div>
                 <div style="display:flex;gap:8px">
-                  <button type="submit" style="background:var(--blue);border:none;color:white;padding:7px 16px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">💾 Zapisz</button>
-                  <button type="button" onclick="toggleRCEdit('{{ item['name'] }}')" style="background:#263548;border:none;color:#c9d7e6;padding:7px 12px;border-radius:6px;font-size:12px;cursor:pointer">Anuluj</button>
+                  <button type="submit" style="background:var(--blue);border:none;color:var(--text-strong);padding:7px 16px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">💾 Zapisz</button>
+                  <button type="button" onclick="toggleRCEdit('{{ item['name'] }}')" style="background:var(--surface-3);border:none;color:var(--text);padding:7px 12px;border-radius:6px;font-size:12px;cursor:pointer">Anuluj</button>
                 </div>
               </form>
             </div>

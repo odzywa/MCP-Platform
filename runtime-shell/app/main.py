@@ -108,13 +108,34 @@ _pending_elicitations: dict[str, "asyncio.Future[str]"] = {}
 _SSE_KEEPALIVE_SECONDS = 10
 
 
+def _code_approval_enabled() -> bool:
+    """One-time codes typed in the chat are accepted (policy switch, on by default) and approvals are in use."""
+    uses_approvals = bool(policy.get("require_approval_for") or policy.get("require_approval_for_prefixes"))
+    return uses_approvals and policy.get("approval_allow_code", True) is not False
+
+
+_APPROVAL_CODE_PROPERTY = {
+    "type": "string",
+    "description": (
+        "One-time 6-digit code from the user's authenticator app. Only pass it after the tool answered "
+        "approval_required and the user typed the code in the chat. Never guess it."
+    ),
+}
+
+
 def _public_schema(tool: dict[str, Any]) -> dict[str, Any]:
-    """Input schema as shown to clients — without the legacy __confirm property (it approves nothing)."""
+    """
+    Input schema as shown to clients: without the legacy __confirm property (it approves nothing)
+    and, when one-time codes are accepted, with the approval_code parameter.
+    """
     schema = tool.get("input_schema") or {}
     props = schema.get("properties")
-    if not isinstance(props, dict) or "__confirm" not in props:
+    if not isinstance(props, dict):
         return schema
-    return {**schema, "properties": {k: v for k, v in props.items() if k != "__confirm"}}
+    public = {k: v for k, v in props.items() if k != "__confirm"}
+    if _code_approval_enabled():
+        public["approval_code"] = _APPROVAL_CODE_PROPERTY
+    return {**schema, "properties": public}
 
 
 def load_config() -> None:
@@ -352,9 +373,14 @@ def _parse_pipeline_template(command_template: list[str]) -> list[list[str]]:
     return [s for s in stages if s]  # drop empty stages
 
 
-def _build_stage_argv(stage_template: list[str], arguments: dict[str, Any]) -> list[str]:
+def _build_stage_argv(stage_template: list[str], arguments: dict[str, Any],
+                      mask_env: bool = False) -> list[str]:
     """
     Build argv for one pipeline stage.
+
+    mask_env=True builds a version for DISPLAY (approval prompts, approval page): every
+    value coming from the container environment is replaced with ***, so secrets such as
+    API tokens never reach the model, the chat or the control plane.
 
     Rules:
     - ${var}  → exactly ONE element in argv (the raw value, no splitting)
@@ -372,7 +398,7 @@ def _build_stage_argv(stage_template: list[str], arguments: dict[str, Any]) -> l
     # OC_SERVER podmieniłby adres w szablonie ["oc", "--token=${OC_TOKEN}",
     # "--server=${OC_SERVER}", ...] i wysłał prawdziwy token pod obcy adres.
     merged_env: dict[str, str] = {k: str(v) for k, v in arguments.items()}
-    merged_env.update(os.environ)
+    merged_env.update({name: "***" for name in os.environ} if mask_env else os.environ)
 
     argv: list[str] = []
     for part in stage_template:
@@ -534,11 +560,11 @@ def _not_executed(tool_name: str, message: str, **extra: Any) -> dict[str, Any]:
 
 
 async def _link_approval(tool_name: str, arguments: dict[str, Any], cmd_preview: str,
-                         tool_mode: str, caller_ip: str, model: str) -> dict[str, Any] | None:
+                         tool_mode: str, caller_ip: str, model: str, code: str = "") -> dict[str, Any] | None:
     """
-    Zgoda przez link do control-plane (dla klientów bez okna potwierdzenia).
-    Zwraca None gdy człowiek zatwierdził dokładnie tę komendę, inaczej wynik
-    "nie wykonano" z linkiem. Jedna zgoda = jedno wykonanie.
+    Zgoda człowieka dla klientów bez okna potwierdzenia: jednorazowy kod z aplikacji
+    uwierzytelniającej wpisany w czacie albo link do control-plane. Zwraca None gdy
+    zatwierdzono dokładnie tę komendę, inaczej wynik "nie wykonano". Jedna zgoda = jedno wykonanie.
     """
     if not CALLBACK_URL or not RUNTIME_ID:
         return _not_executed(
@@ -549,24 +575,60 @@ async def _link_approval(tool_name: str, arguments: dict[str, Any], cmd_preview:
         )
     req_id = _approval_key(tool_name, {**arguments, "_command": cmd_preview})
     max_age = _approval_timeout()
+    if not _code_approval_enabled():
+        code = ""
+    code_note = ""
+
+    def status_of(data: dict[str, Any] | None) -> str:
+        """Effective state: an approval or rejection older than the window no longer counts."""
+        status = (data or {}).get("status") or "none"
+        if status in ("approved", "rejected") and not _approval_fresh((data or {}).get("decided_at"), max_age):
+            return "stale"
+        return status
+
+    async def get_status() -> dict[str, Any] | None:
+        return await asyncio.to_thread(_control_plane, "GET", f"/api/approval-status/{req_id}")
+
+    async def open_request() -> dict[str, Any]:
+        created = await asyncio.to_thread(_control_plane, "POST", "/api/approval-request", {
+            "id": req_id, "runtime_id": RUNTIME_ID, "tool_name": tool_name,
+            "arguments": {**arguments, "_command": cmd_preview},
+            "mode": tool_mode, "caller_ip": caller_ip, "model": model,
+        })
+        if not created or not created.get("url"):
+            raise RuntimeError("control plane did not accept the approval request")
+        return created
+
     try:
-        data = await asyncio.to_thread(_control_plane, "GET", f"/api/approval-status/{req_id}")
-        # Prośba już czeka: model wywołał ponownie — daj człowiekowi chwilę na decyzję,
-        # zamiast odsyłać model od razu (ograniczone, żeby nie przekroczyć timeoutu proxy).
-        if data and data.get("status") == "pending":
+        data = await get_status()
+        if code and status_of(data) != "approved":
+            # Kod z czatu: platforma sprawdza go i (jeśli poprawny) zatwierdza tę prośbę.
+            if status_of(data) != "pending":
+                data = await open_request()
+            answer = await asyncio.to_thread(_control_plane, "POST", f"/api/approval-code/{req_id}", {"code": code}) or {}
+            if answer.get("ok"):
+                data = await get_status()
+            elif answer.get("reason") == "locked":
+                code_note = ("Too many wrong codes — approval by code is locked for this server for a while. "
+                             "The approval link still works.\n\n")
+            else:
+                code_note = (f"The code was not accepted (wrong, expired or already used; attempts left: "
+                             f"{answer.get('attempts_left', 0)}). Ask the user for a NEW code — do not guess.\n\n")
+        elif status_of(data) == "pending":
+            # Prośba już czeka: model wywołał ponownie — daj człowiekowi chwilę na decyzję,
+            # zamiast odsyłać model od razu (ograniczone, żeby nie przekroczyć timeoutu proxy).
             deadline = time.monotonic() + min(20, int(policy.get("approval_wait_seconds") or 20))
-            while time.monotonic() < deadline:
+            while time.monotonic() < deadline and status_of(data) == "pending":
                 await asyncio.sleep(2)
-                data = await asyncio.to_thread(_control_plane, "GET", f"/api/approval-status/{req_id}")
-                if not data or data.get("status") != "pending":
-                    break
-        status = (data or {}).get("status")
-        if status == "approved" and _approval_fresh(data.get("decided_at"), max_age):
+                data = await get_status()
+
+        status = status_of(data)
+        if status == "approved":
             used = await asyncio.to_thread(_control_plane, "POST", f"/api/approval-consume/{req_id}", {})
             if used and used.get("ok"):
                 return None
             status = "used"  # ktoś inny zużył tę zgodę — potrzebna nowa
-        if status == "rejected" and _approval_fresh(data.get("decided_at"), max_age):
+        if status == "rejected":
             reason = data.get("reject_reason") or "rejected"
             return _not_executed(
                 tool_name,
@@ -574,37 +636,42 @@ async def _link_approval(tool_name: str, arguments: dict[str, Any], cmd_preview:
                 f"Command: {cmd_preview}\nReason: {reason}\n\nDo not retry.",
                 approval_denied=True, error=f"operation not approved: {reason}",
             )
-        if status == "pending":
-            url = data.get("url")
-        else:
-            created = await asyncio.to_thread(_control_plane, "POST", "/api/approval-request", {
-                "id": req_id, "runtime_id": RUNTIME_ID, "tool_name": tool_name,
-                "arguments": {**arguments, "_command": cmd_preview},
-                "mode": tool_mode, "caller_ip": caller_ip, "model": model,
-            })
-            url = (created or {}).get("url")
-            if not url:
-                raise RuntimeError("control plane did not accept the approval request")
+        if status != "pending":
+            data = await open_request()
     except Exception as exc:
         return _not_executed(
             tool_name,
             f"\u26d4 This operation requires human approval, but the approval service could not be reached "
             f"({exc}). It was NOT executed.\n\nCommand: {cmd_preview}",
         )
+
+    url = data.get("url")
+    if data.get("code_allowed") and _code_approval_enabled():
+        how = (
+            f"The user can approve in one of two ways:\n"
+            f"1. One-time code — ask the user for the current 6-digit code from their authenticator app, "
+            f"then call this same tool again with exactly the same parameters plus approval_code=\"<the code>\".\n"
+            f"2. Link — the user opens it and decides: {url}\n"
+            f"   After they say it is approved, call this same tool again with exactly the same parameters.\n\n"
+            f"Show the user the exact command above. You cannot approve this yourself; never invent a code."
+        )
+    else:
+        how = (
+            f"Approval link — show it to the user exactly as written:\n{url}\n\n"
+            f"You cannot approve this yourself and there is no parameter that confirms it. "
+            f"Ask the user to open the link and decide. After they say it is approved, call this same "
+            f"tool again with exactly the same parameters."
+        )
     return _not_executed(
         tool_name,
         f"\u23f8 This operation is waiting for approval by a human and has NOT been executed.\n\n"
-        f"Command: {cmd_preview}\n\n"
-        f"Approval link — show it to the user exactly as written:\n{url}\n\n"
-        f"You cannot approve this yourself and there is no parameter that confirms it. "
-        f"Ask the user to open the link and decide. After they say it is approved, call this same "
-        f"tool again with exactly the same parameters.",
+        f"Command: {cmd_preview}\n\n{code_note}{how}",
         approval_url=url,
     )
 
 
 async def _require_approval(tool_name: str, arguments: dict[str, Any], cmd_preview: str, tool_mode: str,
-                            caller_ip: str, model: str, elicit: Any) -> dict[str, Any] | None:
+                            caller_ip: str, model: str, elicit: Any, code: str = "") -> dict[str, Any] | None:
     """Returns None when a human approved the operation, otherwise the "not executed" result."""
     if elicit is not None:
         # Klient MCP sam pyta użytkownika (okno Tak/Nie) — wywołanie czeka na odpowiedź,
@@ -628,7 +695,7 @@ async def _require_approval(tool_name: str, arguments: dict[str, Any], cmd_previ
                 approval_denied=True, error="approval timed out",
             )
         # any other outcome (client error) → fall back to the approval link
-    return await _link_approval(tool_name, arguments, cmd_preview, tool_mode, caller_ip, model)
+    return await _link_approval(tool_name, arguments, cmd_preview, tool_mode, caller_ip, model, code)
 
 
 def _run_pipeline(
@@ -725,6 +792,8 @@ async def execute_tool(tool_name: str, arguments: dict[str, Any],
     # Legacy parameter: the model used to confirm operations itself. It is ignored now —
     # only a human can approve (client dialog or approval link).
     arguments.pop("__confirm", None)
+    # One-time code typed by the user in the chat; verified by the control plane, never by the model.
+    approval_code = _re.sub(r"\D", "", str(arguments.pop("approval_code", "") or ""))
     policy_error = _policy_check(tool, arguments or {})
     if policy_error:
         return {"ok": False, "error": policy_error, "policy_blocked": True}
@@ -769,9 +838,13 @@ async def execute_tool(tool_name: str, arguments: dict[str, Any],
 
     # ── Human-in-the-Loop approval — decyzję podejmuje człowiek, nigdy model.
     if _needs_approval(tool) or _stages_need_approval(stages):
-        cmd_preview = " | ".join(shlex.join(s) for s in stages)
+        # Podgląd dla człowieka i modelu — bez sekretów z ENV (tokeny, hasła).
+        cmd_preview = " | ".join(
+            shlex.join(_build_stage_argv(tmpl, arguments, mask_env=True)) for tmpl in pipeline_templates
+        )
         tool_mode = (tool.get("security") or {}).get("mode") or tool.get("mode", "read-only")
-        blocked = await _require_approval(tool_name, arguments, cmd_preview, tool_mode, caller_ip, model, elicit)
+        blocked = await _require_approval(tool_name, arguments, cmd_preview, tool_mode, caller_ip, model,
+                                          elicit, approval_code)
         if blocked is not None:
             _fire_tool_call_log(tool_name, arguments, blocked,
                                 int((time.monotonic() - _t0) * 1000),

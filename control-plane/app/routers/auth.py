@@ -6,14 +6,20 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from markupsafe import Markup
 
 from .. import queries as sql
-from .. import store
+from .. import store, totp
 from ..auth import create_session, current_user, delete_session, hash_password, verify_password
 from ..config import AUTH_COOKIE, SESSION_TTL_H
 from ..rendering import render
 from ..services import safe_return_to
 from ..web import render_page
+
+try:  # QR code for authenticator setup; without it the secret is shown as text only
+    import segno
+except ImportError:  # pragma: no cover
+    segno = None
 
 
 router = APIRouter()
@@ -86,7 +92,88 @@ async def register_post(request: Request) -> Any:
 @router.get("/user/settings", response_class=HTMLResponse)
 def user_settings_page(error: str = "", ok: str = "") -> str:
     user = current_user.get() or {}
-    return render_page('settings', "pages/user_settings.html", error=error, ok=ok, user=user)
+    account = store.one("SELECT role, totp_secret, totp_enabled FROM users WHERE id=?", (user.get("user_id"),)) or {}
+    # A generated but not yet confirmed secret: show the QR code until the first valid code arrives.
+    pending_secret = account.get("totp_secret") if account.get("totp_secret") and not account.get("totp_enabled") else ""
+    totp_qr = ""
+    if pending_secret and segno is not None:
+        uri = totp.provisioning_uri(pending_secret, user.get("username", "user"))
+        totp_qr = Markup(segno.make(uri, error="m").svg_inline(scale=5, border=3, dark="#000000", light="#ffffff"))
+    return render_page(
+        "settings",
+        "pages/user_settings.html",
+        error=error,
+        ok=ok,
+        user=user,
+        totp_enabled=bool(account.get("totp_enabled")),
+        totp_secret=pending_secret,
+        totp_qr=totp_qr,
+        can_approve=account.get("role") in ("admin", "read_write"),
+    )
+
+
+def _own_account() -> dict[str, Any] | None:
+    """The logged-in user's row; None for the service API token (it has no account)."""
+    user = current_user.get() or {}
+    if not user.get("user_id"):
+        return None
+    return store.one("SELECT * FROM users WHERE id=?", (user["user_id"],))
+
+
+def _settings_redirect(**message: str) -> RedirectResponse:
+    query = "&".join(f"{key}={quote(value)}" for key, value in message.items())
+    return RedirectResponse(f"/user/settings?{query}#totp", status_code=303)
+
+
+@router.post("/api/user/totp/setup")
+async def totp_setup() -> Any:
+    """Generate a new secret; it becomes active only after the first valid code (totp_enable)."""
+    account = _own_account()
+    if not account:
+        raise HTTPException(status_code=403, detail="Wymagane zalogowanie na konto użytkownika")
+    if account["totp_enabled"]:
+        return _settings_redirect(error="Aplikacja uwierzytelniająca jest już włączona")
+    store.execute(
+        "UPDATE users SET totp_secret=?, totp_enabled=0, totp_last_step=0, updated_at=? WHERE id=?",
+        (totp.generate_secret(), store.now_iso(), account["id"]),
+    )
+    return _settings_redirect(ok="Zeskanuj kod QR i wpisz pierwszy kod z aplikacji")
+
+
+@router.post("/api/user/totp/enable")
+async def totp_enable(request: Request) -> Any:
+    account = _own_account()
+    if not account:
+        raise HTTPException(status_code=403, detail="Wymagane zalogowanie na konto użytkownika")
+    form = await request.form()
+    code = re.sub(r"\D", "", str(form.get("code") or ""))
+    if not account["totp_secret"] or account["totp_enabled"]:
+        return _settings_redirect(error="Najpierw wygeneruj kod QR")
+    step = totp.verify(account["totp_secret"], code)
+    if step is None:
+        return _settings_redirect(error="Nieprawidłowy kod — sprawdź godzinę w telefonie i spróbuj ponownie")
+    store.execute(
+        "UPDATE users SET totp_enabled=1, totp_last_step=?, updated_at=? WHERE id=?",
+        (step, store.now_iso(), account["id"]),
+    )
+    store.audit(account["username"], "totp_enabled", "user", account["username"], {})
+    return _settings_redirect(ok="Aplikacja uwierzytelniająca włączona — możesz zatwierdzać operacje kodem w czacie")
+
+
+@router.post("/api/user/totp/disable")
+async def totp_disable(request: Request) -> Any:
+    account = _own_account()
+    if not account:
+        raise HTTPException(status_code=403, detail="Wymagane zalogowanie na konto użytkownika")
+    form = await request.form()
+    if not verify_password(str(form.get("current_password") or ""), account["password_hash"]):
+        return _settings_redirect(error="Nieprawidłowe hasło")
+    store.execute(
+        "UPDATE users SET totp_secret='', totp_enabled=0, totp_last_step=0, updated_at=? WHERE id=?",
+        (store.now_iso(), account["id"]),
+    )
+    store.audit(account["username"], "totp_disabled", "user", account["username"], {})
+    return _settings_redirect(ok="Aplikacja uwierzytelniająca wyłączona")
 
 
 @router.post("/api/user/change-password")

@@ -1,10 +1,12 @@
-<!doctype html><html><head><title>Brak dostępu</title>
-    <style>body{font-family:Arial;background:#111820;color:#dce7f3;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
-    .box{background:#182230;border:1px solid #2b394a;border-radius:12px;padding:40px;text-align:center;max-width:420px}</style></head>
-    <body><div class="box">
-      <div style="font-size:48px;margin-bottom:16px">🔒</div>
-      <h2 style="margin:0 0 10px">Brak dostępu</h2>
-      <p style="color:#8ea2b8;margin-bottom:20px">{{ msg }}</p>
-      <p style="color:#607083;font-size:13px">Zalogowany jako: <b>{{ username }}</b> (rola: {{ role }})</p>
-      <a href="/" style="background:#1f9bd1;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:700">← Powrót</a>
-    </div></body></html>
+<!doctype html>
+<html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brak dostępu — MCP Platform</title><link rel="stylesheet" href="/static/css/base.css"></head>
+<body class="centered">
+  <div class="auth-box" style="text-align:center">
+    <div style="font-size:40px;margin-bottom:12px">🔒</div>
+    <h2 style="margin:0 0 10px;font-size:20px">Brak dostępu</h2>
+    <p style="color:var(--text-soft);margin:0 0 16px">{{ msg }}</p>
+    <p class="muted" style="margin:0 0 22px">Zalogowany jako: <b>{{ username }}</b> (rola: {{ role }})</p>
+    <a class="btn" href="/">← Powrót</a>
+  </div>
+</body></html>

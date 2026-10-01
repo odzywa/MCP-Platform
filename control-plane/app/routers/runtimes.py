@@ -12,7 +12,6 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from .. import queries as sql
 from .. import store
 from ..auth import current_user
-from ..rendering import render
 from ..services import (
     _dispatch_webhooks,
     _runtime_internal_base,
@@ -106,7 +105,7 @@ def runtime_detail(runtime_id: str, request: Request, welcome: str = "", tool_ad
     # Build dynamic adapter bind form — one hidden section per available adapter
     available_adapters = [a for a in store.rows("SELECT * FROM execution_adapters WHERE enabled=1 AND implemented=1 ORDER BY name")
                           if a['name'] not in bound_adapter_names]
-    return render('pages/runtime_detail.html', _base_url=_base_url, _env_vars=_env_vars, _is_admin=_is_admin, _platform_base=_platform_base, available_adapters=available_adapters, credentials=credentials, logs_text=logs_text, payload=payload, policy_json=policy_json, runtime_adapters=runtime_adapters, runtime_audit=runtime_audit, runtime_id=runtime_id, runtime_tool_calls=runtime_tool_calls, targets=targets, tool_added=tool_added, welcome=welcome)
+    return render_page('runtimes', 'pages/runtime_detail.html', _base_url=_base_url, _env_vars=_env_vars, _is_admin=_is_admin, _platform_base=_platform_base, available_adapters=available_adapters, credentials=credentials, logs_text=logs_text, payload=payload, policy_json=policy_json, runtime_adapters=runtime_adapters, runtime_audit=runtime_audit, runtime_id=runtime_id, runtime_tool_calls=runtime_tool_calls, targets=targets, tool_added=tool_added, welcome=welcome)
 
 
 @router.post("/api/runtimes/{runtime_id}/tools")
@@ -478,6 +477,8 @@ async def update_shell_policy(runtime_id: str, request: Request):
     except (ValueError, TypeError):
         policy["approval_timeout_seconds"] = 300
     policy.pop("approval_mode", None)  # removed setting: approval is always decided by a human
+    # One-time codes typed in the chat (authenticator app) may approve operations of this runtime.
+    policy["approval_allow_code"] = form.get("approval_allow_code") == "1"
     store.execute(
         sql.UPSERT_POLICY,
         (runtime_id, json.dumps(policy), store.now_iso()),

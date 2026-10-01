@@ -29,7 +29,7 @@ def index() -> str:
     external_count = len(store.rows("SELECT id FROM external_mcp_servers"))
     action_icons_dash = {"deploy_runtime": "🚀", "stop_runtime": "⏹️", "delete_runtime": "🗑️", "reload_runtime": "♻️",
                     "build_runtime_image": "🔨", "action_failed": "❌", "create_runtime": "➕", "health_refresh": "🩺"}
-    level_colors_dash = {"error": "#f47a80", "warn": "#f4c163", "info": "#7dd3fc"}
+    level_colors_dash = {"error": "var(--danger)", "warn": "var(--warning)", "info": "var(--info)"}
     return render_page('dashboard', "pages/dashboard.html", action_icons_dash=action_icons_dash, audit=audit, external_count=external_count, failed=failed, level_colors_dash=level_colors_dash, logs=logs, running=running, runtimes=runtimes)
 
 
@@ -59,8 +59,8 @@ def audit_page() -> str:
 @router.get("/logs", response_class=HTMLResponse)
 def logs_page() -> str:
     logs = store.rows("SELECT * FROM runtime_logs ORDER BY id DESC LIMIT 300")
-    level_colors = {"error": "#f47a80", "warn": "#f4c163", "warning": "#f4c163", "info": "#7dd3fc", "debug": "#8ea2b8"}
-    level_bg = {"error": "#2c0e10", "warn": "#2c2008", "warning": "#2c2008", "info": "#0a1a2a", "debug": "#141e2b"}
+    level_colors = {"error": "var(--danger)", "warn": "var(--warning)", "warning": "var(--warning)", "info": "var(--info)", "debug": "var(--muted)"}
+    level_bg = {"error": "var(--danger-bg)", "warn": "var(--warning-bg)", "warning": "var(--warning-bg)", "info": "var(--primary-bg)", "debug": "var(--surface-3)"}
     return render_page('logs', "pages/logs.html", level_bg=level_bg, level_colors=level_colors, logs=logs)
 
 

@@ -258,6 +258,11 @@ def init_db() -> None:
               created_at TEXT NOT NULL,
               updated_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS approval_code_failures (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              runtime_id TEXT NOT NULL,
+              created_at TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS approval_requests (
               id TEXT PRIMARY KEY,
               runtime_id TEXT NOT NULL,
@@ -288,6 +293,12 @@ def init_db() -> None:
         rt_columns = {row["name"] for row in conn.execute("PRAGMA table_info(runtimes)").fetchall()}
         if "mcp_auth_token" not in rt_columns:
             conn.execute("ALTER TABLE runtimes ADD COLUMN mcp_auth_token TEXT NOT NULL DEFAULT ''")
+        # One-time codes (authenticator app) for approving tool calls in the chat.
+        user_columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+        if "totp_secret" not in user_columns:
+            conn.execute("ALTER TABLE users ADD COLUMN totp_secret TEXT NOT NULL DEFAULT ''")
+            conn.execute("ALTER TABLE users ADD COLUMN totp_enabled INTEGER NOT NULL DEFAULT 0")
+            conn.execute("ALTER TABLE users ADD COLUMN totp_last_step INTEGER NOT NULL DEFAULT 0")
 
 
 def rows(query: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:

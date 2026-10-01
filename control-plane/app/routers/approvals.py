@@ -8,13 +8,13 @@ session cookie and a POST, and an approval can be used for exactly one execution
 import json
 import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
-from .. import store
+from .. import store, totp
 from ..auth import current_user
 from ..web import render_page
 
@@ -26,6 +26,11 @@ PUBLIC_URL = os.getenv("MCP_PLATFORM_PUBLIC_URL", "http://localhost:18100").rstr
 # A request nobody decided on within this time can no longer be approved.
 PENDING_MAX_AGE_SECONDS = 3600
 _ID_RE = re.compile(r"[a-f0-9]{16,64}")
+# Guessing protection for one-time codes: after this many wrong codes for a runtime,
+# code approval is locked for the window (the approval link keeps working).
+CODE_MAX_FAILURES = 5
+CODE_LOCK_SECONDS = 900
+_APPROVER_ROLES = ("admin", "read_write")
 
 
 def approval_url(req_id: str) -> str:
@@ -40,6 +45,23 @@ def _age_seconds(iso: str | None) -> float:
     if ts.tzinfo is None:
         ts = ts.replace(tzinfo=timezone.utc)
     return (datetime.now(timezone.utc) - ts).total_seconds()
+
+
+def _code_approvers() -> list[dict[str, Any]]:
+    """Active users who can approve and have an authenticator app configured."""
+    return store.rows(
+        "SELECT id, username, totp_secret, totp_last_step FROM users "
+        "WHERE active=1 AND totp_enabled=1 AND totp_secret != '' AND role IN (?, ?)",
+        _APPROVER_ROLES,
+    )
+
+
+def _recent_code_failures(runtime_id: str) -> int:
+    cutoff = (datetime.now(timezone.utc) - timedelta(seconds=CODE_LOCK_SECONDS)).isoformat()
+    row = store.one(
+        "SELECT COUNT(*) AS n FROM approval_code_failures WHERE runtime_id=? AND created_at > ?", (runtime_id, cutoff)
+    )
+    return int(row["n"]) if row else 0
 
 
 def _request(req_id: str) -> dict[str, Any]:
@@ -92,7 +114,11 @@ async def create_approval_request(request: Request) -> JSONResponse:
                WHERE id=?""",
             (*values, req_id),
         )
-    return JSONResponse({"id": req_id, "status": "pending", "url": approval_url(req_id)})
+    return JSONResponse({
+        "id": req_id, "status": "pending", "url": approval_url(req_id),
+        # tells the runtime whether it makes sense to ask the user for a one-time code
+        "code_allowed": bool(_code_approvers()),
+    })
 
 
 @router.get("/api/approval-status/{req_id}")
@@ -108,6 +134,7 @@ def get_approval_status(req_id: str) -> JSONResponse:
         # lets the runtime ignore an approval granted long ago
         "decided_at": row.get("decided_at"),
         "url": approval_url(req_id),
+        "code_allowed": bool(_code_approvers()),
     })
 
 
@@ -119,6 +146,53 @@ def consume_approval(req_id: str) -> JSONResponse:
             "UPDATE approval_requests SET status='used' WHERE id=? AND status='approved'", (req_id,)
         ).rowcount
     return JSONResponse({"ok": used == 1})
+
+
+@router.post("/api/approval-code/{req_id}")
+async def approve_with_code(req_id: str, request: Request) -> JSONResponse:
+    """
+    Approve a pending request with a one-time code from an authenticator app.
+    The user types the code in the chat and the runtime forwards it here. A code is valid
+    for one approval only (replay is refused) and wrong codes are rate limited per runtime.
+    """
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid JSON")
+    code = re.sub(r"\D", "", str(payload.get("code") or ""))
+    row = store.one("SELECT * FROM approval_requests WHERE id = ?", (req_id,))
+    if not row or row["status"] != "pending" or _age_seconds(row["created_at"]) > PENDING_MAX_AGE_SECONDS:
+        return JSONResponse({"ok": False, "reason": "not_pending"})
+    failures = _recent_code_failures(row["runtime_id"])
+    if failures >= CODE_MAX_FAILURES:
+        return JSONResponse({"ok": False, "reason": "locked", "retry_after_seconds": CODE_LOCK_SECONDS})
+    for user in _code_approvers():
+        step = totp.verify(user["totp_secret"], code, last_step=user["totp_last_step"])
+        if step is None:
+            continue
+        with store.db() as conn:
+            # The step is burned first: even if two requests race, one code approves one request.
+            burned = conn.execute(
+                "UPDATE users SET totp_last_step=? WHERE id=? AND totp_last_step < ?", (step, user["id"], step)
+            ).rowcount
+            approved = burned and conn.execute(
+                """UPDATE approval_requests SET status='approved', decided_at=?, decided_by=?, reject_reason=NULL
+                   WHERE id=? AND status='pending'""",
+                (store.now_iso(), f"{user['username']} (kod)", req_id),
+            ).rowcount
+        if approved:
+            store.audit(
+                user["username"], "approve_tool_call", "runtime", row["runtime_id"],
+                {"tool": row["tool_name"], "approval": req_id, "method": "one-time code"},
+            )
+            return JSONResponse({"ok": True, "approved_by": user["username"]})
+        break
+    store.execute(
+        "INSERT INTO approval_code_failures(runtime_id, created_at) VALUES (?, ?)", (row["runtime_id"], store.now_iso())
+    )
+    return JSONResponse({
+        "ok": False, "reason": "invalid", "attempts_left": max(0, CODE_MAX_FAILURES - failures - 1),
+    })
 
 
 # ── Decision page (logged-in users only) ───────────────────────────────────────
