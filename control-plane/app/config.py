@@ -18,7 +18,7 @@ API_TOKEN_HEADER = "X-API-Key"
 # maszynowe (platform-manager) uwierzytelniają się teraz nagłówkiem X-API-Key —
 # patrz MCP_PLATFORM_API_TOKEN w AuthMiddleware.
 # Endpointy callbackowe runtime'ów zostają publiczne — kontenery nie mają cookie.
-_PUBLIC = re.compile(r"^/(login|register)(/?|\?.*)$|^/api/runtimes/[^/]+/openwebui-tool\.py$|^/api/tool-call$|^/api/runtime-callback|^/api/platform-docs$|^/api/tool-packages/?$|^/api/lang\.js$|^/api/approval-request$|^/api/approval-status/[^/]+$")
+_PUBLIC = re.compile(r"^/(login|register)(/?|\?.*)$|^/api/runtimes/[^/]+/openwebui-tool\.py$|^/api/tool-call$|^/api/runtime-callback|^/api/platform-docs$|^/api/tool-packages/?$|^/api/lang\.js$|^/api/approval-request$|^/api/approval-(status|consume)/[^/]+$")
 # Paths that are read-only (any logged-in user can GET them)
 _READONLY_GET = re.compile(
     r"^/(|runtimes.*|audit.*|logs.*|security.*|docs.*|external-mcp.*"

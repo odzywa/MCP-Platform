@@ -1,6 +1,7 @@
 """HTTP middleware: authentication and role-based access control (RBAC)."""
 import re
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -26,7 +27,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if not user:
             if path.startswith("/api/"):
                 return JSONResponse({"detail": "Not authenticated"}, status_code=401)
-            return RedirectResponse("/login", status_code=303)
+            # Come back to the requested page after login (e.g. an approval link opened from a chat).
+            target = "/login"
+            if request.method == "GET" and path != "/":
+                query = request.url.query
+                target += "?next=" + quote(path + (f"?{query}" if query else ""), safe="")
+            return RedirectResponse(target, status_code=303)
 
         current_user.set(user)
         role = user["role"]

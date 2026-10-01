@@ -298,21 +298,36 @@ The `mcp-runtime-shell` runtime executes commands without a shell interpreter. U
 
 ## Human-in-the-Loop Approval System
 
-MCP tools with `write` or `destructive` mode can require explicit user confirmation before execution. The approval happens **directly in the AI chat** — no separate web UI needed.
+MCP tools with `write` or `destructive` mode can require approval by a human before execution. The decision is always made by a **person** — the model has no parameter or other way to approve an operation itself and has to wait for the decision.
 
 ### How It Works
 
+Two paths, chosen automatically:
+
 ```
-AI calls a tool (e.g. oc_delete)
-  → runtime checks policy
-  → approval required → returns approval_required message to AI
-  → AI asks the user in chat: "Do you want to delete pod X? Say 'yes' to confirm."
-  → User says "yes"
-  → AI calls the same tool again with __confirm="yes"
-  → runtime skips approval check, executes the command
+1. The AI client supports a confirmation dialog (MCP elicitation)
+   AI calls a tool (e.g. oc_delete)
+     → the runtime asks the client for confirmation, with the exact command
+     → the chat window shows a Yes/No dialog (the model does not see it)
+     → the tool call WAITS for the answer of the user
+     → Yes: the command runs · No / no answer: it does not
+
+2. Other clients (e.g. OpenWebUI over REST)
+   AI calls a tool
+     → the runtime returns a link to the chat: <platform URL>/approve/<id>
+     → the user opens it, logs in to the platform, approves or rejects
+     → AI calls the same tool again (the call waits a moment for the decision)
+     → once approved the command runs — one approval = one execution
 ```
 
-The `__confirm` parameter is defined in every tool's input schema, so the AI client can pass it without schema validation errors.
+An approval given through the link covers exactly that command (tool + arguments), requires a
+logged-in `read_write` or `admin` user and a form POST — opening the link or using the service API
+token (`X-API-Key`) approves nothing. Decisions are written to the audit log.
+
+The link uses `MCP_PLATFORM_PUBLIC_URL` (ConfigMap `mcp-platform-env`), by default the OpenShift
+Route host `https://mcp-platform-<namespace>.<apps domain>`; set it if your Route uses a custom host.
+The elicitation path keeps the HTTP response open as an SSE stream with keep-alive comments every
+10 s, so the idle timeout of the router does not cut it.
 
 ### Policy Configuration (policy.json)
 
@@ -324,8 +339,7 @@ The `__confirm` parameter is defined in every tool's input schema, so the AI cli
     "oc apply",
     "oc patch",
     "kubectl delete"
-  ],
-  "approval_timeout_seconds": 120
+  ]
 }
 ```
 
@@ -338,25 +352,6 @@ The `__confirm` parameter is defined in every tool's input schema, so the AI cli
 
 **Auto-detection keywords** (matched against tool name): `delete`, `remove`, `destroy`, `drop`, `purge`, `wipe`, `truncate`, `erase`, `clean`, `create`, `apply`, `deploy`, `install`, `patch`, `scale`, `expose`, `rollout`, `add`, `set`, `update`, `replace`, `restart`.
 
-### Approval mode — who confirms
-
-Policy field `approval_mode` decides where the confirmation happens:
-
-| value | behaviour |
-|---|---|
-| `in_chat` *(default)* | The tool returns `approval_required` with the exact command. The agent shows it to the user in the chat window and, on a yes, calls the tool again with `__confirm="yes"`. No web UI involved. |
-| `control_plane` | The tool registers a request visible on the **Approvals** page. A human approves it there, then the agent calls the tool again with the same parameters. |
-
-Both modes answer **immediately**. An earlier version polled the control plane in a
-loop until `approval_timeout_seconds`, which the OpenShift router (HAProxy, ~30 s
-default) cut short — the caller saw `504 Gateway Timeout` instead of a confirmation
-prompt. If you are upgrading from that version, this is the fix.
-
-Repeating the identical call does **not** self-approve: `in_chat` requires the
-explicit `__confirm` parameter, `control_plane` requires a decision recorded in the
-platform. In `control_plane` mode an approval stays valid for
-`approval_timeout_seconds` after it was granted, so the agent has a window to re-call.
-
 ### Prefix-Based Approval
 
 `require_approval_for_prefixes` triggers approval for specific commands regardless of tool mode:
@@ -365,38 +360,22 @@ platform. In `control_plane` mode an approval stays valid for
 "require_approval_for_prefixes": ["oc delete", "oc apply", "kubectl delete"]
 ```
 
-> **Important:** Do NOT add prefixes to `blocked_command_prefixes` if you want approval to handle them. The approval gate takes precedence over the prefix blocklist when the user confirms (`__confirm="yes"`).
+> **Important:** A prefix listed in `blocked_command_prefixes` is always blocked — even after approval. Put commands that should be possible after a human approves only into `require_approval_for_prefixes`.
 
 ### Configuring via UI
 
 Runtime → Policy → **Approvals (Human-in-the-Loop)** section:
 - **Require approval for**: dropdown — Off / Auto / Destructive only / Write+Destructive
 - **Prefixes requiring approval**: one per line
-- **Approval timeout**: seconds before auto-rejection
+- **Approval timeout**: how long the confirmation dialog waits and how long a link approval stays usable (seconds)
 
 Click **💾 Save shell policy** — the policy is saved and the runtime reloads automatically.
 
-### Applying Fixes to an Existing Deployment
+### Upgrading from the `__confirm` version
 
-If you deployed before the approval system was added, run this on the control-plane pod to update tool schemas:
-
-```bash
-oc exec -n mcp-platform deployment/mcp-platform -- python3 -c "
-import sqlite3, json
-conn = sqlite3.connect('/data/mcp_platform.db', timeout=10)
-confirm = {'type': 'string', 'description': 'Pass yes to confirm execution after user approval'}
-rows = conn.execute('SELECT id, input_schema_json FROM tools').fetchall()
-for row in rows:
-    s = json.loads(row['input_schema_json'])
-    if '__confirm' not in s.get('properties', {}):
-        s.setdefault('properties', {})['__confirm'] = confirm
-        conn.execute('UPDATE tools SET input_schema_json=? WHERE id=?', (json.dumps(s), row['id']))
-conn.commit()
-print('OK')
-"
-```
-
-Then **Reload** the runtime in the UI.
+Earlier versions let the model confirm an operation itself by passing `__confirm="yes"`. That
+parameter is now ignored and hidden from tool schemas; no data migration is needed. Rebuild the
+`mcp-runtime-shell` image and redeploy shell runtimes to get the new behaviour.
 
 ---
 
@@ -562,7 +541,6 @@ The runtime ships with approval enabled by default:
 {
   "allowed_binaries": ["oc", "kubectl", "jq", "printf", "rm", "cat", "bash", "sh"],
   "require_approval_for": "auto",
-  "require_approval_for_prefixes": ["oc delete", "oc apply", "oc patch", "kubectl delete"],
-  "approval_timeout_seconds": 120
+  "require_approval_for_prefixes": ["oc delete", "oc apply", "oc patch", "kubectl delete"]
 }
 ```

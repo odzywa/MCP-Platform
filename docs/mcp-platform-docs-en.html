@@ -579,8 +579,7 @@ user="1000:1000"</code></pre>
   "require_read_only": false,
   "block_write_tools": false,
   "require_approval_for": "auto",
-  "require_approval_for_prefixes": ["oc delete", "oc apply", "kubectl delete"],
-  "approval_timeout_seconds": 300
+  "require_approval_for_prefixes": ["oc delete", "oc apply", "kubectl delete"]
 }</code></pre>
 
   <h3>Allowed binaries allowlist</h3>
@@ -639,30 +638,28 @@ user="1000:1000"</code></pre>
     <div class="flow-step ok">✅ AI calls again → execute</div>
   </div>
 
-  <p>The runtime returns a message to the AI with the command description and instructions. The AI asks the user in chat. After confirmation, the AI calls the same tool again — the runtime automatically executes the command.</p>
+  <p>The runtime does not execute the command until a human approves it. The former <code>__confirm</code> parameter is ignored.</p>
 
-  <h3>Two confirmation methods</h3>
+  <h3>Who approves</h3>
+
+  <p>The decision is always made by a person — the model has no parameter or other way to approve an operation itself.</p>
 
   <div class="table-wrap">
     <table>
-      <tr><th>Method</th><th>How it works</th><th>Compatibility</th></tr>
+      <tr><th>Path</th><th>How it works</th><th>When</th></tr>
       <tr>
-        <td><strong>Auto-confirm</strong> on repeated call</td>
-        <td>The first call registers a pending approval. The second identical call (same tool + same args) within the <code>approval_timeout_seconds</code> window is automatically confirmed — no extra parameters needed.</td>
-        <td>All AI models</td>
+        <td><strong>Confirmation dialog in the client</strong></td>
+        <td>The runtime asks the client for confirmation (MCP elicitation). The chat shows a Yes/No dialog with the exact command and the tool call waits for the answer.</td>
+        <td>The MCP client declares elicitation support</td>
       </tr>
       <tr>
-        <td><strong><code>__confirm</code></strong> parameter</td>
-        <td>AI adds <code>__confirm="yes"</code> (or <code>"true"</code>, <code>"1"</code>, <code>"ok"</code>, etc.) to the call parameters. The parameter is defined in every tool's input schema.</td>
-        <td>Models that can add a new parameter to an existing call</td>
+        <td><strong>Approval link</strong></td>
+        <td>The tool returns a link to a platform page. A logged-in user (read_write or admin) approves or rejects; then the AI calls the tool again. One approval = one execution.</td>
+        <td>All other clients, e.g. OpenWebUI</td>
       </tr>
     </table>
   </div>
 
-  <div class="callout ok">
-    <strong>Why auto-confirm works with every model</strong>
-    Some models (e.g. local models like Qwen, Llama) cannot add the <code>__confirm</code> parameter to a repeated tool call. Auto-confirm solves this — the AI simply calls the same tool with the same arguments, which is the natural behaviour after user confirmation.
-  </div>
 
   <h3>Configuration</h3>
 
@@ -679,13 +676,12 @@ user="1000:1000"</code></pre>
   <div class="code-label">Recommended configuration — auto with command prefixes</div>
   <pre><code>{
   "require_approval_for": "auto",
-  "require_approval_for_prefixes": ["oc delete", "oc apply", "kubectl delete"],
-  "approval_timeout_seconds": 300
+  "require_approval_for_prefixes": ["oc delete", "oc apply", "kubectl delete"]
 }</code></pre>
 
   <div class="callout warn">
     <strong>Do not mix with blocked_command_prefixes</strong>
-    If you want approval for a prefix — use <code>require_approval_for_prefixes</code>. Do not add the same prefixes to <code>blocked_command_prefixes</code>. After user confirmation (<code>__confirm="yes"</code> or auto-confirm), the runtime skips the blocked prefix check — but <code>allowed_binaries</code> is still enforced.
+    If you want approval for a prefix — use <code>require_approval_for_prefixes</code>. Do not add the same prefixes to <code>blocked_command_prefixes</code>. A blocked prefix stays blocked even after approval — <code>allowed_binaries</code> and the blocklist are always enforced.
   </div>
 
   <h3>Auto-detection keywords (mode "auto")</h3>
@@ -869,9 +865,8 @@ curl -H "X-API-Key: &lt;YOUR_TOKEN&gt;" \
       <tr><td><code>max_payload_bytes</code></td><td><code>int</code></td><td>Request argument size limit (default: 1 MB).</td></tr>
       <tr><td><code>require_approval_for</code></td><td><code>string[] | "auto"</code></td><td>Modes requiring approval: <code>""</code> (none), <code>"auto"</code>, <code>["write","destructive"]</code>.</td></tr>
       <tr><td><code>require_approval_for_prefixes</code></td><td><code>string[]</code></td><td>Command prefixes requiring approval regardless of mode, e.g. <code>["oc delete","oc apply"]</code>. <strong>Do not combine with <code>blocked_command_prefixes</code>.</strong></td></tr>
-      <tr><td><code>approval_timeout_seconds</code></td><td><code>int</code></td><td>Auto-confirm window on repeated call (default: 300). A second identical call within this window is automatically approved.</td></tr>
       <tr><td><code>allowed_command_prefixes</code></td><td><code>string[]</code></td><td>Allowlist — only commands starting with these prefixes are permitted. If empty, all pass.</td></tr>
-      <tr><td><code>blocked_command_prefixes</code></td><td><code>string[]</code></td><td>Block commands with these prefixes. Skipped when <code>__confirm</code> or auto-confirm from window.</td></tr>
+      <tr><td><code>blocked_command_prefixes</code></td><td><code>string[]</code></td><td>Block commands with these prefixes. Always enforced, even after approval.</td></tr>
     </table>
   </div>
 </div>
@@ -1115,8 +1110,7 @@ podman push --tls-verify=false $REGISTRY/mcp-runtime-shell:latest</code></pre>
       <tr><td>LVMCluster stuck <code>Progressing</code></td><td>After cluster restart: <code>sudo rm -f /var/lock/vgmanager/vgmanager.lock</code> on the node, then delete the vg-manager pod.</td></tr>
       <tr><td>LVMCluster <code>Failed: already exists in filesystem</code></td><td>(a) VG name collides with device name — change name to something other than <code>vdc</code>. (b) Old PV signatures on disk — <code>pvremove -ff /dev/vdc</code>.</td></tr>
       <tr><td><code>docker push</code> TLS error to OCP registry</td><td>Use <code>podman push --tls-verify=false</code> instead of docker push. Docker requires a restart after adding insecure-registries.</td></tr>
-      <tr><td>Approval not working — AI calls again but still blocked</td><td>Check that it is the exact same tool with the exact same arguments. Auto-confirm only works when the hash (tool_name + args) is identical. Restarting the pod clears all pending approvals.</td></tr>
-      <tr><td>Approval window too short</td><td>Set <code>approval_timeout_seconds</code> in policy JSON (default 300s). Pending approvals are cleared on pod restart.</td></tr>
+      <tr><td>Approval not working — AI calls again but still blocked</td><td>A human has to approve the operation: in the confirmation dialog of the client or through the link returned in the chat (requires logging in to the platform). The link points at <code>MCP_PLATFORM_PUBLIC_URL</code>.</td></tr>
       <tr><td>Test tab returns 500 Internal Server Error</td><td>The tool requires a mandatory parameter (e.g. <code>args</code>). Fill in the Arguments JSON field in the test form before clicking Run Tool.</td></tr>
     </table>
   </div>

@@ -474,7 +474,7 @@ function ntPreset(cmd, desc) {
           <details style="border-radius:6px;border:1px solid var(--line);padding:14px;margin-top:4px" {% if payload['policy'].get('require_approval_for') %}open{% endif %}>
             <summary style="font-size:14px;font-weight:700;cursor:pointer;color:var(--text)">✅ Zatwierdzenia (Human-in-the-Loop)</summary>
             <div style="margin-top:14px;display:grid;gap:12px">
-              <p class="muted" style="font-size:12px;margin:0">Gdy AI wywoła narzędzie wymagające zatwierdzenia, narzędzie zwraca komunikat z prośbą o potwierdzenie. AI pyta użytkownika w chacie — po odpowiedzi "tak" wywołuje narzędzie ponownie z <code>__confirm="yes"</code>.</p>
+              <p class="muted" style="font-size:12px;margin:0">Operację wymagającą zatwierdzenia zawsze akceptuje <b>człowiek</b> — model nie może zatwierdzić jej sam. Jeśli klient AI obsługuje okno potwierdzenia (MCP elicitation), pytanie pojawia się w czacie i wywołanie czeka na odpowiedź. W pozostałych klientach narzędzie zwraca w czacie link do strony zatwierdzenia na platformie; po akceptacji model wywołuje narzędzie ponownie.</p>
               <label style="display:grid;gap:6px;font-size:13px;font-weight:600">
                 Wymagaj zatwierdzenia dla
                 <select name="require_approval_for" form="shell-policy-form" style="padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel-2);color:var(--text);font-size:13px">
@@ -492,6 +492,7 @@ function ntPreset(cmd, desc) {
               <label style="display:grid;gap:6px;font-size:13px;font-weight:600">
                 Limit czasu zatwierdzenia (sekundy)
                 <input type="number" name="approval_timeout_seconds" form="shell-policy-form" min="30" max="3600" value="{{ payload['policy'].get('approval_timeout_seconds', 300) }}" style="padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel-2);color:var(--text);font-size:13px;width:140px">
+                <span style="font-size:11px;color:var(--muted)">Tyle czeka okno potwierdzenia w kliencie i tyle jest ważna zgoda udzielona przez link (jedna zgoda = jedno wykonanie).</span>
               </label>
             </div>
           </details>

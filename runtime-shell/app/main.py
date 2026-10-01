@@ -10,13 +10,14 @@ import time
 import threading
 import urllib.error
 import urllib.request
+from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
 from string import Template
 from typing import Any
 
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from jsonschema import validate, ValidationError as JsonSchemaValidationError
 from pydantic import BaseModel, create_model, field_validator
 
@@ -95,7 +96,25 @@ runtime_config: dict[str, Any] = {}
 policy: dict[str, Any] = {}
 tools: dict[str, dict[str, Any]] = {}
 
-_CONFIRM_VALUES = frozenset(["yes", "tak", "true", "1", "y", "ok", "ja", "si", "oui", "confirm", "approve", "yep", "yeah"])
+# ── MCP sessions and elicitation (approval dialog shown by the client) ─────────
+# Elicitation exists since this protocol revision; older clients keep the old handshake.
+_ELICITATION_PROTOCOL = "2025-06-18"
+_LEGACY_PROTOCOL = "2024-11-05"
+# session id -> client capabilities; in-memory, so after a restart clients fall back to approval links.
+_sessions: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
+_MAX_SESSIONS = 2000
+# elicitation request id -> future resolved by the client's JSON-RPC response
+_pending_elicitations: dict[str, "asyncio.Future[str]"] = {}
+_SSE_KEEPALIVE_SECONDS = 10
+
+
+def _public_schema(tool: dict[str, Any]) -> dict[str, Any]:
+    """Input schema as shown to clients — without the legacy __confirm property (it approves nothing)."""
+    schema = tool.get("input_schema") or {}
+    props = schema.get("properties")
+    if not isinstance(props, dict) or "__confirm" not in props:
+        return schema
+    return {**schema, "properties": {k: v for k, v in props.items() if k != "__confirm"}}
 
 
 def load_config() -> None:
@@ -139,7 +158,7 @@ def list_tools() -> dict[str, Any]:
             {
                 "name": tool["name"],
                 "description": tool.get("description", ""),
-                "inputSchema": tool.get("input_schema") or {},
+                "inputSchema": _public_schema(tool),
             }
             for tool in tools.values()
         ]
@@ -164,7 +183,7 @@ def openapi_tool_spec() -> dict[str, Any]:
                     "description": tool.get("description") or "",
                     "requestBody": {
                         "required": True,
-                        "content": {"application/json": {"schema": tool.get("input_schema") or {"type": "object"}}},
+                        "content": {"application/json": {"schema": _public_schema(tool) or {"type": "object"}}},
                     },
                     "responses": {
                         "200": {
@@ -460,11 +479,19 @@ def _needs_approval(tool: dict[str, Any]) -> bool:
     return tool_mode in modes
 
 
+def _approval_timeout() -> int:
+    """How long an approval dialog waits and how long an approved link stays usable (seconds)."""
+    try:
+        return max(30, int(policy.get("approval_timeout_seconds") or 300))
+    except (TypeError, ValueError):
+        return 300
+
+
 def _approval_key(tool_name: str, arguments: dict[str, Any]) -> str:
     """
-    Deterministyczny identyfikator zgody: te same narzędzie + argumenty zawsze
-    dają ten sam klucz. Dzięki temu kolejne wywołanie odnajduje decyzję podjętą
-    w control-plane, bez trzymania otwartego połączenia HTTP.
+    Deterministyczny identyfikator zgody: to samo narzędzie + te same argumenty
+    dają ten sam klucz, więc ponowne wywołanie odnajduje decyzję człowieka
+    bez przekazywania czegokolwiek przez model.
     """
     payload = json.dumps(
         {"r": RUNTIME_ID, "t": tool_name, "a": arguments}, sort_keys=True, default=str
@@ -476,9 +503,6 @@ def _approval_fresh(decided_at: str | None, max_age_s: int) -> bool:
     """Zgoda starsza niż okno ważności nie upoważnia do wykonania."""
     if not decided_at:
         return False
-    # Control-plane zapisuje czas przez datetime.isoformat(), czyli
-    # "2026-09-14T07:37:49.383534+00:00" — z mikrosekundami i offsetem, a nie
-    # z sufiksem "Z". fromisoformat radzi sobie z obiema postaciami.
     try:
         ts = datetime.fromisoformat(decided_at.replace("Z", "+00:00"))
     except ValueError:
@@ -488,75 +512,123 @@ def _approval_fresh(decided_at: str | None, max_age_s: int) -> bool:
     return (datetime.now(timezone.utc) - ts).total_seconds() <= max_age_s
 
 
-async def _approval_state(
-    tool_name: str,
-    arguments: dict[str, Any],
-    tool_mode: str,
-    caller_ip: str,
-    model: str,
-) -> dict[str, Any]:
-    """
-    Sprawdza stan zgody i — jeśli jeszcze nie istnieje — zakłada ją.
-    NIE czeka na decyzję.
-
-    Poprzednia wersja odpytywała control-plane w pętli aż do
-    approval_timeout_seconds. Przy dostępie przez Route OpenShift router
-    (HAProxy, domyślnie 30 s) zrywał połączenie wcześniej i wywołujący
-    dostawał 504 Gateway Timeout zamiast czytelnej prośby o zatwierdzenie.
-
-    Zwraca {"state": "approved" | "pending" | "rejected", "reason": str | None}.
-    """
-    if not CALLBACK_URL:
-        return {"state": "pending", "reason": "brak CALLBACK_URL — nie ma gdzie zapytać"}
-
-    req_id = _approval_key(tool_name, arguments)
-    max_age = int(policy.get("approval_timeout_seconds") or 300)
-    status_url = f"{CALLBACK_URL}/api/approval-status/{req_id}"
-
-    def _get() -> dict[str, Any] | None:
-        try:
-            with urllib.request.urlopen(status_url, timeout=5) as resp:
-                return json.loads(resp.read())
-        except urllib.error.HTTPError as exc:
-            if exc.code == 404:
-                return None
-            raise
+def _control_plane(method: str, path: str, body: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    """Blocking call to the control plane; None on 404, raises on other errors."""
+    req = urllib.request.Request(
+        f"{CALLBACK_URL}{path}",
+        data=json.dumps(body).encode() if body is not None else None,
+        headers={"Content-Type": "application/json"},
+        method=method,
+    )
     try:
-        data = await asyncio.to_thread(_get)
-    except Exception as exc:
-        return {"state": "pending", "reason": f"nie udało się sprawdzić zgody: {exc}"}
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return None
+        raise
 
-    if data is not None:
-        status = data.get("status")
-        if status == "approved":
-            if _approval_fresh(data.get("decided_at"), max_age):
-                return {"state": "approved", "reason": None}
-            # Zgoda wygasła — zakładamy nową prośbę pod tym samym kluczem.
-        elif status == "rejected":
-            return {"state": "rejected", "reason": data.get("reject_reason") or "odrzucone"}
-        elif status == "pending":
-            return {"state": "pending", "reason": "czeka na decyzję"}
 
-    payload = json.dumps({
-        "id": req_id,
-        "runtime_id": RUNTIME_ID,
-        "tool_name": tool_name,
-        "arguments": arguments,
-        "mode": tool_mode,
-        "caller_ip": caller_ip,
-        "model": model,
-    }).encode()
-    try:
-        req = urllib.request.Request(
-            f"{CALLBACK_URL}/api/approval-request",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
+def _not_executed(tool_name: str, message: str, **extra: Any) -> dict[str, Any]:
+    return {"ok": False, "tool": tool_name, "approval_required": True, "message": message, **extra}
+
+
+async def _link_approval(tool_name: str, arguments: dict[str, Any], cmd_preview: str,
+                         tool_mode: str, caller_ip: str, model: str) -> dict[str, Any] | None:
+    """
+    Zgoda przez link do control-plane (dla klientów bez okna potwierdzenia).
+    Zwraca None gdy człowiek zatwierdził dokładnie tę komendę, inaczej wynik
+    "nie wykonano" z linkiem. Jedna zgoda = jedno wykonanie.
+    """
+    if not CALLBACK_URL or not RUNTIME_ID:
+        return _not_executed(
+            tool_name,
+            f"\u26d4 This operation requires human approval, but this server has no way to ask for it "
+            f"(no control plane configured). It was NOT executed.\n\nCommand: {cmd_preview}",
+            approval_denied=True,
         )
-        await asyncio.to_thread(lambda: urllib.request.urlopen(req, timeout=5))
+    req_id = _approval_key(tool_name, {**arguments, "_command": cmd_preview})
+    max_age = _approval_timeout()
+    try:
+        data = await asyncio.to_thread(_control_plane, "GET", f"/api/approval-status/{req_id}")
+        # Prośba już czeka: model wywołał ponownie — daj człowiekowi chwilę na decyzję,
+        # zamiast odsyłać model od razu (ograniczone, żeby nie przekroczyć timeoutu proxy).
+        if data and data.get("status") == "pending":
+            deadline = time.monotonic() + min(20, int(policy.get("approval_wait_seconds") or 20))
+            while time.monotonic() < deadline:
+                await asyncio.sleep(2)
+                data = await asyncio.to_thread(_control_plane, "GET", f"/api/approval-status/{req_id}")
+                if not data or data.get("status") != "pending":
+                    break
+        status = (data or {}).get("status")
+        if status == "approved" and _approval_fresh(data.get("decided_at"), max_age):
+            used = await asyncio.to_thread(_control_plane, "POST", f"/api/approval-consume/{req_id}", {})
+            if used and used.get("ok"):
+                return None
+            status = "used"  # ktoś inny zużył tę zgodę — potrzebna nowa
+        if status == "rejected" and _approval_fresh(data.get("decided_at"), max_age):
+            reason = data.get("reject_reason") or "rejected"
+            return _not_executed(
+                tool_name,
+                f"\u26d4 A human rejected this operation. It was NOT executed.\n\n"
+                f"Command: {cmd_preview}\nReason: {reason}\n\nDo not retry.",
+                approval_denied=True, error=f"operation not approved: {reason}",
+            )
+        if status == "pending":
+            url = data.get("url")
+        else:
+            created = await asyncio.to_thread(_control_plane, "POST", "/api/approval-request", {
+                "id": req_id, "runtime_id": RUNTIME_ID, "tool_name": tool_name,
+                "arguments": {**arguments, "_command": cmd_preview},
+                "mode": tool_mode, "caller_ip": caller_ip, "model": model,
+            })
+            url = (created or {}).get("url")
+            if not url:
+                raise RuntimeError("control plane did not accept the approval request")
     except Exception as exc:
-        return {"state": "pending", "reason": f"nie udało się złożyć prośby: {exc}"}
-    return {"state": "pending", "reason": "prośba złożona"}
+        return _not_executed(
+            tool_name,
+            f"\u26d4 This operation requires human approval, but the approval service could not be reached "
+            f"({exc}). It was NOT executed.\n\nCommand: {cmd_preview}",
+        )
+    return _not_executed(
+        tool_name,
+        f"\u23f8 This operation is waiting for approval by a human and has NOT been executed.\n\n"
+        f"Command: {cmd_preview}\n\n"
+        f"Approval link — show it to the user exactly as written:\n{url}\n\n"
+        f"You cannot approve this yourself and there is no parameter that confirms it. "
+        f"Ask the user to open the link and decide. After they say it is approved, call this same "
+        f"tool again with exactly the same parameters.",
+        approval_url=url,
+    )
+
+
+async def _require_approval(tool_name: str, arguments: dict[str, Any], cmd_preview: str, tool_mode: str,
+                            caller_ip: str, model: str, elicit: Any) -> dict[str, Any] | None:
+    """Returns None when a human approved the operation, otherwise the "not executed" result."""
+    if elicit is not None:
+        # Klient MCP sam pyta użytkownika (okno Tak/Nie) — wywołanie czeka na odpowiedź,
+        # a model nie bierze w tym udziału.
+        answer = await elicit(
+            f"Approve this operation?\n\nTool: {tool_name} ({tool_mode})\nCommand: {cmd_preview}"
+        )
+        if answer == "accept":
+            return None
+        if answer in ("decline", "cancel"):
+            return _not_executed(
+                tool_name,
+                f"\u26d4 The user declined this operation. It was NOT executed.\n\nCommand: {cmd_preview}\n\nDo not retry.",
+                approval_denied=True, error="operation not approved by the user",
+            )
+        if answer == "timeout":
+            return _not_executed(
+                tool_name,
+                f"\u26d4 The user did not answer the approval dialog within {_approval_timeout()} s. "
+                f"It was NOT executed.\n\nCommand: {cmd_preview}",
+                approval_denied=True, error="approval timed out",
+            )
+        # any other outcome (client error) → fall back to the approval link
+    return await _link_approval(tool_name, arguments, cmd_preview, tool_mode, caller_ip, model)
 
 
 def _run_pipeline(
@@ -640,11 +712,19 @@ def _run_pipeline(
 
 
 async def execute_tool(tool_name: str, arguments: dict[str, Any],
-                       caller_ip: str = "", model: str = "") -> dict[str, Any]:
+                       caller_ip: str = "", model: str = "",
+                       elicit: Any = None) -> dict[str, Any]:
+    """
+    elicit — async callable(message) -> "accept" | "decline" | "cancel" | "timeout",
+    available when the MCP client can show a confirmation dialog itself.
+    """
     _t0 = time.monotonic()
     tool = tools.get(tool_name)
     if not tool:
         return {"ok": False, "error": f"unknown tool: {tool_name}"}
+    # Legacy parameter: the model used to confirm operations itself. It is ignored now —
+    # only a human can approve (client dialog or approval link).
+    arguments.pop("__confirm", None)
     policy_error = _policy_check(tool, arguments or {})
     if policy_error:
         return {"ok": False, "error": policy_error, "policy_blocked": True}
@@ -687,86 +767,16 @@ async def execute_tool(tool_name: str, arguments: dict[str, Any],
         MAX_OUTPUT_BYTES,
     )
 
-    # ── Human-in-the-Loop approval.
-    # Gdy control-plane jest osiągalny, decyzję podejmuje CZŁOWIEK na stronie
-    # /approvals — wywołujący nie może się zatwierdzić sam. __confirm działa
-    # tylko w trybie standalone (runtime bez control-plane), bo tam nie ma
-    # gdzie zapytać. Poprzednia wersja zatwierdzała każde powtórzone wywołanie
-    # o identycznych argumentach, więc zwykły retry modelu wykonywał operację.
-    confirm_val = str(arguments.pop("__confirm", "")).strip().lower()
-    caller_confirmed = confirm_val in _CONFIRM_VALUES
-
+    # ── Human-in-the-Loop approval — decyzję podejmuje człowiek, nigdy model.
     if _needs_approval(tool) or _stages_need_approval(stages):
         cmd_preview = " | ".join(shlex.join(s) for s in stages)
         tool_mode = (tool.get("security") or {}).get("mode") or tool.get("mode", "read-only")
-
-        # approval_mode decyduje, KTO potwierdza:
-        #   "in_chat"       (domyślne) — agent pyta użytkownika w oknie rozmowy,
-        #                    a ten odpowiada; model wywołuje ponownie z __confirm.
-        #   "control_plane" — decyzję podejmuje człowiek na stronie /approvals.
-        #
-        # Oba tryby zwracają odpowiedź NATYCHMIAST. Wcześniejsza wersja czekała
-        # w pętli do approval_timeout_seconds, przez co router OpenShift (~30 s)
-        # zrywał połączenie i wywołujący dostawał 504 Gateway Timeout.
-        approval_mode = str(policy.get("approval_mode") or "in_chat").lower()
-
-        if approval_mode == "control_plane" and CALLBACK_URL:
-            approval = await _approval_state(
-                tool_name, {**arguments, "_command": cmd_preview},
-                tool_mode, caller_ip, model,
-            )
-            state = approval.get("state")
-            if state == "rejected":
-                result = {
-                    "ok": False, "tool": tool_name,
-                    "approval_required": True, "approval_denied": True,
-                    "error": f"operation not approved: {approval.get('reason')}",
-                    "message": (
-                        f"\u26d4 Operation was not approved.\n\n"
-                        f"Command: {cmd_preview}\n"
-                        f"Reason: {approval.get('reason')}\n\n"
-                        f"Do not retry — a human declined this operation."
-                    ),
-                }
-                _fire_tool_call_log(tool_name, arguments, result,
-                                    int((time.monotonic() - _t0) * 1000),
-                                    caller_ip=caller_ip, model=model)
-                return result
-            if state != "approved":
-                result = {
-                    "ok": False, "tool": tool_name, "approval_required": True,
-                    "message": (
-                        f"\u23f8 This operation is waiting for human approval.\n\n"
-                        f"Command: {cmd_preview}\n\n"
-                        f"A request was created in the MCP Platform. Ask the user to open "
-                        f"the Approvals page and approve it, then call this same tool again "
-                        f"with the EXACT same parameters."
-                    ),
-                }
-                _fire_tool_call_log(tool_name, arguments, result,
-                                    int((time.monotonic() - _t0) * 1000),
-                                    caller_ip=caller_ip, model=model)
-                return result
-
-        elif not caller_confirmed:
-            # Tryb in_chat — potwierdzenie zbiera agent w rozmowie.
-            result = {
-                "ok": False,
-                "tool": tool_name,
-                "approval_required": True,
-                "message": (
-                    f"\u26a0\ufe0f This operation requires the user's confirmation.\n\n"
-                    f"Command to execute:\n  {cmd_preview}\n\n"
-                    f"Show this command to the user and ask whether to run it.\n"
-                    f"If they agree — call this same tool again with the same parameters "
-                    f"plus __confirm=\"yes\".\n"
-                    f"If they decline — do nothing and tell them it was not executed."
-                ),
-            }
-            _fire_tool_call_log(tool_name, arguments, result,
+        blocked = await _require_approval(tool_name, arguments, cmd_preview, tool_mode, caller_ip, model, elicit)
+        if blocked is not None:
+            _fire_tool_call_log(tool_name, arguments, blocked,
                                 int((time.monotonic() - _t0) * 1000),
                                 caller_ip=caller_ip, model=model)
-            return result
+            return blocked
 
     # ── Hard policy check for every pipeline stage.
     for stage_argv in stages:
@@ -877,6 +887,95 @@ def jsonrpc_error(message_id: Any, code: int, message: str) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": message_id, "error": {"code": code, "message": message}}
 
 
+def _tool_result_message(message_id: Any, result: dict[str, Any]) -> dict[str, Any]:
+    return jsonrpc_result(message_id, {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False)}]})
+
+
+def _sse(message: dict[str, Any]) -> str:
+    return f"event: message\ndata: {json.dumps(message, ensure_ascii=False)}\n\n"
+
+
+def _initialize(message_id: Any, params: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]]:
+    """Handshake. Clients that can show an approval dialog (elicitation) get a session."""
+    requested = str(params.get("protocolVersion") or "")
+    can_elicit = "elicitation" in (params.get("capabilities") or {}) and requested >= _ELICITATION_PROTOCOL
+    headers: dict[str, str] = {}
+    if can_elicit:
+        session_id = secrets.token_urlsafe(24)
+        _sessions[session_id] = {"elicitation": True}
+        while len(_sessions) > _MAX_SESSIONS:
+            _sessions.popitem(last=False)
+        headers["Mcp-Session-Id"] = session_id
+    result = jsonrpc_result(
+        message_id,
+        {
+            # Bez elicitation zostaje dotychczasowy handshake — nic się nie zmienia dla starszych klientów.
+            "protocolVersion": _ELICITATION_PROTOCOL if can_elicit else _LEGACY_PROTOCOL,
+            "capabilities": {"tools": {}},
+            "serverInfo": {"name": runtime_config.get("name", "mcp-runtime"), "version": "0.1.0"},
+        },
+    )
+    return result, headers
+
+
+async def _call_tool_with_dialog(message_id: Any, params: dict[str, Any], request: Request) -> Response:
+    """
+    tools/call dla klienta z elicitation. Jeśli operacja wymaga zgody, odpowiedź
+    staje się strumieniem SSE: serwer wysyła żądanie elicitation/create, klient
+    pokazuje użytkownikowi okno, a wynik narzędzia przychodzi tym samym strumieniem
+    dopiero po decyzji. Bez potrzeby zgody — zwykła odpowiedź JSON jak dotąd.
+    """
+    outbox: asyncio.Queue = asyncio.Queue()
+
+    async def elicit(prompt: str) -> str:
+        request_id = f"approval-{secrets.token_hex(8)}"
+        answer: asyncio.Future = asyncio.get_running_loop().create_future()
+        _pending_elicitations[request_id] = answer
+        await outbox.put({
+            "jsonrpc": "2.0", "id": request_id, "method": "elicitation/create",
+            "params": {"message": prompt, "requestedSchema": {"type": "object", "properties": {}}},
+        })
+        try:
+            return await asyncio.wait_for(answer, timeout=_approval_timeout())
+        except asyncio.TimeoutError:
+            return "timeout"
+        finally:
+            _pending_elicitations.pop(request_id, None)
+
+    call = asyncio.create_task(execute_tool(
+        params.get("name"), params.get("arguments") or {},
+        caller_ip=_caller_ip(request), model=_model_from_request(request), elicit=elicit,
+    ))
+
+    def final_message() -> dict[str, Any]:
+        try:
+            return _tool_result_message(message_id, call.result())
+        except Exception as exc:
+            return jsonrpc_error(message_id, -32603, f"Internal error: {exc}")
+
+    first = asyncio.create_task(outbox.get())
+    await asyncio.wait({call, first}, return_when=asyncio.FIRST_COMPLETED)
+    if not first.done():  # tool finished without asking anything
+        first.cancel()
+        return JSONResponse(final_message())
+
+    async def stream():
+        yield _sse(first.result())
+        while not call.done():
+            pending = asyncio.create_task(outbox.get())
+            await asyncio.wait({call, pending}, timeout=_SSE_KEEPALIVE_SECONDS, return_when=asyncio.FIRST_COMPLETED)
+            if pending.done():
+                yield _sse(pending.result())
+                continue
+            pending.cancel()
+            if not call.done():
+                yield ": waiting for the user's decision\n\n"  # keeps proxies from closing an idle stream
+        yield _sse(final_message())
+
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 @app.post("/mcp")
 async def mcp(request: Request):
     try:
@@ -884,22 +983,26 @@ async def mcp(request: Request):
     except Exception:
         return JSONResponse(jsonrpc_error(None, -32700, "Parse error"), status_code=400)
     messages = payload if isinstance(payload, list) else [payload]
+    session = _sessions.get(request.headers.get("mcp-session-id", ""))
+    can_stream = "text/event-stream" in request.headers.get("accept", "") and not isinstance(payload, list)
     responses = []
+    extra_headers: dict[str, str] = {}
     for message in messages:
         method = message.get("method")
         message_id = message.get("id")
         params = message.get("params") or {}
+        if method is None and message_id in _pending_elicitations:
+            # Odpowiedź klienta na elicitation/create — decyzja użytkownika z okna potwierdzenia.
+            action = str((message.get("result") or {}).get("action") or "cancel")
+            answer = _pending_elicitations[message_id]
+            if not answer.done():
+                answer.set_result(action if action in ("accept", "decline", "cancel") else "cancel")
+            continue
+        if method is None:
+            continue  # response to a request we no longer wait for
         if method == "initialize":
-            responses.append(
-                jsonrpc_result(
-                    message_id,
-                    {
-                        "protocolVersion": "2024-11-05",
-                        "capabilities": {"tools": {}},
-                        "serverInfo": {"name": runtime_config.get("name", "mcp-runtime"), "version": "0.1.0"},
-                    },
-                )
-            )
+            result, extra_headers = _initialize(message_id, params)
+            responses.append(result)
         elif method == "tools/list":
             responses.append(
                 jsonrpc_result(
@@ -909,7 +1012,7 @@ async def mcp(request: Request):
                             {
                                 "name": tool["name"],
                                 "description": tool.get("description", ""),
-                                "inputSchema": tool.get("input_schema") or {},
+                                "inputSchema": _public_schema(tool),
                             }
                             for tool in tools.values()
                         ]
@@ -917,14 +1020,16 @@ async def mcp(request: Request):
                 )
             )
         elif method == "tools/call":
+            if session and session.get("elicitation") and can_stream:
+                return await _call_tool_with_dialog(message_id, params, request)
             result = await execute_tool(params.get("name"), params.get("arguments") or {},
                                         caller_ip=_caller_ip(request),
                                         model=_model_from_request(request))
-            responses.append(jsonrpc_result(message_id, {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False)}]}))
-        elif method == "notifications/initialized":
+            responses.append(_tool_result_message(message_id, result))
+        elif method in ("notifications/initialized", "notifications/cancelled"):
             continue
         else:
             responses.append(jsonrpc_error(message_id, -32601, f"Method not found: {method}"))
     if not responses:
         return Response(status_code=202)
-    return JSONResponse(responses if isinstance(payload, list) else responses[0])
+    return JSONResponse(responses if isinstance(payload, list) else responses[0], headers=extra_headers)

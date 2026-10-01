@@ -13,6 +13,9 @@ data:
   HOME: /tmp
   # Presety Tool Package — ConfigMap mcp-platform-templates (tworzona przez deploy.sh)
   MCP_PLATFORM_TEMPLATES_DIR: /templates
+  # Publiczny adres UI — trafia do linków zatwierdzeń pokazywanych użytkownikowi w czacie.
+  # Domyślny host Route w OpenShift; przy własnym hoście Route ustaw go tutaj.
+  MCP_PLATFORM_PUBLIC_URL: https://mcp-platform-__NAMESPACE__.__APPS_DOMAIN__
 ---
 apiVersion: apps/v1
 kind: Deployment

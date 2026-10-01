@@ -5,7 +5,6 @@ from typing import Any
 
 from markupsafe import Markup
 
-from . import store
 from .auth import current_user
 from .config import _FAVICON_TAG
 from .rendering import env as templates_env
@@ -122,7 +121,6 @@ _NAV_TABS: list[tuple[str, str, str, str, str]] = [
     ("classes",    "🏗️  Typy środowisk",       "/runtime-classes", "Docker images i klasy runtime — definiują jakie binarki są dostępne",     "admin"),
     ("images",     "🐳  Budowanie obrazów",    "/runtime-images",  "Własne obrazy: obraz bazowy + doinstalowane narzędzia",                    "admin"),
     ("security",   "🔒  Bezpieczeństwo",       "/security",        "Przegląd polityk i hardening kontenerów",                                 "read_only"),
-    ("approvals",  "🛡️  Zatwierdzenia",        "/approvals",       "Wywołania narzędzi czekające na decyzję człowieka",                        "read_only"),
     ("audit",      "🔍  Audit",                "/audit",           "Historia wszystkich operacji — deploy, stop, reload, błędy",               "read_only"),
     ("logs",       "📋  Logi",                 "/logs",            "Logi runtimeów — informacje diagnostyczne i błędy kontenerów",            "read_only"),
     ("admin",      "👥  Użytkownicy",           "/admin/users",     "Zarządzanie użytkownikami — role, rejestracje, hasła",                    "admin"),
@@ -152,14 +150,6 @@ def _cached_lang_js() -> str:
     return _lang_js_cache
 
 
-def _pending_approvals_badge() -> str:
-    try:
-        row = store.one("SELECT COUNT(*) AS n FROM approval_requests WHERE status='pending'")
-        return f" ({row['n']})" if row and row["n"] else ""
-    except Exception:
-        return ""
-
-
 def _shell_context(active: str) -> dict[str, Any]:
     user = current_user.get()
     role = (user or {}).get("role", "admin")
@@ -168,8 +158,6 @@ def _shell_context(active: str) -> dict[str, Any]:
     for key, label, href, desc, min_role in _NAV_TABS:
         if _ROLE_ORDER.get(min_role, 0) > user_level:
             continue
-        if key == "approvals":
-            label += _pending_approvals_badge()
         tabs.append({"key": key, "label": label, "href": href, "desc": desc})
     page_title, page_sub = next(
         ((t["label"].split("  ", 1)[-1].strip(), t["desc"]) for t in tabs if t["key"] == active), ("MCP Platform", "")

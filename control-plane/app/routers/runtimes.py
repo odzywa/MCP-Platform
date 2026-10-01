@@ -477,6 +477,7 @@ async def update_shell_policy(runtime_id: str, request: Request):
         policy["approval_timeout_seconds"] = max(30, int(form.get("approval_timeout_seconds") or 300))
     except (ValueError, TypeError):
         policy["approval_timeout_seconds"] = 300
+    policy.pop("approval_mode", None)  # removed setting: approval is always decided by a human
     store.execute(
         sql.UPSERT_POLICY,
         (runtime_id, json.dumps(policy), store.now_iso()),

@@ -79,10 +79,6 @@
           "args": {
             "type": "string",
             "description": "Argumenty komendy oc"
-          },
-          "__confirm": {
-            "type": "string",
-            "description": "Wpisz 'yes' aby potwierdzić wykonanie po zatwierdzeniu przez użytkownika (wymagane gdy narzędzie zgłosi approval_required)"
           }
         },
         "required": [
@@ -115,10 +111,6 @@
           "args": {
             "type": "string",
             "description": "Argumenty komendy oc"
-          },
-          "__confirm": {
-            "type": "string",
-            "description": "Wpisz 'yes' aby potwierdzić wykonanie po zatwierdzeniu przez użytkownika (wymagane gdy narzędzie zgłosi approval_required)"
           }
         },
         "required": [
@@ -151,10 +143,6 @@
           "args": {
             "type": "string",
             "description": "Argumenty komendy oc"
-          },
-          "__confirm": {
-            "type": "string",
-            "description": "Wpisz 'yes' aby potwierdzić wykonanie po zatwierdzeniu przez użytkownika (wymagane gdy narzędzie zgłosi approval_required)"
           }
         },
         "required": [
@@ -310,10 +298,6 @@
           "args": {
             "type": "string",
             "description": "Argumenty komendy oc"
-          },
-          "__confirm": {
-            "type": "string",
-            "description": "Wpisz 'yes' aby potwierdzić wykonanie po zatwierdzeniu przez użytkownika (wymagane gdy narzędzie zgłosi approval_required)"
           }
         },
         "required": [
@@ -356,10 +340,6 @@
           "extra_args": {
             "type": "string",
             "description": "Dodatkowe argumenty, np. -n mynamespace"
-          },
-          "__confirm": {
-            "type": "string",
-            "description": "Wpisz 'yes' aby potwierdzić wykonanie po zatwierdzeniu przez użytkownika (wymagane gdy narzędzie zgłosi approval_required)"
           }
         },
         "required": [
@@ -392,10 +372,6 @@
           "args": {
             "type": "string",
             "description": "Argumenty komendy oc"
-          },
-          "__confirm": {
-            "type": "string",
-            "description": "Wpisz 'yes' aby potwierdzić wykonanie po zatwierdzeniu przez użytkownika (wymagane gdy narzędzie zgłosi approval_required)"
           }
         },
         "required": [
@@ -438,10 +414,6 @@
           "extra_args": {
             "type": "string",
             "description": "Dodatkowe argumenty, np. -n mynamespace"
-          },
-          "__confirm": {
-            "type": "string",
-            "description": "Wpisz 'yes' aby potwierdzić wykonanie po zatwierdzeniu przez użytkownika (wymagane gdy narzędzie zgłosi approval_required)"
           }
         },
         "required": [
@@ -474,10 +446,6 @@
           "args": {
             "type": "string",
             "description": "Argumenty komendy oc"
-          },
-          "__confirm": {
-            "type": "string",
-            "description": "Wpisz 'yes' aby potwierdzić wykonanie po zatwierdzeniu przez użytkownika (wymagane gdy narzędzie zgłosi approval_required)"
           }
         },
         "required": [
@@ -510,10 +478,6 @@
           "args": {
             "type": "string",
             "description": "Argumenty komendy oc"
-          },
-          "__confirm": {
-            "type": "string",
-            "description": "Wpisz 'yes' aby potwierdzić wykonanie po zatwierdzeniu przez użytkownika (wymagane gdy narzędzie zgłosi approval_required)"
           }
         },
         "required": [
@@ -546,10 +510,6 @@
           "args": {
             "type": "string",
             "description": "Argumenty komendy oc"
-          },
-          "__confirm": {
-            "type": "string",
-            "description": "Wpisz 'yes' aby potwierdzić wykonanie po zatwierdzeniu przez użytkownika (wymagane gdy narzędzie zgłosi approval_required)"
           }
         },
         "required": [
@@ -582,10 +542,6 @@
           "args": {
             "type": "string",
             "description": "Argumenty komendy oc"
-          },
-          "__confirm": {
-            "type": "string",
-            "description": "Wpisz 'yes' aby potwierdzić wykonanie po zatwierdzeniu przez użytkownika (wymagane gdy narzędzie zgłosi approval_required)"
           }
         },
         "required": [
@@ -618,10 +574,6 @@
           "args": {
             "type": "string",
             "description": "Argumenty komendy oc"
-          },
-          "__confirm": {
-            "type": "string",
-            "description": "Wpisz 'yes' aby potwierdzić wykonanie po zatwierdzeniu przez użytkownika (wymagane gdy narzędzie zgłosi approval_required)"
           }
         },
         "required": [
@@ -654,10 +606,6 @@
           "args": {
             "type": "string",
             "description": "Argumenty komendy oc"
-          },
-          "__confirm": {
-            "type": "string",
-            "description": "Wpisz 'yes' aby potwierdzić wykonanie po zatwierdzeniu przez użytkownika (wymagane gdy narzędzie zgłosi approval_required)"
           }
         },
         "required": [
@@ -690,10 +638,6 @@
           "args": {
             "type": "string",
             "description": "Argumenty komendy oc"
-          },
-          "__confirm": {
-            "type": "string",
-            "description": "Wpisz 'yes' aby potwierdzić wykonanie po zatwierdzeniu przez użytkownika (wymagane gdy narzędzie zgłosi approval_required)"
           }
         },
         "required": [
@@ -726,10 +670,6 @@
           "args": {
             "type": "string",
             "description": "Argumenty komendy oc"
-          },
-          "__confirm": {
-            "type": "string",
-            "description": "Wpisz 'yes' aby potwierdzić wykonanie po zatwierdzeniu przez użytkownika (wymagane gdy narzędzie zgłosi approval_required)"
           }
         },
         "required": [
@@ -762,10 +702,6 @@
           "args": {
             "type": "string",
             "description": "Argumenty komendy oc"
-          },
-          "__confirm": {
-            "type": "string",
-            "description": "Wpisz 'yes' aby potwierdzić wykonanie po zatwierdzeniu przez użytkownika (wymagane gdy narzędzie zgłosi approval_required)"
           }
         },
         "required": [

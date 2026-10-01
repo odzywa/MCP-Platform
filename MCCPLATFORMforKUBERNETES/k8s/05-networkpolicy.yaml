@@ -61,7 +61,7 @@ spec:
         - protocol: TCP
           port: 8080
 ---
-# Callback runtime'ów do control-plane: logowanie tool calls i approval requests.
+# Callback runtime'ów do control-plane: logowanie tool calls.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

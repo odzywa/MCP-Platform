@@ -715,8 +715,7 @@ user="1000:1000"</code></pre>
   "blocked_commands": [],
   "require_read_only": false,
   "block_write_tools": false,
-  "require_approval_for": "auto",
-  "approval_timeout_seconds": 300
+  "require_approval_for": "auto"
 }</code></pre>
 
   <h3>Allowlist binaries</h3>
@@ -775,30 +774,28 @@ user="1000:1000"</code></pre>
     <div class="flow-step ok">✅ AI wywołuje ponownie → execute</div>
   </div>
 
-  <p>Runtime zwraca do AI komunikat z opisem komendy i instrukcją. AI pyta użytkownika w chacie. Po potwierdzeniu AI wywołuje to samo narzędzie ponownie — runtime automatycznie wykonuje komendę.</p>
+  <p>Runtime nie wykonuje komendy, dopóki człowiek jej nie zatwierdzi. Dawny parametr <code>__confirm</code> jest ignorowany.</p>
 
-  <h3>Dwa sposoby potwierdzenia</h3>
+  <h3>Kto zatwierdza</h3>
+
+  <p>Decyzję zawsze podejmuje człowiek — model nie ma parametru ani sposobu, żeby zatwierdzić operację sam.</p>
 
   <div class="table-wrap">
     <table>
-      <tr><th>Sposób</th><th>Jak działa</th><th>Kompatybilność</th></tr>
+      <tr><th>Ścieżka</th><th>Jak działa</th><th>Kiedy</th></tr>
       <tr>
-        <td><strong>Auto-confirm</strong> przy ponownym wywołaniu</td>
-        <td>Pierwsze wywołanie rejestruje pending. Drugie identyczne wywołanie (ten sam tool + te same args) w oknie <code>approval_timeout_seconds</code> jest automatycznie zatwierdzone — bez żadnych dodatkowych parametrów.</td>
-        <td>Wszystkie modele AI</td>
+        <td><strong>Okno potwierdzenia w kliencie</strong></td>
+        <td>Runtime prosi klienta o potwierdzenie (MCP elicitation). W czacie pojawia się pytanie Tak/Nie z dokładną komendą, a wywołanie narzędzia czeka na odpowiedź.</td>
+        <td>Klient MCP zgłasza obsługę elicitation</td>
       </tr>
       <tr>
-        <td><strong><code>__confirm</code></strong> parametr</td>
-        <td>AI dodaje <code>__confirm="yes"</code> (lub <code>"tak"</code>, <code>"true"</code>, <code>"1"</code>, <code>"ok"</code> itd.) do parametrów wywołania. Parametr jest zdefiniowany w schemacie każdego narzędzia.</td>
-        <td>Modele które potrafią dodać nowy parametr do istniejącego wywołania</td>
+        <td><strong>Link do zatwierdzenia</strong></td>
+        <td>Narzędzie zwraca w czacie link do strony platformy. Zalogowany użytkownik (rola read_write lub admin) zatwierdza albo odrzuca; potem AI wywołuje narzędzie ponownie. Jedna zgoda = jedno wykonanie.</td>
+        <td>Pozostałe klienty, m.in. OpenWebUI</td>
       </tr>
     </table>
   </div>
 
-  <div class="callout ok">
-    <strong>Dlaczego auto-confirm działa z każdym modelem?</strong>
-    Niektóre modele (np. lokalne jak Qwen, Llama) nie potrafią dodać parametru <code>__confirm</code> do ponownego wywołania narzędzia. Auto-confirm rozwiązuje ten problem — AI po prostu wywołuje to samo narzędzie z tymi samymi argumentami, co jest naturalnym zachowaniem po potwierdzeniu przez użytkownika.
-  </div>
 
   <h3>Konfiguracja</h3>
 
@@ -815,8 +812,7 @@ user="1000:1000"</code></pre>
   <div class="code-label">Zalecana konfiguracja — auto z prefiksami komend</div>
   <pre><code>{
   "require_approval_for": "auto",
-  "require_approval_for_prefixes": ["oc delete", "oc apply", "kubectl delete"],
-  "approval_timeout_seconds": 300
+  "require_approval_for_prefixes": ["oc delete", "oc apply", "kubectl delete"]
 }</code></pre>
 
   <div class="callout warn">
@@ -1005,9 +1001,8 @@ curl -H "X-API-Key: &lt;TWÓJ_TOKEN&gt;" \
       <tr><td><code>max_payload_bytes</code></td><td><code>int</code></td><td>Limit wielkości argumentów żądania (domyślnie: 1 MB).</td></tr>
       <tr><td><code>require_approval_for</code></td><td><code>string[] | "auto"</code></td><td>Tryby wymagające zatwierdzenia: <code>""</code> (brak), <code>"auto"</code>, <code>["write","destructive"]</code>.</td></tr>
       <tr><td><code>require_approval_for_prefixes</code></td><td><code>string[]</code></td><td>Prefiksy komend wymagające zatwierdzenia niezależnie od mode, np. <code>["oc delete","oc apply"]</code>. <strong>Nie łącz z <code>blocked_command_prefixes</code>.</strong></td></tr>
-      <tr><td><code>approval_timeout_seconds</code></td><td><code>int</code></td><td>Okno auto-potwierdzenia przy ponownym wywołaniu (domyślnie: 300). Drugie identyczne wywołanie w tym oknie jest automatycznie zatwierdzone.</td></tr>
       <tr><td><code>allowed_command_prefixes</code></td><td><code>string[]</code></td><td>Allowlist — tylko komendy zaczynające się od tych prefiksów są dozwolone. Jeśli pusta, wszystkie przechodzą.</td></tr>
-      <tr><td><code>blocked_command_prefixes</code></td><td><code>string[]</code></td><td>Blokuje komendy o podanych prefiksach. Pomijane gdy <code>__confirm</code> lub auto-confirm z okna.</td></tr>
+      <tr><td><code>blocked_command_prefixes</code></td><td><code>string[]</code></td><td>Blokuje komendy o podanych prefiksach. Obowiązuje zawsze, także po zatwierdzeniu.</td></tr>
     </table>
   </div>
 </div>
@@ -1251,8 +1246,7 @@ podman push --tls-verify=false $REGISTRY/mcp-runtime-shell:latest</code></pre>
       <tr><td>LVMCluster stuck <code>Progressing</code></td><td>Po restarcie klastra: <code>sudo rm -f /var/lock/vgmanager/vgmanager.lock</code> na węźle, usuń pod vg-managera.</td></tr>
       <tr><td>LVMCluster <code>Failed: already exists in filesystem</code></td><td>(a) Nazwa VG pokrywa się z nazwą urządzenia — zmień name na inne niż <code>vdc</code>. (b) Stare sygnatury PV na dysku — <code>pvremove -ff /dev/vdc</code>.</td></tr>
       <tr><td><code>docker push</code> błąd TLS do rejestru OCP</td><td>Użyj <code>podman push --tls-verify=false</code> zamiast docker push. Docker wymaga restartu po dodaniu insecure-registries.</td></tr>
-      <tr><td>Zatwierdzenie nie działa — AI wywołuje ponownie ale nadal blokowane</td><td>Sprawdź czy to to samo narzędzie z tymi samymi argumentami. Auto-confirm działa tylko gdy hash (tool_name + args) jest identyczny. Restartowanie poda kasuje pending approvals.</td></tr>
-      <tr><td>Zwiększ okno zatwierdzenia</td><td>Ustaw <code>approval_timeout_seconds</code> w policy JSON (domyślnie 300s). Po restarcie poda pending approvals są kasowane.</td></tr>
+      <tr><td>Zatwierdzenie nie działa — AI wywołuje ponownie ale nadal blokowane</td><td>Operację musi zatwierdzić człowiek: w oknie potwierdzenia klienta albo przez link zwrócony w czacie (wymaga zalogowania na platformie). Link prowadzi pod adres z <code>MCP_PLATFORM_PUBLIC_URL</code>.</td></tr>
     </table>
   </div>
 

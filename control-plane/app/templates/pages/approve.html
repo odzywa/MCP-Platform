@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+<section style="max-width:820px">
+  <h2>🛡️ Zatwierdzenie operacji</h2>
+
+  {% if req['status'] == 'approved' %}
+  <div class="success">✅ Zatwierdzone przez <b>{{ req['decided_by'] }}</b> ({{ (req['decided_at'] or '')[:19].replace('T', ' ') }}). Wróć do czatu — model może teraz wykonać tę operację (jeden raz).</div>
+  {% elif req['status'] == 'used' %}
+  <div class="success">✅ Zatwierdzone przez <b>{{ req['decided_by'] }}</b> i już wykonane. Kolejne wykonanie wymaga nowej zgody.</div>
+  {% elif req['status'] == 'rejected' %}
+  <div class="alert">⛔ Odrzucone przez <b>{{ req['decided_by'] }}</b>{% if req['reject_reason'] %}: {{ req['reject_reason'] }}{% endif %}</div>
+  {% elif expired %}
+  <div class="alert">⌛ Ta prośba wygasła. Jeśli operacja jest nadal potrzebna, model musi wywołać narzędzie ponownie — dostaniesz nowy link.</div>
+  {% else %}
+  <p class="muted" style="margin-top:0">Model AI chce wykonać operację, która wymaga zgody człowieka. Sprawdź dokładnie komendę — nic się nie wykona, dopóki jej nie zatwierdzisz.</p>
+  {% endif %}
+
+  <table style="margin:14px 0">
+    <tr><th style="width:170px">Serwer MCP</th><td><a href="/runtimes/{{ req['runtime_id'] }}">{{ runtime_name }}</a></td></tr>
+    <tr><th>Narzędzie</th><td><b style="color:var(--blue)">{{ req['tool_name'] }}</b> <span class="risk {% if req['mode'] in ('write', 'destructive') %}{{ req['mode'] }}{% else %}low{% endif %}" style="font-size:11px;margin-left:6px">{{ req['mode'] }}</span></td></tr>
+    {% if command %}<tr><th>Komenda</th><td><pre style="margin:0;white-space:pre-wrap;word-break:break-all;color:#f0b429">{{ command }}</pre></td></tr>{% endif %}
+    <tr><th>Argumenty</th><td><pre style="margin:0;font-size:12px;max-height:220px">{{ arguments }}</pre></td></tr>
+    <tr><th>Zgłoszono</th><td class="muted">{{ req['created_at'][:19].replace('T', ' ') }}{% if req['caller_ip'] %} · IP {{ req['caller_ip'] }}{% endif %}{% if req['model'] %} · {{ req['model'] }}{% endif %}</td></tr>
+  </table>
+
+  {% if req['status'] == 'pending' and not expired %}
+    {% if can_decide %}
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+      <form method="post" action="/approve/{{ req['id'] }}">
+        <input type="hidden" name="decision" value="approve">
+        <button style="background:#1a7a3f;padding:11px 22px;font-size:14px">✅ Zatwierdź wykonanie</button>
+      </form>
+      <form method="post" action="/approve/{{ req['id'] }}" style="display:flex;gap:8px;align-items:flex-end">
+        <input type="hidden" name="decision" value="reject">
+        <input name="reason" placeholder="powód odrzucenia (opcjonalnie)" style="width:260px">
+        <button class="delete" style="padding:11px 18px;font-size:14px">⛔ Odrzuć</button>
+      </form>
+    </div>
+    <div class="hint" style="margin-top:10px">Zgoda dotyczy dokładnie tej komendy i jednego wykonania.</div>
+    {% else %}
+    <div class="alert">🔒 Twoja rola (tylko odczyt) nie pozwala zatwierdzać operacji.</div>
+    {% endif %}
+  {% endif %}
+</section>
+{% endblock %}
